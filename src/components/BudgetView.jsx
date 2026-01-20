@@ -59,77 +59,77 @@ const BudgetView = () => {
     );
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 md:pb-0">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-0">
             {/* Header / Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-game-accent/20 rounded-lg">
-                            <DollarSign className="text-game-accent" size={20} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="p-1.5 bg-game-accent/20 rounded-lg">
+                            <DollarSign className="text-game-accent" size={16} />
                         </div>
-                        <span className="text-sm font-game text-game-muted uppercase">Total Budget</span>
+                        <span className="text-xs font-game text-game-muted uppercase">Total Budget</span>
                     </div>
-                    <p className="text-3xl font-black text-white">${totalMonthlyBudget}</p>
+                    <p className="text-2xl font-black text-white">${totalMonthlyBudget}</p>
                 </div>
 
-                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-game-gold/20 rounded-lg">
-                            <ShoppingCart className="text-game-gold" size={20} />
+                <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="p-1.5 bg-game-gold/20 rounded-lg">
+                            <ShoppingCart className="text-game-gold" size={16} />
                         </div>
-                        <span className="text-sm font-game text-game-muted uppercase">Grocery Alloc</span>
+                        <span className="text-xs font-game text-game-muted uppercase">Grocery Alloc</span>
                     </div>
-                    <p className="text-3xl font-black text-white">${groceryAllocation}</p>
-                    <div className="mt-2 text-xs text-game-muted">
+                    <p className="text-2xl font-black text-white">${groceryAllocation}</p>
+                    <div className="mt-1 text-[10px] text-game-muted">
                         Spent: <span className="text-white">${totalGrocerySpent.toFixed(2)}</span> / Est: ${totalGroceryEstimated.toFixed(2)}
                     </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl relative overflow-hidden group">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-emerald-500/20 rounded-lg">
-                            <TrendingUp className="text-emerald-500" size={20} />
+                <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl relative overflow-hidden group">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="p-1.5 bg-emerald-500/20 rounded-lg">
+                            <TrendingUp className="text-emerald-500" size={16} />
                         </div>
-                        <span className="text-sm font-game text-game-muted uppercase">Earned Rewards</span>
+                        <span className="text-xs font-game text-game-muted uppercase">Earned Rewards</span>
                     </div>
-                    <p className="text-3xl font-black text-emerald-400">${earnedRewards.toFixed(2)}</p>
+                    <p className="text-2xl font-black text-emerald-400">${earnedRewards.toFixed(2)}</p>
                     <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <TrendingUp size={60} />
+                        <TrendingUp size={40} />
                     </div>
                 </div>
             </div>
 
             {/* Grocery Section */}
             <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 shadow-2xl">
-                <div className="p-6 border-b border-slate-700/50 bg-slate-800/30 flex items-center justify-between">
+                <div className="p-4 border-b border-slate-700/50 bg-slate-800/30 flex items-center justify-between">
                     <div>
-                        <h2 className="text-xl font-black text-white flex items-center gap-3">
-                            <Package className="text-game-accent" />
+                        <h2 className="text-lg font-black text-white flex items-center gap-2">
+                            <Package className="text-game-accent" size={20} />
                             GROCERY LIST
                         </h2>
-                        <p className="text-xs text-game-muted mt-1 uppercase tracking-widest">{groceryPeriod} CYCLE</p>
+                        <p className="text-[10px] text-game-muted mt-0.5 uppercase tracking-widest">{groceryPeriod} CYCLE</p>
                     </div>
                     <div className="flex gap-2">
                         <button
                             onClick={resetGroceryList}
-                            className="p-2 hover:bg-slate-700 rounded-lg text-game-muted transition-colors"
+                            className="p-1.5 hover:bg-slate-700 rounded-lg text-game-muted transition-colors"
                             title="Reset completion"
                         >
-                            <RefreshCw size={18} />
+                            <RefreshCw size={16} />
                         </button>
                         <button
                             onClick={() => setShowSettings(!showSettings)}
                             className={clsx(
-                                "p-2 rounded-lg transition-colors",
+                                "p-1.5 rounded-lg transition-colors",
                                 showSettings ? "bg-game-accent text-slate-900" : "hover:bg-slate-700 text-game-muted"
                             )}
                         >
-                            <Settings size={18} />
+                            <Settings size={16} />
                         </button>
                     </div>
                 </div>
 
-                <div className="p-6">
+                <div className="p-4">
                     {showSettings && (
                         <div className="mb-6 p-4 bg-slate-900/50 rounded-2xl border border-slate-700/30 space-y-4 animate-in slide-in-from-top-2 duration-300">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

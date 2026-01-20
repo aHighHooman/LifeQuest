@@ -101,9 +101,11 @@ const HabitTracker = () => {
         setFrequency('daily');
     };
 
+    const safeHabits = Array.isArray(habits) ? habits : [];
+
     return (
         <div className="pb-24 md:pb-0">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-3xl font-game font-bold text-white tracking-widest uppercase text-glow">
                         Protocol Database
@@ -112,9 +114,9 @@ const HabitTracker = () => {
                 </div>
             </div>
 
-            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 mb-8 overflow-hidden">
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 mb-6 overflow-hidden">
+                <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                    <div className="flex flex-col md:flex-row gap-3 items-end">
                         <div className="flex-1 w-full relative">
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Protocol Name</label>
                             <div className="flex gap-2">
@@ -191,9 +193,9 @@ const HabitTracker = () => {
             </div>
 
             {/* List */}
-            <div className="space-y-4">
+            <div className="space-y-3">
                 <AnimatePresence mode='popLayout'>
-                    {habits.length === 0 && (
+                    {safeHabits.length === 0 && (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -202,7 +204,7 @@ const HabitTracker = () => {
                             No protocols established. Initialize new routines above.
                         </motion.div>
                     )}
-                    {habits.map(habit => (
+                    {safeHabits.map(habit => (
                         <HabitItem
                             key={habit.id}
                             habit={habit}

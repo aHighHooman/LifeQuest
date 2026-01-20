@@ -97,20 +97,20 @@ const CalendarView = () => {
                                 setIsAddModalOpen(true);
                             }}
                             className={clsx(
-                                "relative aspect-square md:h-24 p-2 rounded-xl border transition-all cursor-pointer group",
+                                "relative aspect-square md:h-24 p-2 rounded-xl border transition-all cursor-pointer group flex flex-col items-center justify-center gap-1",
                                 !isCurrentMonth ? "bg-slate-900/20 border-slate-800/50 opacity-30" : "bg-slate-900/50 border-slate-800 hover:border-game-accent/50",
                                 isToday(day) && "border-game-gold/50 bg-game-gold/5",
                                 isSelected && isCurrentMonth && "border-game-accent bg-game-accent/10 shadow-[0_0_15px_rgba(56,189,248,0.2)]"
                             )}
                         >
                             <span className={clsx(
-                                "text-sm font-bold block text-center md:text-left",
+                                "text-sm font-bold",
                                 isToday(day) ? "text-game-gold" : (isCurrentMonth ? "text-gray-400" : "text-gray-600")
                             )}>
                                 {format(day, 'd')}
                             </span>
 
-                            <div className="mt-1 flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1 justify-center">
                                 {dayQuests.slice(0, 3).map(q => (
                                     <div
                                         key={q.id}
