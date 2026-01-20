@@ -59,7 +59,7 @@ const BudgetView = () => {
     );
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 md:pb-0">
             {/* Header / Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl">
@@ -100,7 +100,7 @@ const BudgetView = () => {
             </div>
 
             {/* Grocery Section */}
-            <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl">
+            <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 shadow-2xl">
                 <div className="p-6 border-b border-slate-700/50 bg-slate-800/30 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black text-white flex items-center gap-3">

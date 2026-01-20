@@ -23,7 +23,8 @@ export const GameProvider = ({ children }) => {
     const [stats, setStats] = useState(() => {
         try {
             const saved = localStorage.getItem('lq_stats');
-            return saved ? JSON.parse(saved) : INITIAL_STATS;
+            const parsed = saved ? JSON.parse(saved) : null;
+            return parsed || INITIAL_STATS;
         } catch (e) {
             console.error("Error loading stats:", e);
             return INITIAL_STATS;
@@ -33,7 +34,8 @@ export const GameProvider = ({ children }) => {
     const [quests, setQuests] = useState(() => {
         try {
             const saved = localStorage.getItem('lq_quests');
-            return saved ? JSON.parse(saved) : INITIAL_TASKS;
+            const parsed = saved ? JSON.parse(saved) : null;
+            return Array.isArray(parsed) ? parsed : INITIAL_TASKS;
         } catch (e) {
             console.error("Error loading quests:", e);
             return INITIAL_TASKS;
@@ -43,14 +45,15 @@ export const GameProvider = ({ children }) => {
     const [habits, setHabits] = useState(() => {
         try {
             const saved = localStorage.getItem('lq_habits');
-            return saved ? JSON.parse(saved) : INITIAL_HABITS;
+            const parsed = saved ? JSON.parse(saved) : null;
+            return Array.isArray(parsed) ? parsed : INITIAL_HABITS;
         } catch (e) {
             console.error("Error loading habits:", e);
             return INITIAL_HABITS;
         }
     });
 
-    const [widgetMode, setWidgetMode] = useState(false);
+    // Widget mode removed
 
     useEffect(() => {
         localStorage.setItem('lq_stats', JSON.stringify(stats));
@@ -179,7 +182,7 @@ export const GameProvider = ({ children }) => {
 
     return (
         <GameContext.Provider value={{
-            stats, quests, habits, widgetMode, setWidgetMode,
+            stats, quests, habits,
             addQuest, completeQuest, deleteQuest,
             addHabit, checkHabit, deleteHabit
         }}>

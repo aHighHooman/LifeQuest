@@ -4,7 +4,6 @@ import clsx from 'clsx';
 import { useGame } from '../context/GameContext';
 
 const Navigation = ({ currentTab, onTabChange }) => {
-    const { setWidgetMode } = useGame();
     const tabs = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'quests', label: 'Quests', icon: Scroll },
@@ -12,14 +11,6 @@ const Navigation = ({ currentTab, onTabChange }) => {
         { id: 'protocols', label: 'Protocols', icon: Repeat },
         { id: 'budget', label: 'Budget', icon: Wallet },
     ];
-
-    const enterWidgetMode = () => {
-        setWidgetMode(true);
-        // Resize window to widget size
-        if (window.resizeTo) {
-            window.resizeTo(320, 480);
-        }
-    };
 
     return (
         <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto md:left-6 md:right-auto md:fixed z-50 bg-slate-950/80 border-t md:border-t-0 md:border border-slate-700 backdrop-blur-md md:rounded-full md:m-6 md:px-6 px-1 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex justify-around md:justify-start md:gap-4 shadow-2xl">
@@ -42,17 +33,6 @@ const Navigation = ({ currentTab, onTabChange }) => {
                     </button>
                 );
             })}
-
-            <div className="w-[1px] bg-slate-800 mx-1 hidden md:block" />
-
-            <button
-                onClick={enterWidgetMode}
-                className="flex flex-col md:flex-row items-center gap-1 md:gap-2 px-4 py-2 rounded-xl transition-all text-game-gold/60 hover:text-game-gold hover:bg-game-gold/10"
-                title="Enter Widget Mode"
-            >
-                <Minimize2 size={20} />
-                <span className="text-[10px] md:text-sm font-bold uppercase tracking-wider">Widget</span>
-            </button>
         </nav>
     );
 };

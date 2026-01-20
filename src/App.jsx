@@ -4,7 +4,6 @@ import Dashboard from './components/Dashboard';
 import QuestBoard from './components/QuestBoard';
 import HabitTracker from './components/HabitTracker';
 import Navigation from './components/Navigation';
-import WidgetView from './components/WidgetView';
 
 import BudgetView from './components/BudgetView';
 import CalendarView from './components/CalendarView';
@@ -21,11 +20,7 @@ function AppContent({ currentTab, setCurrentTab }) {
     );
   }
 
-  const { widgetMode } = context;
-
-  if (widgetMode) {
-    return <WidgetView />;
-  }
+  // Widget mode logic removed
 
   return (
     <div className="min-h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))] font-sans selection:bg-game-accent selection:text-slate-900 overflow-x-hidden">

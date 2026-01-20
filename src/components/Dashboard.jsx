@@ -16,29 +16,29 @@ const Dashboard = () => {
     const activeHabits = habits.slice(0, 3);
 
     return (
-        <div className="space-y-8 pb-20 md:pb-0">
+        <div className="space-y-5 pb-20 md:pb-0">
             {/* HUD Stats Area */}
-            <div className="bg-game-panel p-6 rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden">
+            <div className="bg-game-panel p-4 rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-game-accent to-transparent opacity-50"></div>
 
-                <div className="flex flex-col md:flex-row gap-8 items-center">
+                <div className="flex flex-col md:flex-row gap-6 items-center">
                     {/* Avatar / Level */}
                     <div className="flex flex-col items-center">
-                        <div className="w-24 h-24 rounded-full bg-slate-900 border-4 border-game-accent flex items-center justify-center text-4xl font-bold font-game text-game-accent shadow-neon box-content">
+                        <div className="w-20 h-20 rounded-full bg-slate-900 border-4 border-game-accent flex items-center justify-center text-3xl font-bold font-game text-game-accent shadow-neon box-content">
                             {stats.level}
                         </div>
                         <div className="mt-2 text-game-muted text-xs font-bold tracking-[0.2em]">LEVEL</div>
                     </div>
 
                     {/* Stats Bars */}
-                    <div className="flex-1 w-full space-y-6">
+                    <div className="flex-1 w-full space-y-5">
                         {/* HP */}
                         <div>
                             <div className="flex justify-between text-xs font-bold text-gray-400 mb-1">
                                 <span className="flex items-center gap-1"><Heart size={12} className="text-game-danger" /> HEALTH</span>
                                 <span>{stats.hp} / {stats.maxHp}</span>
                             </div>
-                            <div className="h-6 bg-slate-900 rounded-sm overflow-hidden border border-slate-700 relative skewed-box">
+                            <div className="h-5 bg-slate-900 rounded-sm overflow-hidden border border-slate-700 relative skewed-box">
                                 <motion.div
                                     className="h-full bg-game-danger shadow-[0_0_15px_rgba(244,63,94,0.6)]"
                                     initial={{ width: 0 }}
@@ -54,7 +54,7 @@ const Dashboard = () => {
                                 <span className="flex items-center gap-1"><Zap size={12} className="text-game-accent" /> EXPERIENCE</span>
                                 <span>{stats.xp} / {stats.maxXp}</span>
                             </div>
-                            <div className="h-6 bg-slate-900 rounded-sm overflow-hidden border border-slate-700 relative">
+                            <div className="h-5 bg-slate-900 rounded-sm overflow-hidden border border-slate-700 relative">
                                 <motion.div
                                     className="h-full bg-game-accent shadow-[0_0_15px_rgba(56,189,248,0.6)]"
                                     initial={{ width: 0 }}
@@ -66,30 +66,30 @@ const Dashboard = () => {
                     </div>
 
                     {/* Currency */}
-                    <div className="bg-slate-900/50 p-4 rounded-xl border border-game-gold/30 flex flex-col items-center min-w-[120px]">
-                        <Coins size={32} className="text-game-gold mb-2 drop-shadow-md" />
-                        <span className="text-2xl font-bold text-white">{stats.gold}</span>
-                        <span className="text-[10px] text-game-gold uppercase tracking-widest">Credits</span>
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-game-gold/30 flex flex-col items-center min-w-[100px]">
+                        <Coins size={28} className="text-game-gold mb-1 drop-shadow-md" />
+                        <span className="text-xl font-bold text-white">{stats.gold}</span>
+                        <span className="text-[9px] text-game-gold uppercase tracking-widest">Credits</span>
                     </div>
                 </div>
             </div>
 
             {/* Today's Overview Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Quick Quests */}
-                <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800">
-                    <h3 className="text-xl font-game font-bold text-white mb-4 flex items-center gap-2">
-                        <CheckSquare className="text-game-accent" />
+                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                    <h3 className="text-lg font-game font-bold text-white mb-3 flex items-center gap-2">
+                        <CheckSquare className="text-game-accent" size={18} />
                         Current Objectives
                     </h3>
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {activeQuests.length === 0 ? (
-                            <p className="text-gray-500 italic text-sm">No active objectives.</p>
+                            <p className="text-gray-500 italic text-xs">No active objectives.</p>
                         ) : (
                             activeQuests.map(q => (
-                                <div key={q.id} className="bg-slate-800 p-3 rounded border border-slate-700 flex justify-between items-center">
-                                    <span className="font-bold text-sm text-gray-200">{q.title}</span>
-                                    <span className="text-xs bg-slate-700 px-2 py-1 rounded text-game-accent">{q.difficulty}</span>
+                                <div key={q.id} className="bg-slate-800 p-2.5 rounded border border-slate-700 flex justify-between items-center">
+                                    <span className="font-bold text-sm text-gray-200 truncate pr-2">{q.title}</span>
+                                    <span className="text-[10px] bg-slate-700 px-2 py-0.5 rounded text-game-accent capitalize">{q.difficulty}</span>
                                 </div>
                             ))
                         )}
@@ -97,19 +97,19 @@ const Dashboard = () => {
                 </div>
 
                 {/* Due Protocols */}
-                <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800">
-                    <h3 className="text-xl font-game font-bold text-white mb-4 flex items-center gap-2">
-                        <Calendar className="text-game-gold" />
+                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                    <h3 className="text-lg font-game font-bold text-white mb-3 flex items-center gap-2">
+                        <Calendar className="text-game-gold" size={18} />
                         Pending Protocols
                     </h3>
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {activeHabits.length === 0 ? (
-                            <p className="text-gray-500 italic text-sm">All protocols secure.</p>
+                            <p className="text-gray-500 italic text-xs">All protocols secure.</p>
                         ) : (
                             activeHabits.map(h => (
-                                <div key={h.id} className="bg-slate-800 p-3 rounded border border-slate-700 flex justify-between items-center">
-                                    <span className="font-bold text-sm text-gray-200">{h.title}</span>
-                                    <span className="text-xs text-gray-500">{h.frequency}</span>
+                                <div key={h.id} className="bg-slate-800 p-2.5 rounded border border-slate-700 flex justify-between items-center">
+                                    <span className="font-bold text-sm text-gray-200 truncate pr-2">{h.title}</span>
+                                    <span className="text-[10px] text-gray-500 capitalize">{h.frequency}</span>
                                 </div>
                             ))
                         )}
