@@ -25,7 +25,7 @@ function AppContent({ currentTab, setCurrentTab }) {
   return (
     <div className="min-h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))] font-sans selection:bg-game-accent selection:text-slate-900 overflow-x-hidden">
       <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10">
-        <header className="mb-8 flex items-center justify-between">
+        <header className="mb-4 flex items-center justify-between">
           <h1 className="text-4xl md:text-5xl font-black font-game text-transparent bg-clip-text bg-gradient-to-r from-game-accent to-game-gold tracking-tighter drop-shadow-lg p-1">
             LIFEQUEST
           </h1>

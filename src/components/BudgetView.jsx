@@ -61,41 +61,32 @@ const BudgetView = () => {
     return (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-0">
             {/* Header / Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl">
-                    <div className="flex items-center gap-2 mb-1">
-                        <div className="p-1.5 bg-game-accent/20 rounded-lg">
-                            <DollarSign className="text-game-accent" size={16} />
-                        </div>
-                        <span className="text-xs font-game text-game-muted uppercase">Total Budget</span>
+            <div className="grid grid-cols-3 gap-2 px-1">
+                <div className="bg-slate-800/40 p-2 rounded-xl border border-slate-700/50 backdrop-blur-sm shadow-lg flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-70">
+                        <DollarSign className="text-game-accent" size={12} />
+                        <span className="text-[8px] font-game text-game-muted uppercase tracking-tighter truncate">Budget</span>
                     </div>
-                    <p className="text-2xl font-black text-white">${totalMonthlyBudget}</p>
+                    <p className="text-sm font-black text-white leading-none">${totalMonthlyBudget}</p>
                 </div>
 
-                <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl">
-                    <div className="flex items-center gap-2 mb-1">
-                        <div className="p-1.5 bg-game-gold/20 rounded-lg">
-                            <ShoppingCart className="text-game-gold" size={16} />
-                        </div>
-                        <span className="text-xs font-game text-game-muted uppercase">Grocery Alloc</span>
+                <div className="bg-slate-800/40 p-2 rounded-xl border border-slate-700/50 backdrop-blur-sm shadow-lg flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-70">
+                        <ShoppingCart className="text-game-gold" size={12} />
+                        <span className="text-[8px] font-game text-game-muted uppercase tracking-tighter truncate">Grocery</span>
                     </div>
-                    <p className="text-2xl font-black text-white">${groceryAllocation}</p>
-                    <div className="mt-1 text-[10px] text-game-muted">
-                        Spent: <span className="text-white">${totalGrocerySpent.toFixed(2)}</span> / Est: ${totalGroceryEstimated.toFixed(2)}
+                    <p className="text-sm font-black text-white leading-none">${groceryAllocation}</p>
+                    <div className="mt-1 text-[7px] text-game-muted leading-tight">
+                        <span className="text-white">${totalGrocerySpent.toFixed(0)}</span>/${totalGroceryEstimated.toFixed(0)}
                     </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-xl relative overflow-hidden group">
-                    <div className="flex items-center gap-2 mb-1">
-                        <div className="p-1.5 bg-emerald-500/20 rounded-lg">
-                            <TrendingUp className="text-emerald-500" size={16} />
-                        </div>
-                        <span className="text-xs font-game text-game-muted uppercase">Earned Rewards</span>
+                <div className="bg-slate-800/40 p-2 rounded-xl border border-slate-700/50 backdrop-blur-sm shadow-lg relative overflow-hidden flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-70">
+                        <TrendingUp className="text-emerald-500" size={12} />
+                        <span className="text-[8px] font-game text-game-muted uppercase tracking-tighter truncate">Earned</span>
                     </div>
-                    <p className="text-2xl font-black text-emerald-400">${earnedRewards.toFixed(2)}</p>
-                    <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <TrendingUp size={40} />
-                    </div>
+                    <p className="text-sm font-black text-emerald-400 leading-none">${earnedRewards.toFixed(2)}</p>
                 </div>
             </div>
 
@@ -265,7 +256,7 @@ const BudgetView = () => {
                             <div
                                 key={item.id}
                                 className={clsx(
-                                    "group flex items-center justify-between p-4 rounded-2xl border transition-all duration-300",
+                                    "group flex items-center justify-between p-3 rounded-2xl border transition-all duration-300",
                                     item.completed
                                         ? "bg-slate-900/30 border-slate-800 text-slate-600"
                                         : "bg-slate-800/20 border-slate-700/50 hover:border-game-accent/50 text-white"
