@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Flame, Plus, Trash2, Clock, Settings, Calendar } from 'lucide-react';
+import clsx from 'clsx';
 
 const HabitItem = ({ habit, onCheck, onDelete }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
