@@ -174,10 +174,39 @@ const BudgetView = () => {
                             </div>
                             <button
                                 onClick={clearGroceryList}
-                                className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold uppercase rounded-lg border border-red-500/20 transition-all"
+                                className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-bold uppercase rounded-lg border border-red-500/20 transition-all"
                             >
-                                Clear All Items
+                                Clear Current List
                             </button>
+
+                            <div className="pt-4 border-t border-slate-700/50">
+                                <h4 className="text-[10px] font-bold text-game-accent uppercase mb-3 tracking-widest flex items-center gap-2">
+                                    <TrendingUp size={12} /> Master Price Database
+                                </h4>
+                                <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto no-scrollbar pr-1">
+                                    {Object.keys(priceDatabase).length === 0 ? (
+                                        <p className="text-[10px] text-gray-600 italic">No historical price data established.</p>
+                                    ) : (
+                                        Object.entries(priceDatabase).map(([name, price]) => (
+                                            <div key={name} className="flex items-center justify-between p-2 rounded bg-slate-800 border border-slate-700">
+                                                <span className="text-xs text-slate-300">{name}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-mono text-game-gold">${price.toFixed(2)}</span>
+                                                    <button
+                                                        onClick={() => {
+                                                            const newPrice = prompt(`Update price for ${name}:`, price);
+                                                            if (newPrice !== null && !isNaN(newPrice)) updatePrice(name, newPrice);
+                                                        }}
+                                                        className="p-1 hover:bg-slate-700 rounded text-game-muted hover:text-game-accent transition-colors"
+                                                    >
+                                                        <Settings size={12} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
 

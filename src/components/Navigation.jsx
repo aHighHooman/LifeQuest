@@ -22,7 +22,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
     };
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto md:left-6 md:right-auto md:fixed z-50 bg-slate-950/80 border-t md:border-t-0 md:border border-slate-700 backdrop-blur-md md:rounded-full md:m-6 md:px-6 p-2 md:p-2 flex justify-around md:gap-4 shadow-2xl">
+        <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto md:left-6 md:right-auto md:fixed z-50 bg-slate-950/80 border-t md:border-t-0 md:border border-slate-700 backdrop-blur-md md:rounded-full md:m-6 md:px-6 px-1 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex justify-around md:justify-start md:gap-4 shadow-2xl">
             {tabs.map(tab => {
                 const Icon = tab.icon;
                 const isActive = currentTab === tab.id;
@@ -31,7 +31,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
                         key={tab.id}
                         onClick={() => onTabChange(tab.id)}
                         className={clsx(
-                            "flex flex-col md:flex-row items-center gap-1 md:gap-2 px-4 py-2 rounded-xl transition-all",
+                            "flex flex-col md:flex-row items-center gap-1 md:gap-2 px-2 md:px-4 py-2 rounded-xl transition-all flex-shrink-0 min-w-0",
                             isActive
                                 ? "bg-game-accent/20 text-game-accent shadow-[0_0_10px_rgba(56,189,248,0.3)]"
                                 : "text-gray-500 hover:text-gray-300 hover:bg-white/5"

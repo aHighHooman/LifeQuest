@@ -10,8 +10,8 @@ const INITIAL_STATS = {
     level: 1,
     xp: 0,
     maxXp: 100,
-    hp: 50,
-    maxHp: 50,
+    hp: 0,
+    maxHp: 100,
     gold: 0,
 };
 
@@ -90,8 +90,8 @@ export const GameProvider = ({ children }) => {
     };
 
     // --- QUESTS ---
-    const addQuest = (title, difficulty = 'easy', dueDate = null) => {
-        const rewards = {
+    const addQuest = (title, difficulty = 'easy', dueDate = null, customReward = null) => {
+        const defaultRewards = {
             easy: { xp: 10, gold: 5 },
             medium: { xp: 25, gold: 15 },
             hard: { xp: 50, gold: 40 },
@@ -103,7 +103,7 @@ export const GameProvider = ({ children }) => {
             difficulty,
             dueDate,
             completed: false,
-            reward: rewards[difficulty] || rewards.easy,
+            reward: customReward || defaultRewards[difficulty] || defaultRewards.easy,
             createdAt: new Date().toISOString(),
         };
         setQuests(prev => [newQuest, ...prev]);

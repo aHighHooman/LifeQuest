@@ -10,12 +10,12 @@ const INITIAL_PRICE_DB = {}; // { "Milk": 4.00 }
 export const BudgetProvider = ({ children }) => {
     const [totalMonthlyBudget, setTotalMonthlyBudget] = useState(() => {
         const saved = localStorage.getItem('lq_budget_total');
-        return saved ? JSON.parse(saved) : 400;
+        return saved ? JSON.parse(saved) : 0;
     });
 
     const [groceryAllocation, setGroceryAllocation] = useState(() => {
         const saved = localStorage.getItem('lq_budget_grocery_alloc');
-        return saved ? JSON.parse(saved) : 250;
+        return saved ? JSON.parse(saved) : 0;
     });
 
     const [earnedRewards, setEarnedRewards] = useState(() => {

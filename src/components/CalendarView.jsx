@@ -104,7 +104,7 @@ const CalendarView = () => {
                             )}
                         >
                             <span className={clsx(
-                                "text-sm font-bold",
+                                "text-sm font-bold block text-center md:text-left",
                                 isToday(day) ? "text-game-gold" : (isCurrentMonth ? "text-gray-400" : "text-gray-600")
                             )}>
                                 {format(day, 'd')}
