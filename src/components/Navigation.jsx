@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Scroll, Zap, Coins, ChevronUp, Heart } from 'lucide-react';
 import clsx from 'clsx';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 
 const Navigation = ({ currentTab, onTabChange }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -42,30 +42,49 @@ const Navigation = ({ currentTab, onTabChange }) => {
     const validInnerIndex = innerIndex !== -1 ? innerIndex : 0;
     const baseInnerRotation = -innerAngles[validInnerIndex];
 
-    // ANIMATION FIX:
-    // We use `useSpring` to animate the BASE rotation smoothly (when switching tabs).
-    // We combine it with `dragOffset` (which is instant) for best of both worlds.
+    // ANIMATION FIX: Imperative Control
+    // We use raw MotionValues and drive them with `animate()` to ensure robust handoffs and no drift.
 
-    const springConfig = { stiffness: 160, damping: 20 };
+    // 1. Source Values
+    const innerRotationMV = useMotionValue(baseInnerRotation);
+    const outerRotationMV = useMotionValue(baseOuterRotation);
 
-    const innerBaseSpring = useSpring(baseInnerRotation, springConfig);
-    const outerBaseSpring = useSpring(baseOuterRotation, springConfig);
+    // 2. Helper to animate to a specific tab's target state
+    const animateToTab = (targetTabId) => {
+        const springConfig = { stiffness: 160, damping: 20 };
 
+        // Calculate targets for the new tab
+        const targetOuterIndex = outerTabs.findIndex(t => t.id === targetTabId);
+        const targetValidOuterIndex = targetOuterIndex !== -1 ? targetOuterIndex : 1;
+        const targetOuterRotation = -outerAngles[targetValidOuterIndex];
+
+        const targetInnerIndex = innerTabs.findIndex(t => t.id === targetTabId);
+        const targetValidInnerIndex = targetInnerIndex !== -1 ? targetInnerIndex : 0;
+        const targetInnerRotation = -innerAngles[targetValidInnerIndex];
+
+        animate(innerRotationMV, targetInnerRotation, springConfig);
+        animate(outerRotationMV, targetOuterRotation, springConfig);
+    };
+
+    // 3. Sync with external State changes (e.g. user clicked a tab elsewhere)
     useEffect(() => {
-        innerBaseSpring.set(baseInnerRotation);
-        outerBaseSpring.set(baseOuterRotation);
-    }, [baseInnerRotation, baseOuterRotation, innerBaseSpring, outerBaseSpring]);
+        animateToTab(currentTab);
+    }, [currentTab]); // Functionally dependent on currentTab only
 
     // Combine Spring (State) + Drag (User Input)
     const innerRotationTransform = useTransform(
-        [innerBaseSpring, dragOffset],
+        [innerRotationMV, dragOffset],
         ([base, drag]) => base + (isExpanded ? drag : 0)
     );
 
     const outerRotationTransform = useTransform(
-        [outerBaseSpring, dragOffset],
+        [outerRotationMV, dragOffset],
         ([base, drag]) => base + (!isExpanded ? drag : 0)
     );
+
+    // Counter-rotation for icons so they stay upright DURING the animation
+    const negInnerRotation = useTransform(innerRotationTransform, r => -r);
+    const negOuterRotation = useTransform(outerRotationTransform, r => -r);
 
 
     // -- Global Gestures --
@@ -76,44 +95,74 @@ const Navigation = ({ currentTab, onTabChange }) => {
         const absX = Math.abs(x);
         const absY = Math.abs(y);
 
+        // HANDOFF: Snap MV to current visual state then reset drag
+        const currentDrag = dragOffset.get();
+        if (isExpanded) {
+            innerRotationMV.set(innerRotationMV.get() + currentDrag);
+        } else {
+            outerRotationMV.set(outerRotationMV.get() + currentDrag);
+        }
+        dragOffset.set(0);
+
+        // Predict Next Tab
+        let nextTab = currentTab;
+        let nextIsExpanded = isExpanded;
+
         if (absY > absX && absY > 30) {
             // Vertical Swipe
             if (y < 0 && !isExpanded) {
-                // Swipe Up -> Expand & Default to 'budget' (or first inner tab)
-                setIsExpanded(true);
-                if (innerIndex === -1) onTabChange(innerTabs[0].id);
+                // Swipe Up -> Expand
+                nextIsExpanded = true;
+                // Original logic: if (innerIndex === -1) onTabChange(innerTabs[0].id);
+                // If innerIndex is VALID, we stay on it? Or do nothing?
+                // "Swipe Up -> Expand" implies we just reveal the inner disk.
+                // If we are already on 'dashboard' (outer), expanding reveals 'budget' (inner)?
+                // Let's stick to original logic:
+                if (innerIndex === -1) nextTab = innerTabs[0].id; // Default to first inner
             }
             if (y > 0 && isExpanded) {
-                // Swipe Down -> Collapse & specific back to 'dashboard'
-                setIsExpanded(false);
-                onTabChange('dashboard');
+                // Swipe Down -> Collapse
+                nextIsExpanded = false;
+                nextTab = 'dashboard';
             }
         } else if (absX > threshold) {
             // Horizontal Swipe
-            // We read the current X drag to decide direction
             if (isExpanded) {
                 if (x > 0 && validInnerIndex > 0) {
-                    onTabChange(innerTabs[validInnerIndex - 1].id);
+                    nextTab = innerTabs[validInnerIndex - 1].id;
                 } else if (x < 0 && validInnerIndex < innerTabs.length - 1) {
-                    onTabChange(innerTabs[validInnerIndex + 1].id);
+                    nextTab = innerTabs[validInnerIndex + 1].id;
                 }
             } else {
                 if (x > 0 && validOuterIndex > 0) {
-                    onTabChange(outerTabs[validOuterIndex - 1].id);
+                    nextTab = outerTabs[validOuterIndex - 1].id;
                 } else if (x < 0 && validOuterIndex < outerTabs.length - 1) {
-                    onTabChange(outerTabs[validOuterIndex + 1].id);
+                    nextTab = outerTabs[validOuterIndex + 1].id;
                 }
             }
         }
 
-        // Reset the motion value cleanly
-        dragOffset.set(0);
+        // Apply Logic
+        if (nextIsExpanded !== isExpanded) setIsExpanded(nextIsExpanded);
+
+        // Optimize: Trigger animation IMMEDIATELY to predicted tab
+        // This prevents drift even if onTabChange is slow or if tab doesn't change (snaps back)
+        animateToTab(nextTab);
+
+        if (nextTab !== currentTab) {
+            onTabChange(nextTab);
+        }
     };
 
     const onPan = (event, info) => {
         // Direct update to motion value - NO RE-RENDER
         if (Math.abs(info.offset.x) > Math.abs(info.offset.y)) {
-            dragOffset.set(info.offset.x * 0.5);
+            // SENSITIVITY FIX:
+            // 1. Reduced multiplier from 0.5 to 0.25 (Feel "heavier" and more controlled)
+            // 2. Clamped to +/- 40 degrees max (Prevent "edge to edge" wild spinning)
+            const raw = info.offset.x * 0.25;
+            const clamped = Math.max(-40, Math.min(40, raw));
+            dragOffset.set(clamped);
         }
     };
 
@@ -160,7 +209,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
                             const top = 150 + radius * Math.sin(radian);
 
                             return (
-                                <button
+                                <motion.button
                                     key={tab.id}
                                     className="absolute pointer-events-auto hover:scale-110 transition-transform p-3 rounded-full"
                                     onClick={(e) => {
@@ -170,9 +219,9 @@ const Navigation = ({ currentTab, onTabChange }) => {
                                     style={{
                                         left,
                                         top,
-                                        // Counter-rotate icons so they stay upright relative to the screen? 
-                                        // Or just relative to the disk? Currently relative to disk.
-                                        transform: `translate(-50%, -50%) rotate(${-baseInnerRotation}deg)`
+                                        x: "-50%",
+                                        y: "-50%",
+                                        rotate: negInnerRotation,
                                     }}
                                 >
                                     <Icon
@@ -182,7 +231,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
                                             isActive ? tab.color : "text-slate-600"
                                         )}
                                     />
-                                </button>
+                                </motion.button>
                             );
                         })}
                     </motion.div>
@@ -215,7 +264,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
                             const top = 250 + radius * Math.sin(radian);
 
                             return (
-                                <button
+                                <motion.button
                                     key={tab.id}
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -225,7 +274,9 @@ const Navigation = ({ currentTab, onTabChange }) => {
                                     style={{
                                         left,
                                         top,
-                                        transform: `translate(-50%, -50%) rotate(${-baseOuterRotation}deg)`
+                                        x: "-50%",
+                                        y: "-50%",
+                                        rotate: negOuterRotation
                                     }}
                                 >
                                     <div className={clsx(
@@ -242,7 +293,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
                                             {tab.label}
                                         </span>
                                     )}
-                                </button>
+                                </motion.button>
                             );
                         })}
                     </motion.div>
