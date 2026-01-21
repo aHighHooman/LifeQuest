@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Scroll, Zap, Coins, ChevronUp, Heart } from 'lucide-react';
 import clsx from 'clsx';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 
 const Navigation = ({ currentTab, onTabChange }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -33,27 +33,40 @@ const Navigation = ({ currentTab, onTabChange }) => {
 
 
     // -- Rotation Logic --
-    // We compute the BASE rotation. The drag offset will be ADDED to this via transform.
 
     const outerAngles = [-45, 0, 45];
     const validOuterIndex = outerIndex !== -1 ? outerIndex : 1;
     const baseOuterRotation = -outerAngles[validOuterIndex];
 
-    const innerAngles = [-25, 25]; // Tighter for inner arc
+    const innerAngles = [-25, 25];
     const validInnerIndex = innerIndex !== -1 ? innerIndex : 0;
     const baseInnerRotation = -innerAngles[validInnerIndex];
 
-    // Create transformed motion values for actual rotation
-    // If NOT expanded, outer rotates with drag. If expanded, inner rotates with drag.
-    // We can conditionally apply the drag offset in the animate prop or via a derived motion value.
-    // Simpler approach: Pass the raw MotionValue to the animate logic or styling.
+    // ANIMATION FIX:
+    // We use `useSpring` to animate the BASE rotation smoothly (when switching tabs).
+    // We combine it with `dragOffset` (which is instant) for best of both worlds.
 
-    // However, since we are doing conditional logic (isExpanded determines WHICH disk gets the drag),
-    // we might need to reset dragOffset to 0 on panEnd, which we do.
+    const springConfig = { stiffness: 160, damping: 20 };
 
-    // Computed rotations for the disks
-    // We can't put `isExpanded ? dragOffset : 0` directly into `animate` easily without causing re-renders if we were mixing state.
-    // BUT `useMotionValue` allows us to feed it directly.
+    const innerBaseSpring = useSpring(baseInnerRotation, springConfig);
+    const outerBaseSpring = useSpring(baseOuterRotation, springConfig);
+
+    useEffect(() => {
+        innerBaseSpring.set(baseInnerRotation);
+        outerBaseSpring.set(baseOuterRotation);
+    }, [baseInnerRotation, baseOuterRotation, innerBaseSpring, outerBaseSpring]);
+
+    // Combine Spring (State) + Drag (User Input)
+    const innerRotationTransform = useTransform(
+        [innerBaseSpring, dragOffset],
+        ([base, drag]) => base + (isExpanded ? drag : 0)
+    );
+
+    const outerRotationTransform = useTransform(
+        [outerBaseSpring, dragOffset],
+        ([base, drag]) => base + (!isExpanded ? drag : 0)
+    );
+
 
     // -- Global Gestures --
 
@@ -124,16 +137,10 @@ const Navigation = ({ currentTab, onTabChange }) => {
                             y: isExpanded ? -70 : 0,
                             scale: isExpanded ? 1 : 0.9,
                             opacity: isExpanded ? 1 : 0,
-                            rotate: baseInnerRotation
-                            // We handle the DRAG rotation separately or add it here? 
-                            // If we add `+ dragOffset.get()` here, it reads the value ONCE at render/animate start.
-                            // We need it to be dynamic. 
-                            // `style={{ rotate: transformedInnerRotation }}` is better.
+                            // rotate: handled in style by transform
                         }}
                         style={{
-                            // We combine base rotation (state) + drag (motion value)
-                            // Since baseRotation is a number, checking `isExpanded`
-                            rotate: isExpanded ? useTransform(dragOffset, (v) => baseInnerRotation + v) : baseInnerRotation
+                            rotate: innerRotationTransform
                         }}
                         transition={{ type: "spring", stiffness: 160, damping: 20 }}
                         onPan={onPan}
@@ -185,10 +192,10 @@ const Navigation = ({ currentTab, onTabChange }) => {
                     <motion.div
                         animate={{
                             y: isExpanded ? -80 : 0,
-                            // rotate: baseOuterRotation // Moved to style for performance
+                            // rotate: handled in style by transform
                         }}
                         style={{
-                            rotate: !isExpanded ? useTransform(dragOffset, (v) => baseOuterRotation + v) : baseOuterRotation
+                            rotate: outerRotationTransform
                         }}
                         transition={{ type: "spring", stiffness: 160, damping: 20 }}
                         onPan={onPan}
