@@ -7,32 +7,53 @@ import clsx from 'clsx';
 const QuestItem = ({ quest, onComplete, onDelete }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+    const rarityColors = {
+        easy: { border: "border-slate-500", text: "text-gray-300", bg: "bg-slate-700/30", glow: "shadow-none", label: "Common" },
+        medium: { border: "border-blue-500", text: "text-blue-400", bg: "bg-blue-900/20", glow: "shadow-[0_0_15px_rgba(56,189,248,0.2)]", label: "Rare" },
+        hard: { border: "border-purple-500", text: "text-purple-400", bg: "bg-purple-900/20", glow: "shadow-[0_0_20px_rgba(168,85,247,0.3)]", label: "Epic" },
+        legendary: { border: "border-game-gold", text: "text-game-gold", bg: "bg-game-gold/10", glow: "shadow-[0_0_25px_rgba(255,215,0,0.4)]", label: "Legendary" }
+    };
+
+    const rarity = rarityColors[quest.difficulty] || rarityColors.easy;
+
     return (
         <motion.div
             layout
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9 }}
+            whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
             className={clsx(
-                "relative p-4 rounded-lg border-l-4 mb-3 transition-all group overflow-hidden",
-                quest.completed ? "bg-slate-900/50 border-game-muted" : "bg-game-panel border-game-accent hover:shadow-neon hover:border-l-[6px]"
+                "relative p-4 rounded-xl border-l-4 mb-3 transition-all group overflow-hidden",
+                quest.completed
+                    ? "bg-slate-900/50 border-game-muted opacity-60"
+                    : `${rarity.bg} ${rarity.border} ${rarity.glow} hover:border-l-[8px]`
             )}
         >
-            <div className="flex justify-between items-start gap-4">
+            {/* Background Glow Effect */}
+            {!quest.completed && (
+                <div className={clsx(
+                    "absolute top-0 right-0 w-32 h-32 -mr-16 -mt-16 rounded-full blur-3xl opacity-20 transition-colors",
+                    rarity.text.replace('text-', 'bg-')
+                )} />
+            )}
+
+            <div className="flex justify-between items-start gap-4 relative z-10">
                 <div className="flex-1 min-w-0">
-                    <h3 className={clsx("font-bold font-game text-lg truncate", quest.completed && "text-gray-500 line-through")}>
+                    <h3 className={clsx(
+                        "font-bold font-game text-lg truncate transition-colors",
+                        quest.completed ? "text-gray-500 line-through" : "text-slate-100"
+                    )}>
                         {quest.title}
                     </h3>
-                    <div className="flex flex-wrap gap-2 mt-2 text-[10px] md:text-xs text-gray-400">
+                    <div className="flex flex-wrap gap-2 mt-2 text-[10px] md:text-xs">
                         <span className={clsx(
-                            "px-2 py-0.5 rounded uppercase font-bold tracking-wider",
-                            quest.difficulty === 'easy' && "bg-slate-700 text-gray-300",
-                            quest.difficulty === 'medium' && "bg-blue-900/50 text-blue-300",
-                            quest.difficulty === 'hard' && "bg-red-900/50 text-red-300"
+                            "px-2 py-0.5 rounded-full uppercase font-black tracking-widest border",
+                            quest.completed ? "bg-slate-800 border-slate-700 text-gray-500" : `bg-black/40 ${rarity.border} ${rarity.text}`
                         )}>
-                            {quest.difficulty.toUpperCase()}
+                            {rarity.label}
                         </span>
-                        <span className="flex items-center gap-1 text-game-gold font-bold">
+                        <span className="flex items-center gap-1 text-game-gold font-bold bg-black/40 px-2 py-0.5 rounded-full border border-game-gold/20">
                             <Sword size={12} /> {quest.reward.xp + quest.reward.gold} VAL
                         </span>
                     </div>
@@ -40,21 +61,30 @@ const QuestItem = ({ quest, onComplete, onDelete }) => {
 
                 <div className="flex items-center gap-1 md:gap-2 shrink-0">
                     {!quest.completed && (
-                        <button
+                        <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
                             onClick={() => onComplete(quest.id)}
-                            className="p-2 rounded-full hover:bg-game-accent/20 text-game-accent transition-colors"
+                            className={clsx(
+                                "p-2 rounded-full transition-all",
+                                `hover:${rarity.bg} ${rarity.text}`
+                            )}
                         >
-                            <Circle size={24} />
-                        </button>
+                            <Circle size={28} strokeWidth={2.5} />
+                        </motion.button>
                     )}
                     {quest.completed && (
-                        <div className="p-2 text-game-success">
-                            <CheckCircle size={24} />
-                        </div>
+                        <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="p-2 text-game-success"
+                        >
+                            <CheckCircle size={28} strokeWidth={2.5} />
+                        </motion.div>
                     )}
                     <button
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                        className="p-2 rounded-full hover:bg-slate-700 text-gray-400 transition-colors"
+                        className="p-2 rounded-full hover:bg-slate-800 text-gray-400 transition-colors"
                     >
                         <Settings size={18} />
                     </button>
@@ -73,11 +103,11 @@ const QuestItem = ({ quest, onComplete, onDelete }) => {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="mt-4 pt-4 border-t border-slate-700 overflow-hidden"
+                        className="mt-4 pt-4 border-t border-slate-700/50 overflow-hidden relative z-10"
                     >
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Parameters</label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Mission Specs</label>
                                 <div className="space-y-1">
                                     {quest.dueDate && (
                                         <div className="flex items-center gap-2 text-xs text-game-accent font-medium">
@@ -90,7 +120,7 @@ const QuestItem = ({ quest, onComplete, onDelete }) => {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-[10px] text-gray-500 uppercase font-bold">Created</p>
+                                <p className="text-[10px] text-gray-500 uppercase font-bold">Logged</p>
                                 <p className="text-[10px] text-gray-400">{new Date(quest.createdAt).toLocaleDateString()}</p>
                             </div>
                         </div>
@@ -192,9 +222,10 @@ const QuestBoard = () => {
                                             onChange={(e) => setDifficulty(e.target.value)}
                                             className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-game-accent"
                                         >
-                                            <option value="easy">Easy</option>
-                                            <option value="medium">Medium</option>
-                                            <option value="hard">Hard</option>
+                                            <option value="easy">Common</option>
+                                            <option value="medium">Rare</option>
+                                            <option value="hard">Epic</option>
+                                            <option value="legendary">Legendary</option>
                                         </select>
                                     </div>
 

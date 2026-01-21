@@ -11,8 +11,11 @@ import {
     Settings,
     ChevronDown,
     RefreshCw,
-    Package
+    Package,
+    Coins,
+    Minus
 } from 'lucide-react';
+import { useGame } from '../context/GameContext';
 import clsx from 'clsx';
 
 const BudgetView = () => {
@@ -61,32 +64,32 @@ const BudgetView = () => {
     return (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-0">
             {/* Header / Summary */}
-            <div className="grid grid-cols-3 gap-2 px-1">
-                <div className="bg-slate-800/40 p-2 rounded-xl border border-slate-700/50 backdrop-blur-sm shadow-lg flex flex-col justify-center">
-                    <div className="flex items-center gap-1.5 mb-1 opacity-70">
-                        <DollarSign className="text-game-accent" size={12} />
-                        <span className="text-[8px] font-game text-game-muted uppercase tracking-tighter truncate">Budget</span>
+            <div className="grid grid-cols-3 gap-3 px-1">
+                <div className="bg-slate-800/40 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-lg flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80">
+                        <DollarSign className="text-game-accent" size={14} />
+                        <span className="text-[10px] font-bold font-game text-game-muted uppercase tracking-wider truncate">Budget</span>
                     </div>
-                    <p className="text-sm font-black text-white leading-none">${totalMonthlyBudget}</p>
+                    <p className="text-2xl font-black text-white leading-none">${totalMonthlyBudget}</p>
                 </div>
 
-                <div className="bg-slate-800/40 p-2 rounded-xl border border-slate-700/50 backdrop-blur-sm shadow-lg flex flex-col justify-center">
-                    <div className="flex items-center gap-1.5 mb-1 opacity-70">
-                        <ShoppingCart className="text-game-gold" size={12} />
-                        <span className="text-[8px] font-game text-game-muted uppercase tracking-tighter truncate">Grocery</span>
+                <div className="bg-slate-800/40 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-lg flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80">
+                        <ShoppingCart className="text-game-gold" size={14} />
+                        <span className="text-[10px] font-bold font-game text-game-muted uppercase tracking-wider truncate">Grocery</span>
                     </div>
-                    <p className="text-sm font-black text-white leading-none">${groceryAllocation}</p>
-                    <div className="mt-1 text-[7px] text-game-muted leading-tight">
-                        <span className="text-white">${totalGrocerySpent.toFixed(0)}</span>/${totalGroceryEstimated.toFixed(0)}
+                    <p className="text-2xl font-black text-white leading-none">${groceryAllocation}</p>
+                    <div className="mt-1 text-[9px] text-game-muted leading-tight font-mono">
+                        <span className="text-white">${totalGrocerySpent.toFixed(0)}</span> / ${totalGroceryEstimated.toFixed(0)}
                     </div>
                 </div>
 
-                <div className="bg-slate-800/40 p-2 rounded-xl border border-slate-700/50 backdrop-blur-sm shadow-lg relative overflow-hidden flex flex-col justify-center">
-                    <div className="flex items-center gap-1.5 mb-1 opacity-70">
-                        <TrendingUp className="text-emerald-500" size={12} />
-                        <span className="text-[8px] font-game text-game-muted uppercase tracking-tighter truncate">Earned</span>
+                <div className="bg-slate-800/40 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-lg relative overflow-hidden flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80">
+                        <TrendingUp className="text-emerald-500" size={14} />
+                        <span className="text-[10px] font-bold font-game text-game-muted uppercase tracking-wider truncate">Earned</span>
                     </div>
-                    <p className="text-sm font-black text-emerald-400 leading-none">${earnedRewards.toFixed(2)}</p>
+                    <p className="text-2xl font-black text-emerald-400 leading-none">${earnedRewards.toFixed(2)}</p>
                 </div>
             </div>
 
@@ -327,6 +330,96 @@ const BudgetView = () => {
                                 </span>
                             </div>
                         </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Miscellaneous Spending Section */}
+            <MiscSpendingSection />
+        </div>
+    );
+};
+
+
+// Subcomponent for cleaner code
+const MiscSpendingSection = () => {
+    const { spendCoins, coinHistory, stats } = useGame();
+    const [desc, setDesc] = useState('');
+    const [amount, setAmount] = useState('');
+
+    const handleSpend = (e) => {
+        e.preventDefault();
+        if (!desc || !amount) return;
+        const success = spendCoins(parseInt(amount), desc);
+        if (success) {
+            setDesc('');
+            setAmount('');
+        } else {
+            alert("Insufficient Credits!");
+        }
+    };
+
+    const recentSpending = coinHistory
+        .filter(t => t.type === 'spent')
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 5);
+
+    return (
+        <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-700/50 bg-slate-800/30">
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                    <Coins className="text-game-gold" size={20} />
+                    MISCELLANEOUS (CREDITS)
+                </h2>
+                <p className="text-[10px] text-game-muted mt-0.5 uppercase tracking-widest">Disposable Income Tracking</p>
+            </div>
+
+            <div className="p-4">
+                <form onSubmit={handleSpend} className="mb-6 flex flex-col md:flex-row gap-2">
+                    <input
+                        type="text"
+                        placeholder="Expense description..."
+                        value={desc}
+                        onChange={(e) => setDesc(e.target.value)}
+                        className="w-full md:flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-game-gold transition-all"
+                    />
+                    <div className="w-full md:w-24 relative">
+                        <input
+                            type="number"
+                            placeholder="Cost"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-game-gold outline-none focus:border-game-gold transition-all"
+                        />
+                        <span className="absolute right-8 top-3.5 text-xs text-game-gold font-bold">C</span>
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={!amount || parseInt(amount) > stats.gold}
+                        className="bg-game-gold/10 hover:bg-game-gold/20 text-game-gold border border-game-gold/50 p-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Minus size={24} />
+                    </button>
+                </form>
+
+                <div className="space-y-3">
+                    {recentSpending.length === 0 ? (
+                        <div className="text-center py-8 text-slate-600 border-2 border-dashed border-slate-800 rounded-2xl">
+                            <p className="text-xs">No recent spending recorded.</p>
+                        </div>
+                    ) : (
+                        recentSpending.map(tx => (
+                            <div key={tx.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/20 border border-slate-700/30">
+                                <div>
+                                    <p className="font-bold text-slate-300 text-sm">{tx.description}</p>
+                                    <p className="text-[10px] text-slate-500">{new Date(tx.date).toLocaleDateString()}</p>
+                                </div>
+                                <div className="flex items-center gap-1 text-red-400">
+                                    <span className="font-black text-lg">-{tx.amount}</span>
+                                    <Coins size={14} className="text-game-gold" />
+                                </div>
+                            </div>
+                        ))
                     )}
                 </div>
             </div>

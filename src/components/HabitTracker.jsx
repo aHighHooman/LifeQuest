@@ -7,20 +7,46 @@ import clsx from 'clsx';
 const HabitItem = ({ habit, onCheck, onDelete }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+    const getFlameTier = (streak) => {
+        if (streak >= 100) return { color: "text-purple-400", glow: "shadow-[0_0_20px_rgba(168,85,247,0.6)]", size: 20, label: "Ethereal", bg: "bg-purple-500/10", border: "border-purple-500/30" };
+        if (streak >= 50) return { color: "text-red-500", glow: "shadow-[0_0_15px_rgba(239,68,68,0.5)]", size: 18, label: "Inferno", bg: "bg-red-500/10", border: "border-red-500/30" };
+        if (streak >= 25) return { color: "text-orange-500", glow: "shadow-[0_0_12px_rgba(249,115,22,0.4)]", size: 16, label: "Blazing", bg: "bg-orange-500/10", border: "border-orange-500/30" };
+        if (streak >= 5) return { color: "text-yellow-400", glow: "shadow-[0_0_10px_rgba(250,204,21,0.3)]", size: 14, label: "Kindled", bg: "bg-yellow-500/10", border: "border-yellow-500/30" };
+        return { color: "text-gray-600", glow: "shadow-none", size: 12, label: "Faint", bg: "bg-slate-800/30", border: "border-slate-700" };
+    };
+
+    const tier = getFlameTier(habit.streak);
+
     return (
         <motion.div
             layout
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-game-panel p-4 rounded-lg border border-slate-700 mb-3 group hover:border-slate-500 transition-colors"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            whileHover={{ scale: 1.01, translateX: 4 }}
+            className={clsx(
+                "p-4 rounded-xl border backdrop-blur-md mb-3 group transition-all duration-300 shadow-xl overflow-hidden relative",
+                tier.bg,
+                tier.border,
+                "hover:shadow-[0_0_30px_rgba(0,0,0,0.3)]"
+            )}
         >
-            <div className="flex items-center justify-between gap-4">
+            <div className="absolute top-0 left-0 w-1 h-full bg-current opacity-30 group-hover:opacity-100 transition-opacity" />
+            <div className="flex items-center justify-between gap-4 relative z-10">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3">
                         <h3 className="font-game font-bold text-lg text-slate-100 truncate">{habit.title}</h3>
-                        <div className="flex items-center gap-1 text-[10px] text-orange-400 font-bold">
-                            <Flame size={12} /> {habit.streak}
+                        <div className={clsx("flex items-center gap-1 font-black transition-all duration-500", tier.color)}>
+                            <motion.div
+                                animate={habit.streak > 0 ? {
+                                    scale: [1, 1.2, 1],
+                                    rotate: [0, 5, -5, 0]
+                                } : {}}
+                                transition={{ repeat: Infinity, duration: 2 }}
+                            >
+                                <Flame size={tier.size} className={clsx("drop-shadow-lg", tier.glow)} />
+                            </motion.div>
+                            <span className="text-xs">{habit.streak}</span>
                         </div>
                     </div>
                     <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1">
@@ -106,12 +132,19 @@ const HabitTracker = () => {
 
     return (
         <div className="pb-24 md:pb-0">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-3xl font-game font-bold text-white tracking-widest uppercase text-glow">
+            <div className="flex justify-between items-center mb-10">
+                <div className="relative">
+                    <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: '100%' }}
+                        className="absolute -bottom-2 left-0 h-1 bg-gradient-to-r from-game-gold to-transparent"
+                    />
+                    <h2 className="text-4xl font-game font-black text-white tracking-[0.2em] uppercase bg-clip-text text-transparent bg-gradient-to-br from-white via-white to-gray-500">
                         Protocol Database
                     </h2>
-                    <p className="text-sm text-gray-500">Manage recurring operational requirements.</p>
+                    <p className="text-[10px] text-game-gold/60 font-black uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
+                        <span className="w-8 h-px bg-game-gold/30" /> Active System Protocols
+                    </p>
                 </div>
             </div>
 

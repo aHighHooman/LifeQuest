@@ -53,13 +53,97 @@ export const GameProvider = ({ children }) => {
         }
     });
 
-    // Widget mode removed
+    // --- DATA LOGGING & SETTINGS ---
+    const [settings, setSettings] = useState(() => {
+        try {
+            const saved = localStorage.getItem('lq_settings');
+            return saved ? JSON.parse(saved) : {
+                protocolReward: 1,
+                questRewards: {
+                    easy: 5,
+                    medium: 15,
+                    hard: 40,
+                    legendary: 100
+                }
+            };
+        } catch (e) {
+            return {
+                protocolReward: 1,
+                questRewards: {
+                    easy: 5,
+                    medium: 15,
+                    hard: 40,
+                    legendary: 100
+                }
+            };
+        }
+    });
+
+    const [calories, setCalories] = useState(() => {
+        try {
+            const saved = localStorage.getItem('lq_calories');
+            return saved ? JSON.parse(saved) : { current: 0, target: 2000, history: [] };
+        } catch (e) {
+            return { current: 0, target: 2000, history: [] };
+        }
+    });
+
+    const [coinHistory, setCoinHistory] = useState(() => {
+        try {
+            const saved = localStorage.getItem('lq_coin_history');
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            return [];
+        }
+    });
 
     useEffect(() => {
-        localStorage.setItem('lq_stats', JSON.stringify(stats));
-        localStorage.setItem('lq_quests', JSON.stringify(quests));
-        localStorage.setItem('lq_habits', JSON.stringify(habits));
-    }, [stats, quests, habits]);
+        localStorage.setItem('lq_settings', JSON.stringify(settings));
+        localStorage.setItem('lq_calories', JSON.stringify(calories));
+        localStorage.setItem('lq_coin_history', JSON.stringify(coinHistory));
+    }, [settings, calories, coinHistory]);
+
+    // --- ACTIONS ---
+
+    // Direct Stats Modification (for Debug/Settings Menu)
+    const updateStats = (newStats) => {
+        setStats(prev => ({ ...prev, ...newStats }));
+    };
+
+    const updateSettings = (newSettings) => {
+        setSettings(prev => ({ ...prev, ...newSettings }));
+    };
+
+    // Calorie Tracking
+    const addCalories = (amount) => {
+        const today = new Date().toISOString().split('T')[0];
+        setCalories(prev => {
+            const newCurrent = Math.max(0, prev.current + amount);
+            // Simple history tracking: array of { date, amount }
+            // Or aggregate by day? Let's do simple transaction log for now, aggregate data later for charts
+            const newEntry = { date: new Date().toISOString(), amount: amount };
+            return { ...prev, current: newCurrent, history: [...prev.history, newEntry] };
+        });
+    };
+
+    const setCalorieGoal = (amount) => {
+        setCalories(prev => ({ ...prev, target: amount }));
+    };
+
+    // Misc Coin Spending
+    const spendCoins = (amount, description) => {
+        if (stats.gold < amount) return false;
+
+        setStats(prev => ({ ...prev, gold: prev.gold - amount }));
+        setCoinHistory(prev => [...prev, {
+            id: Date.now().toString(),
+            date: new Date().toISOString(),
+            amount,
+            description,
+            type: 'spent'
+        }]);
+        return true;
+    };
 
     const addXp = (amount) => {
         setStats(prev => {
@@ -74,15 +158,23 @@ export const GameProvider = ({ children }) => {
                 newXp -= prev.maxXp;
                 newMaxXp = Math.floor(prev.maxXp * 1.2);
                 newHp = newMaxHp; // Heal on level up
-                // Play level up sound/effect here?
             }
 
             return { ...prev, xp: newXp, level: newLevel, maxXp: newMaxXp, hp: newHp };
         });
     };
 
-    const addGold = (amount) => {
+    const addGold = (amount, source = 'reward') => {
         setStats(prev => ({ ...prev, gold: prev.gold + amount }));
+        if (amount > 0) {
+            setCoinHistory(prev => [...prev, {
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                amount,
+                description: `Earned from ${source}`,
+                type: 'earned'
+            }]);
+        }
     };
 
     const takeDamage = (amount) => {
@@ -94,10 +186,12 @@ export const GameProvider = ({ children }) => {
 
     // --- QUESTS ---
     const addQuest = (title, difficulty = 'easy', dueDate = null, customReward = null) => {
+        // Use settings for rewards if not custom
         const defaultRewards = {
-            easy: { xp: 10, gold: 5 },
-            medium: { xp: 25, gold: 15 },
-            hard: { xp: 50, gold: 40 },
+            easy: { xp: 10, gold: settings.questRewards.easy },
+            medium: { xp: 25, gold: settings.questRewards.medium },
+            hard: { xp: 60, gold: settings.questRewards.hard },
+            legendary: { xp: 150, gold: settings.questRewards.legendary },
         };
 
         const newQuest = {
@@ -116,7 +210,7 @@ export const GameProvider = ({ children }) => {
         setQuests(prev => prev.map(q => {
             if (q.id === id && !q.completed) {
                 addXp(q.reward.xp);
-                addGold(q.reward.gold);
+                addGold(q.reward.gold, 'Quest');
                 addRewardFromGold(q.reward.gold);
                 return { ...q, completed: true, completedAt: new Date().toISOString() };
             }
@@ -130,15 +224,13 @@ export const GameProvider = ({ children }) => {
 
     // --- HABITS ---
     const addHabit = (title, frequency = 'daily', frequencyParam = 1) => {
-        // frequency: 'daily', 'weekly', 'interval' (every X days), 'monthly'
-        // frequencyParam: number (e.g. 2 for "every 2 days")
         const newHabit = {
             id: Date.now().toString(),
             title,
             frequency,
             frequencyParam,
             streak: 0,
-            history: {}, // { "YYYY-MM-DD": 1 }
+            history: {},
             createdAt: new Date().toISOString(),
         };
         setHabits(prev => [newHabit, ...prev]);
@@ -151,20 +243,10 @@ export const GameProvider = ({ children }) => {
                 const newHistory = { ...h.history };
                 const count = newHistory[today] || 0;
 
-                // Prevent double checking for the same day if we want to be strict, 
-                // but for a game, we might allow grinding. 
-                // Let's allow grinding for now but maybe limit XP?
-
                 if (direction === 'positive') {
-                    // Bonus for maintaining streak vs simple completion?
-                    // For now simple add.
                     addXp(5);
-                    addGold(1);
-                    addRewardFromGold(1);
-
-                    // Logic to calculate if streak continues could be complex with custom intervals.
-                    // We'll increment streak if this is the FIRST check of the "period".
-                    // Simplified: just inc streak on check for now.
+                    addGold(settings.protocolReward, 'Protocol');
+                    addRewardFromGold(settings.protocolReward);
 
                     return { ...h, streak: h.streak + 1, history: { ...newHistory, [today]: count + 1 } };
                 } else {
@@ -182,9 +264,10 @@ export const GameProvider = ({ children }) => {
 
     return (
         <GameContext.Provider value={{
-            stats, quests, habits,
+            stats, quests, habits, settings, calories, coinHistory,
             addQuest, completeQuest, deleteQuest,
-            addHabit, checkHabit, deleteHabit
+            addHabit, checkHabit, deleteHabit,
+            updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins
         }}>
             {children}
         </GameContext.Provider>
