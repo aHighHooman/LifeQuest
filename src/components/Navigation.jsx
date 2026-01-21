@@ -172,13 +172,13 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
             style={{ touchAction: 'pan-y' }}
         >
             {/* Main Content Content (Injected) */}
-            <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden relative z-10 select-text">
+            <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden relative z-10 select-text pb-64">
                 {children}
             </div>
 
             {/* Bottom Gesture Zone: Captures Vertical Swipes for Expansion */}
             <motion.div
-                className="fixed bottom-0 left-0 right-0 h-48 z-10 pointer-events-auto"
+                className="fixed bottom-0 left-0 right-0 h-20 z-10 pointer-events-auto"
                 onPan={onPan}
                 onPanEnd={onPanEnd}
                 style={{ touchAction: 'none' }}
