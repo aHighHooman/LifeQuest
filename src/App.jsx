@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { GameProvider, useGame } from './context/GameContext';
 import Dashboard from './components/Dashboard';
 import QuestBoard from './components/QuestBoard';
@@ -6,7 +7,7 @@ import HabitTracker from './components/HabitTracker';
 import Navigation from './components/Navigation';
 
 import BudgetView from './components/BudgetView';
-import CalendarView from './components/CalendarView';
+
 import CalorieTracker from './components/CalorieTracker';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
@@ -45,14 +46,29 @@ function AppContent({ currentTab, setCurrentTab }) {
           </div>
         </header>
 
-        <main className="min-h-[600px] relative z-10">
+        <motion.main
+          className="min-h-[600px] relative z-10"
+          onPanEnd={(e, info) => {
+            const threshold = 50;
+            if (currentTab === 'dashboard') {
+              if (info.offset.x < -threshold) setCurrentTab('protocols'); // Swipe Left -> Go Right
+              if (info.offset.x > threshold) setCurrentTab('quests'); // Swipe Right -> Go Left
+            } else if (currentTab === 'quests') {
+              if (info.offset.x < -threshold) setCurrentTab('dashboard');
+              // Can't swipe right from Quests (first tab)
+            } else if (currentTab === 'protocols') {
+              if (info.offset.x > threshold) setCurrentTab('dashboard');
+              // Can't swipe left from Protocols (last tab)
+            }
+          }}
+        >
           {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} />}
           {currentTab === 'quests' && <QuestBoard />}
-          {currentTab === 'calendar' && <CalendarView />}
+
           {currentTab === 'protocols' && <HabitTracker />}
           {currentTab === 'budget' && <BudgetView />}
           {currentTab === 'calories' && <CalorieTracker />}
-        </main>
+        </motion.main>
       </div>
 
       <Navigation currentTab={currentTab} onTabChange={setCurrentTab} />

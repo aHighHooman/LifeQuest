@@ -177,7 +177,7 @@ const HabitTracker = () => {
 
                         <button
                             type="submit"
-                            className="w-full md:w-auto bg-game-gold hover:bg-yellow-300 text-slate-900 px-6 py-2 rounded-lg transition-colors flex items-center justify-center font-bold gap-2 shadow-neon-gold h-[42px]"
+                            className="w-full md:w-auto bg-purple-500 hover:bg-purple-400 text-white px-6 py-2 rounded-lg transition-colors flex items-center justify-center font-bold gap-2 shadow-neon-purple h-[42px]"
                         >
                             <Plus size={20} /> <span className="md:hidden">Add Protocol</span>
                         </button>

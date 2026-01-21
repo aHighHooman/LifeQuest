@@ -98,10 +98,13 @@ export const GameProvider = ({ children }) => {
     });
 
     useEffect(() => {
+        localStorage.setItem('lq_stats', JSON.stringify(stats));
+        localStorage.setItem('lq_quests', JSON.stringify(quests));
+        localStorage.setItem('lq_habits', JSON.stringify(habits));
         localStorage.setItem('lq_settings', JSON.stringify(settings));
         localStorage.setItem('lq_calories', JSON.stringify(calories));
         localStorage.setItem('lq_coin_history', JSON.stringify(coinHistory));
-    }, [settings, calories, coinHistory]);
+    }, [stats, quests, habits, settings, calories, coinHistory]);
 
     // --- ACTIONS ---
 
