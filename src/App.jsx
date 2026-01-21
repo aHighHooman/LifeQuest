@@ -30,7 +30,7 @@ function AppContent({ currentTab, setCurrentTab }) {
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10">
-        <header className="mb-4 flex items-center justify-between">
+        <header className="mb-2 flex items-center justify-between">
           <div className={`${currentTab !== 'dashboard' ? 'opacity-0 pointer-events-none' : ''}`}>
             <h1
               onClick={() => setIsSettingsOpen(true)}

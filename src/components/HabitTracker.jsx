@@ -132,7 +132,7 @@ const HabitTracker = () => {
 
     return (
         <div className="pb-24 md:pb-0">
-            <div className="flex justify-between items-center mb-10">
+            <div className="flex justify-between items-center mb-6">
                 <div className="relative">
                     <motion.div
                         initial={{ width: 0 }}

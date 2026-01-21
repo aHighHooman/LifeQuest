@@ -61,7 +61,7 @@ const Dashboard = ({ onTabChange }) => {
                             className="cursor-pointer group"
                         >
                             <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1 px-1 group-hover:text-white transition-colors">
-                                <span className="flex items-center gap-1 uppercase"><Heart size={10} className="text-game-danger fill-game-danger/20" /> Health / Metabolism</span>
+                                <span className="flex items-center gap-1 uppercase"><Heart size={10} className="text-game-danger fill-game-danger/20" /> Health</span>
                                 <span className="font-mono text-gray-500 group-hover:text-white">{stats.hp}/{stats.maxHp}</span>
                             </div>
                             <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 relative group-hover:border-game-danger/50 transition-colors">

@@ -1,3 +1,4 @@
+import React from 'react';
 import { LayoutDashboard, Scroll, Zap } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,14 +22,40 @@ const Navigation = ({ currentTab, onTabChange }) => {
     const angles = [-45, 0, 45];
     const rotation = -angles[validNavIndex];
 
+    const [dragOffset, setDragOffset] = React.useState(0);
+
+    const onPan = (event, info) => {
+        // Map horizontal drag pixels to degrees. 
+        // Dragging 1px = 0.5 degrees rotation.
+        setDragOffset(info.offset.x * 0.5);
+    };
+
+    const onPanEnd = (event, info) => {
+        const threshold = 50; // px drag to trigger switch
+        if (info.offset.x > threshold) {
+            // Dragged Right -> Rotate Clockwise -> Go to Previous (Left) Tab
+            if (validNavIndex > 0) {
+                onTabChange(tabs[validNavIndex - 1].id);
+            }
+        } else if (info.offset.x < -threshold) {
+            // Dragged Left -> Rotate Counter-Clockwise -> Go to Next (Right) Tab
+            if (validNavIndex < tabs.length - 1) {
+                onTabChange(tabs[validNavIndex + 1].id);
+            }
+        }
+        setDragOffset(0);
+    };
+
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-40 pointer-events-none overflow-hidden">
             <div className="relative w-80 h-32 flex items-end justify-center">
                 {/* Rotating Container (The Arc Wheel) */}
                 <motion.nav
-                    animate={{ rotate: rotation }}
+                    onPan={onPan}
+                    onPanEnd={onPanEnd}
+                    animate={{ rotate: rotation + dragOffset }}
                     transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                    className="pointer-events-auto bg-slate-950/60 border border-slate-700/50 backdrop-blur-2xl rounded-full w-[400px] h-[400px] absolute -bottom-[320px] flex justify-center pt-8 shadow-[0_-10px_40px_rgba(0,0,0,0.6)]"
+                    className="pointer-events-auto bg-slate-950/60 border border-slate-700/50 backdrop-blur-2xl rounded-full w-[400px] h-[400px] absolute -bottom-[320px] flex justify-center pt-8 shadow-[0_-10px_40px_rgba(0,0,0,0.6)] cursor-grab active:cursor-grabbing"
                 >
                     {tabs.map((tab, index) => {
                         const Icon = tab.icon;

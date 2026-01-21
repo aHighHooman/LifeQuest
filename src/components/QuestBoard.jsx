@@ -159,7 +159,7 @@ const QuestBoard = () => {
 
     return (
         <div className="pb-24 md:pb-0">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-5">
                 <div>
                     <h2 className="text-3xl font-game font-bold text-white tracking-widest uppercase text-glow">
                         Active Quests
