@@ -27,51 +27,41 @@ function AppContent({ currentTab, setCurrentTab }) {
   // Widget mode logic removed
 
   return (
-    <div className="min-h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))] font-sans selection:bg-game-accent selection:text-slate-900 overflow-x-hidden">
+    <div className="min-h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col">
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-      <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10">
-        <header className="mb-2 flex items-center justify-between">
-          <div className={`${currentTab !== 'dashboard' ? 'opacity-0 pointer-events-none' : ''}`}>
-            <h1
-              onClick={() => setIsSettingsOpen(true)}
-              className="text-4xl md:text-5xl font-black font-game text-transparent bg-clip-text bg-gradient-to-r from-game-accent to-game-gold tracking-tighter drop-shadow-lg p-1 cursor-pointer hover:opacity-80 transition-opacity"
-            >
-              LIFEQUEST
-            </h1>
-          </div>
-          <div className="text-right hidden md:block">
-            <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs">System Online</p>
-            <p className="text-[10px] text-slate-600 font-mono">{new Date().toLocaleDateString()}</p>
-          </div>
-        </header>
+      <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
+        <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))]">
+          <header className="mb-2 flex items-center justify-between">
+            <div className={`${currentTab !== 'dashboard' ? 'opacity-0 pointer-events-none' : ''}`}>
+              <h1
+                onClick={() => setIsSettingsOpen(true)}
+                className="text-4xl md:text-5xl font-black font-game text-transparent bg-clip-text bg-gradient-to-r from-game-accent to-game-gold tracking-tighter drop-shadow-lg p-1 cursor-pointer hover:opacity-80 transition-opacity"
+              >
+                LIFEQUEST
+              </h1>
+            </div>
+            <div className="text-right hidden md:block">
+              <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs">System Online</p>
+              <p className="text-[10px] text-slate-600 font-mono">{new Date().toLocaleDateString()}</p>
+            </div>
+          </header>
 
-        <motion.main
-          className="min-h-[600px] relative z-10"
-          onPanEnd={(e, info) => {
-            const threshold = 50;
-            if (currentTab === 'dashboard') {
-              if (info.offset.x < -threshold) setCurrentTab('protocols'); // Swipe Left -> Go Right
-              if (info.offset.x > threshold) setCurrentTab('quests'); // Swipe Right -> Go Left
-            } else if (currentTab === 'quests') {
-              if (info.offset.x < -threshold) setCurrentTab('dashboard');
-              // Can't swipe right from Quests (first tab)
-            } else if (currentTab === 'protocols') {
-              if (info.offset.x > threshold) setCurrentTab('dashboard');
-              // Can't swipe left from Protocols (last tab)
-            }
-          }}
-        >
-          {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} />}
-          {currentTab === 'quests' && <QuestBoard />}
+          <motion.main
+            className="min-h-[600px] relative z-10"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} />}
+            {currentTab === 'quests' && <QuestBoard />}
 
-          {currentTab === 'protocols' && <HabitTracker />}
-          {currentTab === 'budget' && <BudgetView />}
-          {currentTab === 'calories' && <CalorieTracker />}
-        </motion.main>
-      </div>
-
-      <Navigation currentTab={currentTab} onTabChange={setCurrentTab} />
+            {currentTab === 'protocols' && <HabitTracker />}
+            {currentTab === 'budget' && <BudgetView />}
+            {currentTab === 'calories' && <CalorieTracker />}
+          </motion.main>
+        </div>
+      </Navigation>
 
       <div className="fixed inset-0 pointer-events-none z-[0] opacity-20"
         style={{

@@ -3,7 +3,7 @@ import { LayoutDashboard, Scroll, Zap, Coins, ChevronUp, Heart } from 'lucide-re
 import clsx from 'clsx';
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 
-const Navigation = ({ currentTab, onTabChange }) => {
+const Navigation = ({ currentTab, onTabChange, children }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
     // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
@@ -108,16 +108,14 @@ const Navigation = ({ currentTab, onTabChange }) => {
         let nextTab = currentTab;
         let nextIsExpanded = isExpanded;
 
+        // Note: With touchAction='pan-y' on the wrapper, we mainly receive Horizontal pans.
+        // Vertical pans are largely consumed by browser scrolling, EXCEPT on the bottom gesture layer.
+
         if (absY > absX && absY > 30) {
-            // Vertical Swipe
+            // Vertical Swipe (Mostly triggered from Bottom Layer)
             if (y < 0 && !isExpanded) {
                 // Swipe Up -> Expand
                 nextIsExpanded = true;
-                // Original logic: if (innerIndex === -1) onTabChange(innerTabs[0].id);
-                // If innerIndex is VALID, we stay on it? Or do nothing?
-                // "Swipe Up -> Expand" implies we just reveal the inner disk.
-                // If we are already on 'dashboard' (outer), expanding reveals 'budget' (inner)?
-                // Let's stick to original logic:
                 if (innerIndex === -1) nextTab = innerTabs[0].id; // Default to first inner
             }
             if (y > 0 && isExpanded) {
@@ -126,7 +124,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
                 nextTab = 'dashboard';
             }
         } else if (absX > threshold) {
-            // Horizontal Swipe
+            // Horizontal Swipe (Works globally)
             if (isExpanded) {
                 if (x > 0 && validInnerIndex > 0) {
                     nextTab = innerTabs[validInnerIndex - 1].id;
@@ -167,16 +165,26 @@ const Navigation = ({ currentTab, onTabChange }) => {
     };
 
     return (
-        <>
-            {/* Gesture Capture Layer */}
+        <motion.div
+            className="flex-1 w-full flex flex-col min-h-0 relative select-none"
+            onPan={onPan}
+            onPanEnd={onPanEnd}
+            style={{ touchAction: 'pan-y' }}
+        >
+            {/* Main Content Content (Injected) */}
+            <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden relative z-10 select-text">
+                {children}
+            </div>
+
+            {/* Bottom Gesture Zone: Captures Vertical Swipes for Expansion */}
             <motion.div
-                className="fixed bottom-0 left-0 right-0 h-[50vh] z-10"
+                className="fixed bottom-0 left-0 right-0 h-48 z-10 pointer-events-auto"
                 onPan={onPan}
                 onPanEnd={onPanEnd}
                 style={{ touchAction: 'none' }}
             />
 
-            <div className="fixed bottom-0 left-0 right-0 z-20 flex justify-center h-0 pointer-events-none overflow-visible">
+            <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-0 pointer-events-none overflow-visible">
 
                 <div className="relative flex items-end justify-center pointer-events-auto mb-[-50px]">
 
@@ -311,7 +319,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
 
                 </div>
             </div>
-        </>
+        </motion.div>
     );
 };
 
