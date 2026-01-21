@@ -342,7 +342,7 @@ const BudgetView = () => {
 
 
 // Subcomponent for cleaner code
-const MiscSpendingSection = () => {
+const MiscSpendingSection = React.memo(() => {
     const { spendCoins, coinHistory, stats } = useGame();
     const [desc, setDesc] = useState('');
     const [amount, setAmount] = useState('');
@@ -425,6 +425,6 @@ const MiscSpendingSection = () => {
             </div>
         </div>
     );
-};
+});
 
 export default BudgetView;

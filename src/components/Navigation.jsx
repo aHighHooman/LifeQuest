@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Scroll, Zap, Coins, ChevronUp, Heart } from 'lucide-react';
 import clsx from 'clsx';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 
 const Navigation = ({ currentTab, onTabChange }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const [dragOffset, setDragOffset] = useState(0);
+
+    // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
+    const dragOffset = useMotionValue(0);
 
     const outerTabs = [
         { id: 'quests', label: 'Quests', icon: Scroll, color: 'text-blue-400' },
@@ -31,15 +33,27 @@ const Navigation = ({ currentTab, onTabChange }) => {
 
 
     // -- Rotation Logic --
+    // We compute the BASE rotation. The drag offset will be ADDED to this via transform.
 
     const outerAngles = [-45, 0, 45];
     const validOuterIndex = outerIndex !== -1 ? outerIndex : 1;
-    const outerRotation = -outerAngles[validOuterIndex];
+    const baseOuterRotation = -outerAngles[validOuterIndex];
 
     const innerAngles = [-25, 25]; // Tighter for inner arc
     const validInnerIndex = innerIndex !== -1 ? innerIndex : 0;
-    const innerRotation = -innerAngles[validInnerIndex];
+    const baseInnerRotation = -innerAngles[validInnerIndex];
 
+    // Create transformed motion values for actual rotation
+    // If NOT expanded, outer rotates with drag. If expanded, inner rotates with drag.
+    // We can conditionally apply the drag offset in the animate prop or via a derived motion value.
+    // Simpler approach: Pass the raw MotionValue to the animate logic or styling.
+
+    // However, since we are doing conditional logic (isExpanded determines WHICH disk gets the drag),
+    // we might need to reset dragOffset to 0 on panEnd, which we do.
+
+    // Computed rotations for the disks
+    // We can't put `isExpanded ? dragOffset : 0` directly into `animate` easily without causing re-renders if we were mixing state.
+    // BUT `useMotionValue` allows us to feed it directly.
 
     // -- Global Gestures --
 
@@ -63,6 +77,7 @@ const Navigation = ({ currentTab, onTabChange }) => {
             }
         } else if (absX > threshold) {
             // Horizontal Swipe
+            // We read the current X drag to decide direction
             if (isExpanded) {
                 if (x > 0 && validInnerIndex > 0) {
                     onTabChange(innerTabs[validInnerIndex - 1].id);
@@ -77,15 +92,17 @@ const Navigation = ({ currentTab, onTabChange }) => {
                 }
             }
         }
-        setDragOffset(0);
+
+        // Reset the motion value cleanly
+        dragOffset.set(0);
     };
 
     const onPan = (event, info) => {
+        // Direct update to motion value - NO RE-RENDER
         if (Math.abs(info.offset.x) > Math.abs(info.offset.y)) {
-            setDragOffset(info.offset.x * 0.5);
+            dragOffset.set(info.offset.x * 0.5);
         }
     };
-
 
     return (
         <>
@@ -104,15 +121,21 @@ const Navigation = ({ currentTab, onTabChange }) => {
                     {/* Inner Disk (Budget/Health) */}
                     <motion.div
                         animate={{
-                            // Uniform Motion Logic: 
-                            // Both disks move UP by ~80px-100px.
-                            // Inner: -180 (start) -> -70 (end) = +110px move
                             y: isExpanded ? -70 : 0,
                             scale: isExpanded ? 1 : 0.9,
                             opacity: isExpanded ? 1 : 0,
-                            rotate: innerRotation + (isExpanded ? dragOffset : 0)
+                            rotate: baseInnerRotation
+                            // We handle the DRAG rotation separately or add it here? 
+                            // If we add `+ dragOffset.get()` here, it reads the value ONCE at render/animate start.
+                            // We need it to be dynamic. 
+                            // `style={{ rotate: transformedInnerRotation }}` is better.
                         }}
-                        transition={{ type: "spring", stiffness: 160, damping: 20 }} // Slightly softer for "pull" feel
+                        style={{
+                            // We combine base rotation (state) + drag (motion value)
+                            // Since baseRotation is a number, checking `isExpanded`
+                            rotate: isExpanded ? useTransform(dragOffset, (v) => baseInnerRotation + v) : baseInnerRotation
+                        }}
+                        transition={{ type: "spring", stiffness: 160, damping: 20 }}
                         onPan={onPan}
                         onPanEnd={onPanEnd}
                         className="absolute bottom-[-180px] w-[300px] h-[300px] rounded-full flex justify-center items-start pt-6 z-40 pointer-events-auto bg-slate-900/90 backdrop-blur-md"
@@ -140,7 +163,9 @@ const Navigation = ({ currentTab, onTabChange }) => {
                                     style={{
                                         left,
                                         top,
-                                        transform: `translate(-50%, -50%) rotate(${-innerRotation}deg)`
+                                        // Counter-rotate icons so they stay upright relative to the screen? 
+                                        // Or just relative to the disk? Currently relative to disk.
+                                        transform: `translate(-50%, -50%) rotate(${-baseInnerRotation}deg)`
                                     }}
                                 >
                                     <Icon
@@ -159,18 +184,15 @@ const Navigation = ({ currentTab, onTabChange }) => {
                     {/* Outer Disk (Quests/Dash/Proto) */}
                     <motion.div
                         animate={{
-                            // Uniform Motion Logic:
-                            // Outer: -330 (tucked further) -> -250 ? No, Outer is big.
-                            // Lowered bottom to -330px "tuck further"
-                            // If we move it UP by 80px to match Inner's 110px move roughly?
-                            // -330 -> -250.
                             y: isExpanded ? -80 : 0,
-                            rotate: outerRotation + (!isExpanded ? dragOffset : 0),
+                            // rotate: baseOuterRotation // Moved to style for performance
+                        }}
+                        style={{
+                            rotate: !isExpanded ? useTransform(dragOffset, (v) => baseOuterRotation + v) : baseOuterRotation
                         }}
                         transition={{ type: "spring", stiffness: 160, damping: 20 }}
                         onPan={onPan}
                         onPanEnd={onPanEnd}
-                        // Tuck Further: -330px
                         className="absolute bottom-[-330px] w-[500px] h-[500px] rounded-full bg-slate-950 shadow-2xl z-30 flex justify-center items-start pt-10 pointer-events-auto"
                     >
                         <div className="absolute top-4 w-[480px] h-[480px] rounded-full pointer-events-none" />
@@ -196,19 +218,16 @@ const Navigation = ({ currentTab, onTabChange }) => {
                                     style={{
                                         left,
                                         top,
-                                        transform: `translate(-50%, -50%) rotate(${-outerRotation}deg)`
+                                        transform: `translate(-50%, -50%) rotate(${-baseOuterRotation}deg)`
                                     }}
                                 >
-                                    {/* Removed Border Circle -> Just Icon + Glow */}
                                     <div className={clsx(
                                         "p-3 rounded-full transition-all duration-300",
-                                        // isActive ? "bg-slate-900" : "bg-transparent" // Replaced by purely icon glow logic
                                     )}>
                                         <Icon
                                             size={isActive ? 32 : 24}
                                             className={clsx(isActive ? tab.color : "text-slate-500 group-hover:text-slate-400")}
                                         />
-                                        {/* Glow Removed as per user request */}
                                     </div>
 
                                     {isActive && (
