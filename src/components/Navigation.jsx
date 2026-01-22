@@ -115,8 +115,11 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
             // Vertical Swipe (Mostly triggered from Bottom Layer)
             if (y < 0 && !isExpanded) {
                 // Swipe Up -> Expand
-                nextIsExpanded = true;
-                if (innerIndex === -1) nextTab = innerTabs[0].id; // Default to first inner
+                // RESTRICTION: Only allow expanding from Dashboard
+                if (currentTab === 'dashboard') {
+                    nextIsExpanded = true;
+                    if (innerIndex === -1) nextTab = innerTabs[0].id; // Default to first inner
+                }
             }
             if (y > 0 && isExpanded) {
                 // Swipe Down -> Collapse
@@ -172,7 +175,10 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
             style={{ touchAction: 'pan-y' }}
         >
             {/* Main Content Content (Injected) */}
-            <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden relative z-10 select-text pb-64">
+            <div className={clsx(
+                "flex-1 w-full min-h-0 relative z-10 select-text pb-64",
+                currentTab === 'dashboard' ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
+            )}>
                 {children}
             </div>
 

@@ -18,7 +18,7 @@ const Dashboard = ({ onTabChange }) => {
     const activeHabits = habits.slice(0, 3);
 
     return (
-        <div className="space-y-5 pb-32">
+        <div className="space-y-5">
             <React.Suspense fallback={null}>
                 <StatsView isOpen={showStats} onClose={() => setShowStats(false)} />
             </React.Suspense>
