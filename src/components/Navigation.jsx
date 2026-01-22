@@ -172,7 +172,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
             className="flex-1 w-full flex flex-col min-h-0 relative select-none"
             onPan={onPan}
             onPanEnd={onPanEnd}
-            style={{ touchAction: 'pan-y' }}
+            style={{ touchAction: currentTab === 'dashboard' ? 'none' : 'pan-y' }}
         >
             {/* Main Content Content (Injected) */}
             <div className={clsx(
