@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { usePersistentState } from '../utils/persistence';
 
 const BudgetContext = createContext();
 
@@ -8,50 +9,13 @@ const INITIAL_GROCERY_ITEMS = []; // { id, name, quantity, price, completed }
 const INITIAL_PRICE_DB = {}; // { "Milk": 4.00 }
 
 export const BudgetProvider = ({ children }) => {
-    const [totalMonthlyBudget, setTotalMonthlyBudget] = useState(() => {
-        const saved = localStorage.getItem('lq_budget_total');
-        return saved ? JSON.parse(saved) : 0;
-    });
-
-    const [groceryAllocation, setGroceryAllocation] = useState(() => {
-        const saved = localStorage.getItem('lq_budget_grocery_alloc');
-        return saved ? JSON.parse(saved) : 0;
-    });
-
-    const [earnedRewards, setEarnedRewards] = useState(() => {
-        const saved = localStorage.getItem('lq_budget_earned');
-        return saved ? JSON.parse(saved) : 0;
-    });
-
-    const [groceryList, setGroceryList] = useState(() => {
-        const saved = localStorage.getItem('lq_grocery_list');
-        return saved ? JSON.parse(saved) : INITIAL_GROCERY_ITEMS;
-    });
-
-    const [priceDatabase, setPriceDatabase] = useState(() => {
-        const saved = localStorage.getItem('lq_price_db');
-        return saved ? JSON.parse(saved) : INITIAL_PRICE_DB;
-    });
-
-    const [groceryPeriod, setGroceryPeriod] = useState(() => {
-        const saved = localStorage.getItem('lq_grocery_period');
-        return saved ? JSON.parse(saved) : 'weekly'; // 'weekly' or 'bi-weekly'
-    });
-
-    const [goldToUsdRatio, setGoldToUsdRatio] = useState(() => {
-        const saved = localStorage.getItem('lq_gold_ratio');
-        return saved ? JSON.parse(saved) : 10; // 10 gold = $1
-    });
-
-    useEffect(() => {
-        localStorage.setItem('lq_budget_total', JSON.stringify(totalMonthlyBudget));
-        localStorage.setItem('lq_budget_grocery_alloc', JSON.stringify(groceryAllocation));
-        localStorage.setItem('lq_budget_earned', JSON.stringify(earnedRewards));
-        localStorage.setItem('lq_grocery_list', JSON.stringify(groceryList));
-        localStorage.setItem('lq_price_db', JSON.stringify(priceDatabase));
-        localStorage.setItem('lq_grocery_period', JSON.stringify(groceryPeriod));
-        localStorage.setItem('lq_gold_ratio', JSON.stringify(goldToUsdRatio));
-    }, [totalMonthlyBudget, groceryAllocation, earnedRewards, groceryList, priceDatabase, groceryPeriod, goldToUsdRatio]);
+    const [totalMonthlyBudget, setTotalMonthlyBudget] = usePersistentState('lq_budget_total', 0);
+    const [groceryAllocation, setGroceryAllocation] = usePersistentState('lq_budget_grocery_alloc', 0);
+    const [earnedRewards, setEarnedRewards] = usePersistentState('lq_budget_earned', 0);
+    const [groceryList, setGroceryList] = usePersistentState('lq_grocery_list', INITIAL_GROCERY_ITEMS);
+    const [priceDatabase, setPriceDatabase] = usePersistentState('lq_price_db', INITIAL_PRICE_DB);
+    const [groceryPeriod, setGroceryPeriod] = usePersistentState('lq_grocery_period', 'weekly');
+    const [goldToUsdRatio, setGoldToUsdRatio] = usePersistentState('lq_gold_ratio', 10);
 
     const addRewardFromGold = (goldAmount) => {
         const usdValue = goldAmount / goldToUsdRatio;

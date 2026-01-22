@@ -41,5 +41,16 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'framer-motion', 'date-fns', 'uuid'],
+          charts: ['recharts'],
+          icons: ['lucide-react']
+        }
+      }
+    }
   }
 })

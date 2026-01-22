@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion } from 'framer-motion';
 import { Shield, Zap, Coins, Heart, Calendar, CheckSquare } from 'lucide-react';
-import StatsView from './StatsView';
+const StatsView = React.lazy(() => import('./StatsView'));
 
 const Dashboard = ({ onTabChange }) => {
     const { stats, quests, habits } = useGame();
@@ -19,7 +19,9 @@ const Dashboard = ({ onTabChange }) => {
 
     return (
         <div className="space-y-5 pb-32">
-            <StatsView isOpen={showStats} onClose={() => setShowStats(false)} />
+            <React.Suspense fallback={null}>
+                <StatsView isOpen={showStats} onClose={() => setShowStats(false)} />
+            </React.Suspense>
 
             {/* HUD Stats Area */}
             <div className="bg-game-panel p-3 rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden">

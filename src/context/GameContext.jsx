@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useBudget } from './BudgetContext';
+import { usePersistentState } from '../utils/persistence';
 
 const GameContext = createContext();
 
@@ -18,93 +19,29 @@ const INITIAL_STATS = {
 const INITIAL_TASKS = [];
 const INITIAL_HABITS = [];
 
+const INITIAL_SETTINGS = {
+    protocolReward: 1,
+    questRewards: {
+        easy: 5,
+        medium: 15,
+        hard: 40,
+        legendary: 100
+    }
+};
+
+const INITIAL_CALORIES = { current: 0, target: 2000, history: [] };
+const INITIAL_COIN_HISTORY = [];
+
 export const GameProvider = ({ children }) => {
     const { addRewardFromGold } = useBudget();
-    const [stats, setStats] = useState(() => {
-        try {
-            const saved = localStorage.getItem('lq_stats');
-            const parsed = saved ? JSON.parse(saved) : null;
-            return parsed || INITIAL_STATS;
-        } catch (e) {
-            console.error("Error loading stats:", e);
-            return INITIAL_STATS;
-        }
-    });
 
-    const [quests, setQuests] = useState(() => {
-        try {
-            const saved = localStorage.getItem('lq_quests');
-            const parsed = saved ? JSON.parse(saved) : null;
-            return Array.isArray(parsed) ? parsed : INITIAL_TASKS;
-        } catch (e) {
-            console.error("Error loading quests:", e);
-            return INITIAL_TASKS;
-        }
-    });
-
-    const [habits, setHabits] = useState(() => {
-        try {
-            const saved = localStorage.getItem('lq_habits');
-            const parsed = saved ? JSON.parse(saved) : null;
-            return Array.isArray(parsed) ? parsed : INITIAL_HABITS;
-        } catch (e) {
-            console.error("Error loading habits:", e);
-            return INITIAL_HABITS;
-        }
-    });
-
-    // --- DATA LOGGING & SETTINGS ---
-    const [settings, setSettings] = useState(() => {
-        try {
-            const saved = localStorage.getItem('lq_settings');
-            return saved ? JSON.parse(saved) : {
-                protocolReward: 1,
-                questRewards: {
-                    easy: 5,
-                    medium: 15,
-                    hard: 40,
-                    legendary: 100
-                }
-            };
-        } catch (e) {
-            return {
-                protocolReward: 1,
-                questRewards: {
-                    easy: 5,
-                    medium: 15,
-                    hard: 40,
-                    legendary: 100
-                }
-            };
-        }
-    });
-
-    const [calories, setCalories] = useState(() => {
-        try {
-            const saved = localStorage.getItem('lq_calories');
-            return saved ? JSON.parse(saved) : { current: 0, target: 2000, history: [] };
-        } catch (e) {
-            return { current: 0, target: 2000, history: [] };
-        }
-    });
-
-    const [coinHistory, setCoinHistory] = useState(() => {
-        try {
-            const saved = localStorage.getItem('lq_coin_history');
-            return saved ? JSON.parse(saved) : [];
-        } catch (e) {
-            return [];
-        }
-    });
-
-    useEffect(() => {
-        localStorage.setItem('lq_stats', JSON.stringify(stats));
-        localStorage.setItem('lq_quests', JSON.stringify(quests));
-        localStorage.setItem('lq_habits', JSON.stringify(habits));
-        localStorage.setItem('lq_settings', JSON.stringify(settings));
-        localStorage.setItem('lq_calories', JSON.stringify(calories));
-        localStorage.setItem('lq_coin_history', JSON.stringify(coinHistory));
-    }, [stats, quests, habits, settings, calories, coinHistory]);
+    // Using usePersistentState for automatic localStorage handling and backup on corruption
+    const [stats, setStats] = usePersistentState('lq_stats', INITIAL_STATS);
+    const [quests, setQuests] = usePersistentState('lq_quests', INITIAL_TASKS);
+    const [habits, setHabits] = usePersistentState('lq_habits', INITIAL_HABITS);
+    const [settings, setSettings] = usePersistentState('lq_settings', INITIAL_SETTINGS);
+    const [calories, setCalories] = usePersistentState('lq_calories', INITIAL_CALORIES);
+    const [coinHistory, setCoinHistory] = usePersistentState('lq_coin_history', INITIAL_COIN_HISTORY);
 
     // --- ACTIONS ---
 
@@ -123,7 +60,6 @@ export const GameProvider = ({ children }) => {
         setCalories(prev => {
             const newCurrent = Math.max(0, prev.current + amount);
             // Simple history tracking: array of { date, amount }
-            // Or aggregate by day? Let's do simple transaction log for now, aggregate data later for charts
             const newEntry = { date: new Date().toISOString(), amount: amount };
             return { ...prev, current: newCurrent, history: [...prev.history, newEntry] };
         });
