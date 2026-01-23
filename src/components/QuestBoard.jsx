@@ -113,7 +113,7 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
             animate="animate"
             exit="exit"
             className={clsx(
-                "absolute w-full max-w-md bg-slate-900 rounded-2xl border-2 overflow-hidden shadow-2xl origin-bottom touch-none",
+                "absolute w-[90%] max-w-md bg-slate-900 rounded-2xl border-2 overflow-hidden shadow-2xl origin-bottom touch-none left-0 right-0 mx-auto",
                 rarity.border,
                 rarity.shadow,
                 isEditingBrief ? "cursor-default" : "cursor-grab active:cursor-grabbing"
@@ -379,8 +379,8 @@ const QuestBoard = () => {
     const discardedQuests = quests.filter(q => q.discarded);
 
     return (
-        <div className="pb-4 md:pb-0 relative flex flex-col">
-            <div className="flex justify-between items-center mb-5 pl-4">
+        <div className="pb-4 md:pb-0 relative flex flex-col w-full">
+            <div className="flex justify-between items-center mb-5 px-6">
                 <div>
                     <h2 className="text-3xl font-game font-bold text-emerald-400 tracking-widest uppercase text-glow">
                         Active Quests
@@ -577,8 +577,7 @@ const QuestBoard = () => {
             </div>
 
             {/* 3. LOGS (Victory Left, Discarded Right) */}
-            <div className="mt-auto pt-4 flex justify-between items-end px-2">
-                {/* VICTORY LOG */}
+            <div className="pt-4 flex justify-between items-end px-6 md:px-2">                {/* VICTORY LOG */}
                 <div onClick={() => setShowVictoryLog(true)} className="cursor-pointer group">
                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-2 group-hover:text-emerald-400 transition-colors">
                         <span className="uppercase font-bold tracking-widest">Victory Log</span>
