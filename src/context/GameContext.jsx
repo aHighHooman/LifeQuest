@@ -185,9 +185,14 @@ export const GameProvider = ({ children }) => {
             frequencyParam,
             streak: 0,
             history: {},
+            isActive: false, // Default to inactive until first success or manual activation
             createdAt: new Date().toISOString(),
         };
         setHabits(prev => [newHabit, ...prev]);
+    };
+
+    const toggleHabitActivation = (id, isActive) => {
+        setHabits(prev => prev.map(h => h.id === id ? { ...h, isActive } : h));
     };
 
     const checkHabit = (id, direction = 'positive') => {
@@ -202,7 +207,13 @@ export const GameProvider = ({ children }) => {
                     addGold(settings.protocolReward, 'Protocol');
                     addRewardFromGold(settings.protocolReward);
 
-                    return { ...h, streak: h.streak + 1, history: { ...newHistory, [today]: count + 1 } };
+                    // Auto-activate on first success
+                    return {
+                        ...h,
+                        streak: h.streak + 1,
+                        history: { ...newHistory, [today]: count + 1 },
+                        isActive: true
+                    };
                 } else {
                     takeDamage(5);
                     return { ...h, streak: 0, history: { ...newHistory, [today]: count - 1 } };
@@ -247,14 +258,21 @@ export const GameProvider = ({ children }) => {
             return q;
         }));
 
-        // Future: Reset daily focus or handle specific habit logic here
+        // MIGRATION: Ensure all existing habits have isActive: true
+        setHabits(prev => prev.map(h => {
+            if (h.isActive === undefined) {
+                return { ...h, isActive: true };
+            }
+            return h;
+        }));
+
     }, []); // Run once on mount for now
 
     return (
         <GameContext.Provider value={{
             stats, quests, habits, settings, calories, coinHistory,
             addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest,
-            addHabit, checkHabit, deleteHabit,
+            addHabit, checkHabit, deleteHabit, toggleHabitActivation,
             updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins,
             toggleToday
         }}>

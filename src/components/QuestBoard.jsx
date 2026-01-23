@@ -6,6 +6,11 @@ import clsx from 'clsx';
 
 const USE_DECK_VIEW = true;
 
+// ANIMATION PARAMETER: Tune 'stiffness' and 'damping' to control bounciness.
+// Higher stiffness = faster/snappier. Higher damping = less bounce (settles faster).
+// Recommendation for "less bouncy": stiffness: 400, damping: 40.
+const SPRING_CONFIG = { type: "spring", stiffness: 400, damping: 40 };
+
 const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious, custom }) => {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
@@ -109,6 +114,7 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
                     return { y: 200, opacity: 0 };
                 }
             }}
+            transition={SPRING_CONFIG}
             initial="initial"
             animate="animate"
             exit="exit"
