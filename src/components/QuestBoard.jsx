@@ -6,7 +6,7 @@ import clsx from 'clsx';
 
 const USE_DECK_VIEW = true;
 
-const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate }) => {
+const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious }) => {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
     const rotate = useTransform(x, [-200, 200], [-30, 30]);
@@ -28,6 +28,9 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
         } else if (info.offset.y < -swipeThreshold) {
             // Swipe Up - Skip/Cycle (Reorder)
             onSkip(quest.id);
+        } else if (info.offset.y > swipeThreshold) {
+            // Swipe Down - Previous
+            if (onPrevious) onPrevious();
         }
     };
 
@@ -187,7 +190,7 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
     );
 };
 
-const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate }) => {
+const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate, onPrevious }) => {
     const visibleQuests = quests.slice(0, 4);
 
     if (quests.length === 0) {
@@ -215,14 +218,13 @@ const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate }) => {
                         onDismiss={onDelete}
                         onSkip={onSkip}
                         onUpdate={onUpdate}
+                        onPrevious={onPrevious}
                     />
                 ))}
             </AnimatePresence>
         </div>
     );
 };
-
-// ... QuestItem removed as Deck View is primary and vertical list was secondary/unused in requested changes ...
 
 const LogModal = ({ title, items, onClose, type, onRestore }) => {
     return (
@@ -310,6 +312,28 @@ const QuestBoard = () => {
         setSkippedOffsets(prev => ({ ...prev, [id]: Date.now() }));
     };
 
+    const handlePrevious = () => {
+        // Calculate current order to find the last item
+        const active = quests
+            .filter(q => !q.completed && !q.discarded)
+            .sort((a, b) => (skippedOffsets[a.id] || 0) - (skippedOffsets[b.id] || 0));
+
+        if (active.length === 0) return;
+
+        // Get the last item (bottom of the deck)
+        const lastQuest = active[active.length - 1];
+
+        // To bring it to the front, we need an offset smaller than any current offset
+        const currentOffsets = Object.values(skippedOffsets);
+        const minOffset = currentOffsets.length > 0 ? Math.min(...currentOffsets) : 0;
+
+        // Assign a new negative offset to force it to the top
+        setSkippedOffsets(prev => ({
+            ...prev,
+            [lastQuest.id]: Math.min(0, minOffset) - 1
+        }));
+    };
+
     // Filter Logic
     const activeQuests = quests
         .filter(q => !q.completed && !q.discarded)
@@ -329,7 +353,7 @@ const QuestBoard = () => {
 
     return (
         <div className="pb-24 md:pb-0 relative min-h-[600px] flex flex-col">
-            <div className="flex justify-between items-center mb-5">
+            <div className="flex justify-between items-center mb-5 pl-4">
                 <div>
                     <h2 className="text-3xl font-game font-bold text-emerald-400 tracking-widest uppercase text-glow">
                         Active Quests
@@ -349,6 +373,7 @@ const QuestBoard = () => {
                     onDelete={deleteQuest}
                     onSkip={handleSkip}
                     onUpdate={updateQuest}
+                    onPrevious={handlePrevious}
                 />
             </div>
 
@@ -396,29 +421,30 @@ const QuestBoard = () => {
                                 exit={{ height: 0, opacity: 0 }}
                                 className="pt-4 overflow-hidden border-t border-emerald-500/20 mt-2"
                             >
-                                <div className="space-y-5">
+                                <div className="space-y-4">
                                     {/* Difficulty Selector */}
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-emerald-400 uppercase mb-2 tracking-wider">Target Priority</label>
-                                        <div className="grid grid-cols-4 gap-2">
-                                            {[
-                                                { id: 'easy', label: 'Cmn', color: 'emerald', fullLabel: 'Common' },
-                                                { id: 'medium', label: 'Rare', color: 'blue', fullLabel: 'Rare' },
-                                                { id: 'hard', label: 'Epic', color: 'purple', fullLabel: 'Epic' },
-                                                { id: 'legendary', label: 'Leg', color: 'yellow', fullLabel: 'Legendary' }
-                                            ].map((level) => (
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {[
+                                            { id: 'easy', label: 'Cmn', color: 'emerald', fullLabel: 'Common' },
+                                            { id: 'medium', label: 'Rare', color: 'blue', fullLabel: 'Rare' },
+                                            { id: 'hard', label: 'Epic', color: 'purple', fullLabel: 'Epic' },
+                                            { id: 'legendary', label: 'Leg', color: 'yellow', fullLabel: 'Legendary' }
+                                        ].map((level) => {
+                                            const isActive = difficulty === level.id;
+                                            return (
                                                 <button
                                                     key={level.id}
                                                     type="button"
                                                     onClick={() => setDifficulty(level.id)}
                                                     className={clsx(
-                                                        "flex flex-col items-center justify-center p-2 rounded-lg border transition-all relative overflow-hidden",
-                                                        difficulty === level.id
-                                                            ? `bg-${level.color}-500/20 border-${level.color}-500 shadow-[0_0_10px_rgba(0,0,0,0.5)]`
+                                                        "flex flex-col items-center justify-center py-2 rounded-lg border transition-all relative overflow-hidden",
+                                                        isActive
+                                                            ? `border-${level.color}-500 shadow-[0_0_10px_rgba(0,0,0,0.3)]`
                                                             : "bg-slate-900/50 border-slate-700 opacity-60 hover:opacity-100 hover:border-slate-500"
                                                     )}
+                                                    style={{ backgroundColor: isActive ? `rgba(var(--color-${level.color}-500), 0.2)` : '' }}
                                                 >
-                                                    {difficulty === level.id && (
+                                                    {isActive && (
                                                         <motion.div
                                                             layoutId="active-difficulty"
                                                             className={clsx("absolute inset-0 z-0 opacity-20", `bg-${level.color}-400`)}
@@ -426,90 +452,93 @@ const QuestBoard = () => {
                                                     )}
                                                     <span className={clsx(
                                                         "relative z-10 text-[10px] font-black uppercase tracking-widest",
-                                                        difficulty === level.id ? `text-${level.color}-400` : "text-gray-500"
+                                                        isActive ? `text-${level.color}-400` : "text-gray-500"
                                                     )}>
                                                         {level.label}
                                                     </span>
                                                 </button>
-                                            ))}
-                                        </div>
+                                            )
+                                        })}
                                     </div>
 
-                                    {/* Mission Control Grid */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Mission Brief - Moved Up */}
+                                    <textarea
+                                        value={missionBrief}
+                                        onChange={(e) => setMissionBrief(e.target.value)}
+                                        placeholder="// Enter mission parameters..."
+                                        rows={1}
+                                        className="relative w-full bg-slate-950 border border-emerald-500/20 rounded-lg px-3 py-2 text-xs text-emerald-100 placeholder-emerald-900/50 focus:outline-none focus:border-emerald-500/50 resize-none font-mono"
+                                    />
+
+                                    {/* Compact Control Row: [Date | Gold | XP] */}
+                                    <div className="flex gap-4">
                                         {/* Date Plugin */}
-                                        <div className="bg-slate-950/50 p-3 rounded-lg border border-emerald-500/10">
-                                            <label className="block text-[10px] font-bold text-emerald-400 uppercase mb-2 flex items-center gap-2">
-                                                <Calendar size={12} /> Deadline
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={dueDate}
-                                                onChange={(e) => setDueDate(e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-emerald-100 focus:outline-none focus:border-emerald-500/50 focus:bg-slate-900/80 transition-all font-mono [color-scheme:dark]"
-                                            />
-                                            <div className="flex gap-2 mt-2">
-                                                <button type="button" onClick={() => {
-                                                    const d = new Date();
-                                                    setDueDate(d.toISOString().split('T')[0]);
-                                                }} className="text-[10px] bg-slate-800 text-gray-400 px-2 py-1 rounded hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors">Today</button>
-                                                <button type="button" onClick={() => {
-                                                    const d = new Date();
-                                                    d.setDate(d.getDate() + 1);
-                                                    setDueDate(d.toISOString().split('T')[0]);
-                                                }} className="text-[10px] bg-slate-800 text-gray-400 px-2 py-1 rounded hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors">Tmrw</button>
-                                                <button type="button" onClick={() => {
-                                                    const d = new Date();
-                                                    d.setDate(d.getDate() + 7);
-                                                    setDueDate(d.toISOString().split('T')[0]);
-                                                }} className="text-[10px] bg-slate-800 text-gray-400 px-2 py-1 rounded hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors">Week</button>
+                                        <div className="flex-1 space-y-2">
+                                            <div className="flex items-center gap-2 bg-slate-950 border border-emerald-500/30 rounded-lg px-2 py-1.5 hover:border-emerald-500/60 transition-colors group">
+                                                <Calendar size={14} className="text-emerald-500/50 group-hover:text-emerald-400" />
+                                                <input
+                                                    type="date"
+                                                    value={dueDate}
+                                                    onChange={(e) => setDueDate(e.target.value)}
+                                                    className="bg-transparent border-none text-xs text-emerald-100 focus:outline-none w-full font-mono uppercase [color-scheme:dark]"
+                                                />
+                                                {dueDate && (
+                                                    <button type="button" onClick={() => setDueDate('')} className="text-emerald-900 hover:text-emerald-400 p-1">
+                                                        <X size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2 justify-start">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDueDate(new Date().toISOString().split('T')[0])}
+                                                    className="text-[10px] uppercase font-bold text-emerald-600 hover:text-emerald-400 transition-colors"
+                                                >
+                                                    Today
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const d = new Date();
+                                                        d.setDate(d.getDate() + 1);
+                                                        setDueDate(d.toISOString().split('T')[0]);
+                                                    }}
+                                                    className="text-[10px] uppercase font-bold text-emerald-600 hover:text-emerald-400 transition-colors"
+                                                >
+                                                    Tom
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDueDate('')}
+                                                    className="text-[10px] uppercase font-bold text-emerald-600 hover:text-emerald-400 transition-colors"
+                                                >
+                                                    None
+                                                </button>
                                             </div>
                                         </div>
 
-                                        {/* Rewards Plugin */}
-                                        <div className="bg-slate-950/50 p-3 rounded-lg border border-emerald-500/10">
-                                            <label className="block text-[10px] font-bold text-game-gold uppercase mb-2 flex items-center gap-2">
-                                                <DollarSign size={12} /> Custom Bounty
-                                            </label>
-                                            <div className="flex gap-2">
-                                                <div className="relative flex-1">
-                                                    <span className="absolute left-2 top-1.5 text-[10px] text-gray-500 font-bold">XP</span>
-                                                    <input
-                                                        type="number"
-                                                        value={customReward.xp || ''}
-                                                        onChange={(e) => setCustomReward(p => ({ ...p, xp: e.target.value }))}
-                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 pl-8 text-xs text-game-gold focus:outline-none focus:border-game-gold/50 font-mono"
-                                                        placeholder="Auto"
-                                                    />
-                                                </div>
-                                                <div className="relative flex-1">
-                                                    <span className="absolute left-2 top-1.5 text-[10px] text-gray-500 font-bold">G</span>
-                                                    <input
-                                                        type="number"
-                                                        value={customReward.gold || ''}
-                                                        onChange={(e) => setCustomReward(p => ({ ...p, gold: e.target.value }))}
-                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 pl-8 text-xs text-game-gold focus:outline-none focus:border-game-gold/50 font-mono"
-                                                        placeholder="Auto"
-                                                    />
-                                                </div>
+                                        {/* Stacked Bounty Inputs */}
+                                        <div className="shrink-0 bg-slate-950 border border-game-gold/20 rounded-lg p-2 flex flex-col gap-1 w-28">
+                                            <div className="flex items-center gap-2 border-b border-gray-800 pb-1">
+                                                <span className="text-[10px] font-bold text-game-gold w-4">G</span>
+                                                <input
+                                                    type="number"
+                                                    value={customReward.gold || ''}
+                                                    onChange={(e) => setCustomReward(p => ({ ...p, gold: e.target.value }))}
+                                                    className="w-full bg-transparent text-[10px] text-game-gold focus:outline-none text-right font-mono"
+                                                    placeholder="-"
+                                                />
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Mission Brief */}
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-emerald-400 uppercase mb-1 flex items-center gap-2">
-                                            <Edit3 size={12} /> Mission Brief
-                                        </label>
-                                        <div className="relative">
-                                            <div className="absolute inset-0 bg-emerald-500/5 blur-sm rounded-lg pointer-events-none" />
-                                            <textarea
-                                                value={missionBrief}
-                                                onChange={(e) => setMissionBrief(e.target.value)}
-                                                placeholder="// Enter mission parameters and directives..."
-                                                rows={2}
-                                                className="relative w-full bg-slate-950 border border-emerald-500/20 rounded-lg px-4 py-3 text-xs text-emerald-100 placeholder-emerald-900/50 focus:outline-none focus:border-emerald-500/50 focus:shadow-[0_0_15px_rgba(16,185,129,0.1)] resize-none font-mono"
-                                            />
+                                            <div className="flex items-center gap-2 pt-0.5">
+                                                <span className="text-[10px] font-bold text-blue-400 w-4">XP</span>
+                                                <input
+                                                    type="number"
+                                                    value={customReward.xp || ''}
+                                                    onChange={(e) => setCustomReward(p => ({ ...p, xp: e.target.value }))}
+                                                    className="w-full bg-transparent text-[10px] text-blue-400 focus:outline-none text-right font-mono"
+                                                    placeholder="-"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -521,7 +550,6 @@ const QuestBoard = () => {
 
             {/* 3. LOGS (Victory Left, Discarded Right) */}
             <div className="mt-auto pt-4 flex justify-between items-end px-2">
-
                 {/* VICTORY LOG */}
                 <div onClick={() => setShowVictoryLog(true)} className="cursor-pointer group">
                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-2 group-hover:text-emerald-400 transition-colors">
