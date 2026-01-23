@@ -124,7 +124,7 @@ export const GameProvider = ({ children }) => {
     };
 
     // --- QUESTS ---
-    const addQuest = (title, difficulty = 'easy', dueDate = null, customReward = null) => {
+    const addQuest = (title, difficulty = 'easy', dueDate = null, customReward = null, missionBrief = '') => {
         // Use settings for rewards if not custom
         const defaultRewards = {
             easy: { xp: 10, gold: settings.questRewards.easy },
@@ -138,11 +138,17 @@ export const GameProvider = ({ children }) => {
             title,
             difficulty,
             dueDate,
+            missionBrief,
             completed: false,
+            discarded: false,
             reward: customReward || defaultRewards[difficulty] || defaultRewards.easy,
             createdAt: new Date().toISOString(),
         };
         setQuests(prev => [newQuest, ...prev]);
+    };
+
+    const updateQuest = (id, updates) => {
+        setQuests(prev => prev.map(q => q.id === id ? { ...q, ...updates } : q));
     };
 
     const completeQuest = (id) => {
@@ -158,6 +164,15 @@ export const GameProvider = ({ children }) => {
     };
 
     const deleteQuest = (id) => {
+        // Soft delete (discard)
+        setQuests(prev => prev.map(q => q.id === id ? { ...q, discarded: true, discardedAt: new Date().toISOString() } : q));
+    };
+
+    const restoreQuest = (id) => {
+        setQuests(prev => prev.map(q => q.id === id ? { ...q, discarded: false, discardedAt: null } : q));
+    };
+
+    const permanentDeleteQuest = (id) => {
         setQuests(prev => prev.filter(q => q.id !== id));
     };
 
@@ -238,7 +253,7 @@ export const GameProvider = ({ children }) => {
     return (
         <GameContext.Provider value={{
             stats, quests, habits, settings, calories, coinHistory,
-            addQuest, completeQuest, deleteQuest,
+            addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest,
             addHabit, checkHabit, deleteHabit,
             updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins,
             toggleToday
