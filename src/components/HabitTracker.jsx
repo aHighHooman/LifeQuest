@@ -1,18 +1,39 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Check, X, Flame, Plus, Trash2, Clock, Settings, Calendar } from 'lucide-react';
 import clsx from 'clsx';
 
 const HabitItem = ({ habit, onCheck, onDelete }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+    // Swipe Logic
+    const x = useMotionValue(0);
+    const backgroundOpacity = useTransform(x, [-100, 0, 100], [1, 0, 1]);
+    const checkOpacity = useTransform(x, [50, 100], [0, 1]);
+    const crossOpacity = useTransform(x, [-100, -50], [1, 0]);
+    const bgRight = useTransform(x, [0, 100], ["rgba(0,0,0,0)", "rgba(34, 197, 94, 0.2)"]);
+    const bgLeft = useTransform(x, [-100, 0], ["rgba(244, 63, 94, 0.2)", "rgba(0,0,0,0)"]);
+
+    const iconScaleRight = useTransform(x, [50, 150], [1, 1.5]);
+    const iconScaleLeft = useTransform(x, [-150, -50], [1.5, 1]);
+
+    const handleDragEnd = (event, info) => {
+        if (info.offset.x > 80) {
+            if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+            onCheck(habit.id, 'positive');
+        } else if (info.offset.x < -80) {
+            if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+            onCheck(habit.id, 'negative');
+        }
+    };
+
     const getFlameTier = (streak) => {
-        if (streak >= 100) return { color: "text-purple-400", glow: "shadow-[0_0_20px_rgba(168,85,247,0.6)]", size: 20, label: "Ethereal", bg: "bg-purple-500/10", border: "border-purple-500/30" };
-        if (streak >= 50) return { color: "text-red-500", glow: "shadow-[0_0_15px_rgba(239,68,68,0.5)]", size: 18, label: "Inferno", bg: "bg-red-500/10", border: "border-red-500/30" };
-        if (streak >= 25) return { color: "text-orange-500", glow: "shadow-[0_0_12px_rgba(249,115,22,0.4)]", size: 16, label: "Blazing", bg: "bg-orange-500/10", border: "border-orange-500/30" };
-        if (streak >= 5) return { color: "text-yellow-400", glow: "shadow-[0_0_10px_rgba(250,204,21,0.3)]", size: 14, label: "Kindled", bg: "bg-yellow-500/10", border: "border-yellow-500/30" };
-        return { color: "text-gray-600", glow: "shadow-none", size: 12, label: "Faint", bg: "bg-slate-800/30", border: "border-slate-700" };
+        if (streak >= 100) return { color: "text-purple-400", glow: "shadow-[0_0_20px_rgba(168,85,247,0.8)] filter drop-shadow(0 0 8px rgba(168,85,247,0.6))", size: 24, label: "Ethereal", bg: "bg-purple-500/10", border: "border-purple-500/50" };
+        if (streak >= 50) return { color: "text-fuchsia-400", glow: "shadow-[0_0_15px_rgba(232,121,249,0.5)]", size: 20, label: "Mystic", bg: "bg-fuchsia-500/10", border: "border-fuchsia-500/30" };
+        if (streak >= 25) return { color: "text-violet-400", glow: "shadow-[0_0_12px_rgba(139,92,246,0.4)]", size: 18, label: "Arcane", bg: "bg-violet-500/10", border: "border-violet-500/30" };
+        if (streak >= 5) return { color: "text-indigo-400", glow: "shadow-[0_0_10px_rgba(129,140,248,0.3)]", size: 16, label: "Active", bg: "bg-indigo-500/10", border: "border-indigo-500/30" };
+        return { color: "text-slate-600", glow: "shadow-none", size: 14, label: "Dormant", bg: "bg-slate-800/30", border: "border-slate-700" };
     };
 
     const tier = getFlameTier(habit.streak);
@@ -20,23 +41,49 @@ const HabitItem = ({ habit, onCheck, onDelete }) => {
     return (
         <motion.div
             layout
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
+            // Ensure proper layout animation even with dragging
+            style={{ x, touchAction: "none" }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.5}
+            // ISOLATION
+            dragPropagation={false}
+            data-no-swipe="true"
+            onDragEnd={handleDragEnd}
+
+            initial={{ opacity: 0, y: 10 }} // Changed to y for standard list fade-in
+            animate={{ opacity: 1, y: 0, x: 0 }} // Reset x on animate to snap back
             exit={{ opacity: 0, scale: 0.95 }}
-            whileHover={{ scale: 1.01, translateX: 4 }}
+            whileHover={{ scale: 1.01 }}
             className={clsx(
-                "p-4 rounded-xl border backdrop-blur-md mb-3 group transition-all duration-300 shadow-xl overflow-hidden relative",
+                "relative rounded-xl border backdrop-blur-md mb-3 group transition-all duration-300 shadow-xl overflow-hidden cursor-grab active:cursor-grabbing",
                 tier.bg,
                 tier.border,
                 "hover:shadow-[0_0_30px_rgba(0,0,0,0.3)]"
             )}
+            whileDrag={{ scale: 1.02 }} // Tactile response on hold
         >
-            <div className="absolute top-0 left-0 w-1 h-full bg-current opacity-30 group-hover:opacity-100 transition-opacity" />
-            <div className="flex items-center justify-between gap-4 relative z-10">
-                <div className="flex-1 min-w-0">
+            {/* Swipe Feedback Backgrounds */}
+            <motion.div style={{ backgroundColor: bgRight, opacity: backgroundOpacity }} className="absolute inset-0 z-0 flex items-center justify-start pl-6 pointer-events-none">
+                <motion.div style={{ opacity: checkOpacity, scale: iconScaleRight }}>
+                    <Check size={32} className="text-green-500 drop-shadow-[0_0_10px_rgba(34,197,94,0.8)]" />
+                </motion.div>
+            </motion.div>
+            <motion.div style={{ backgroundColor: bgLeft, opacity: backgroundOpacity }} className="absolute inset-0 z-0 flex items-center justify-end pr-6 pointer-events-none">
+                <motion.div style={{ opacity: crossOpacity, scale: iconScaleLeft }}>
+                    <X size={32} className="text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
+                </motion.div>
+            </motion.div>
+
+            <div className="absolute top-0 left-0 w-1 h-full bg-current opacity-30 group-hover:opacity-100 transition-opacity z-10" />
+
+            <div className="flex items-center justify-between gap-4 relative z-10 p-4 bg-slate-900/40">
+                {/* Added bg-slate-900/40 to content to ensure readability over swipe backgrounds */}
+
+                <div className="flex-1 min-w-0 pointer-events-none"> {/* Disable pointer events on text to ensure easy dragging */}
                     <div className="flex items-center gap-3">
                         <h3 className="font-game font-bold text-lg text-slate-100 truncate">{habit.title}</h3>
-                        <div className={clsx("flex items-center gap-1 font-black transition-all duration-500", tier.color)}>
+                        <div className={clsx("flex items-center gap-1 font-black transition-all duration-500 pointer-events-auto", tier.color)}>
                             <motion.div
                                 animate={habit.streak > 0 ? {
                                     scale: [1, 1.2, 1],
@@ -54,19 +101,10 @@ const HabitItem = ({ habit, onCheck, onDelete }) => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-1 md:gap-2 shrink-0">
-                    <button
-                        onClick={() => onCheck(habit.id, 'positive')}
-                        className="w-9 h-9 rounded-lg bg-slate-800 hover:bg-green-500/20 text-green-500 flex items-center justify-center border border-slate-700 hover:border-green-500 transition-all active:scale-95 shadow-lg"
-                    >
-                        <Check size={18} />
-                    </button>
-                    <button
-                        onClick={() => onCheck(habit.id, 'negative')}
-                        className="w-9 h-9 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-rose-500 flex items-center justify-center border border-slate-700 hover:border-rose-500 transition-all active:scale-95 shadow-lg"
-                    >
-                        <X size={18} />
-                    </button>
+                <div className="flex items-center gap-1 md:gap-2 shrink-0 pointer-events-auto"
+                    onPointerDown={(e) => e.stopPropagation()} // Stop drag when clicking buttons
+                >
+
                     <button
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                         className="p-2 rounded-full hover:bg-slate-700 text-gray-500 transition-colors"
@@ -88,9 +126,9 @@ const HabitItem = ({ habit, onCheck, onDelete }) => {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="mt-4 pt-4 border-t border-slate-700 overflow-hidden"
+                        className="px-4 pb-4 pt-0 border-t border-slate-700 overflow-hidden bg-slate-900/40 relative z-20"
                     >
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4 mt-4">
                             <div>
                                 <p className="text-[10px] text-gray-500 uppercase font-bold">Parameters</p>
                                 <div className="flex items-center gap-2 text-xs text-gray-400 mt-1">
@@ -137,18 +175,18 @@ const HabitTracker = () => {
                     <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: '100%' }}
-                        className="absolute -bottom-2 left-0 h-1 bg-gradient-to-r from-game-gold to-transparent"
+                        className="absolute -bottom-2 left-0 h-1 bg-gradient-to-r from-purple-500 to-transparent"
                     />
-                    <h2 className="text-4xl font-game font-black text-white tracking-[0.2em] uppercase bg-clip-text text-transparent bg-gradient-to-br from-white via-white to-gray-500">
+                    <h2 className="text-4xl font-game font-black text-white tracking-[0.2em] uppercase bg-clip-text text-transparent bg-gradient-to-br from-purple-200 via-purple-400 to-purple-600">
                         Protocol Database
                     </h2>
-                    <p className="text-[10px] text-game-gold/60 font-black uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
-                        <span className="w-8 h-px bg-game-gold/30" /> Active System Protocols
+                    <p className="text-[10px] text-purple-400/80 font-black uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
+                        <span className="w-8 h-px bg-purple-500/50" /> Active System Protocols
                     </p>
                 </div>
             </div>
 
-            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 mb-6 overflow-hidden">
+            <div className="bg-purple-900/10 p-4 rounded-xl border border-purple-500/20 mb-6 overflow-hidden">
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                     <div className="flex flex-col md:flex-row gap-3 items-end">
                         <div className="flex-1 w-full relative">

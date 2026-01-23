@@ -65,40 +65,40 @@ const BudgetView = () => {
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-0">
             {/* Header / Summary */}
             <div className="grid grid-cols-3 gap-3 px-1">
-                <div className="bg-slate-800/40 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-lg flex flex-col justify-center">
+                <div className="bg-amber-900/10 p-3 rounded-2xl border border-amber-500/20 backdrop-blur-sm shadow-lg flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 mb-1 opacity-80">
-                        <DollarSign className="text-game-accent" size={14} />
-                        <span className="text-[10px] font-bold font-game text-game-muted uppercase tracking-wider truncate">Budget</span>
+                        <DollarSign className="text-amber-400" size={14} />
+                        <span className="text-[10px] font-bold font-game text-amber-200/60 uppercase tracking-wider truncate">Budget</span>
                     </div>
                     <p className="text-2xl font-black text-white leading-none">${totalMonthlyBudget}</p>
                 </div>
 
-                <div className="bg-slate-800/40 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-lg flex flex-col justify-center">
+                <div className="bg-amber-900/10 p-3 rounded-2xl border border-amber-500/20 backdrop-blur-sm shadow-lg flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 mb-1 opacity-80">
-                        <ShoppingCart className="text-game-gold" size={14} />
-                        <span className="text-[10px] font-bold font-game text-game-muted uppercase tracking-wider truncate">Grocery</span>
+                        <ShoppingCart className="text-amber-400" size={14} />
+                        <span className="text-[10px] font-bold font-game text-amber-200/60 uppercase tracking-wider truncate">Grocery</span>
                     </div>
                     <p className="text-2xl font-black text-white leading-none">${groceryAllocation}</p>
-                    <div className="mt-1 text-[9px] text-game-muted leading-tight font-mono">
-                        <span className="text-white">${totalGrocerySpent.toFixed(0)}</span> / ${totalGroceryEstimated.toFixed(0)}
+                    <div className="mt-1 text-[9px] text-amber-200/40 leading-tight font-mono">
+                        <span className="text-amber-100">${totalGrocerySpent.toFixed(0)}</span> / ${totalGroceryEstimated.toFixed(0)}
                     </div>
                 </div>
 
-                <div className="bg-slate-800/40 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-lg relative overflow-hidden flex flex-col justify-center">
+                <div className="bg-amber-900/10 p-3 rounded-2xl border border-amber-500/20 backdrop-blur-sm shadow-lg relative overflow-hidden flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 mb-1 opacity-80">
-                        <TrendingUp className="text-emerald-500" size={14} />
-                        <span className="text-[10px] font-bold font-game text-game-muted uppercase tracking-wider truncate">Earned</span>
+                        <TrendingUp className="text-amber-400" size={14} />
+                        <span className="text-[10px] font-bold font-game text-amber-200/60 uppercase tracking-wider truncate">Earned</span>
                     </div>
-                    <p className="text-2xl font-black text-emerald-400 leading-none">${earnedRewards.toFixed(2)}</p>
+                    <p className="text-2xl font-black text-amber-400 leading-none">${earnedRewards.toFixed(2)}</p>
                 </div>
             </div>
 
             {/* Grocery Section */}
-            <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 shadow-2xl">
-                <div className="p-4 border-b border-slate-700/50 bg-slate-800/30 flex items-center justify-between">
+            <div className="bg-amber-900/10 rounded-3xl border border-amber-500/20 shadow-2xl">
+                <div className="p-4 border-b border-amber-500/20 bg-amber-900/20 flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-black text-white flex items-center gap-2">
-                            <Package className="text-game-accent" size={20} />
+                            <Package className="text-amber-400" size={20} />
                             GROCERY LIST
                         </h2>
                         <p className="text-[10px] text-game-muted mt-0.5 uppercase tracking-widest">{groceryPeriod} CYCLE</p>
@@ -247,7 +247,7 @@ const BudgetView = () => {
                             </div>
                             <button
                                 type="submit"
-                                className="bg-game-accent hover:bg-game-accent/80 text-slate-900 p-3 rounded-xl transition-all shadow-lg shadow-game-accent/20"
+                                className="bg-game-gold hover:bg-game-gold/80 text-slate-900 p-3 rounded-xl transition-all shadow-lg shadow-game-gold/20"
                             >
                                 <Plus size={24} />
                             </button>
@@ -365,8 +365,8 @@ const MiscSpendingSection = React.memo(() => {
         .slice(0, 5);
 
     return (
-        <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 shadow-2xl overflow-hidden">
-            <div className="p-4 border-b border-slate-700/50 bg-slate-800/30">
+        <div className="bg-amber-900/10 rounded-3xl border border-amber-500/20 shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-amber-500/20 bg-amber-900/20">
                 <h2 className="text-lg font-black text-white flex items-center gap-2">
                     <Coins className="text-game-gold" size={20} />
                     MISCELLANEOUS (CREDITS)

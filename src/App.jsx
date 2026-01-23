@@ -40,20 +40,22 @@ function AppContent({ currentTab, setCurrentTab }) {
       <React.Suspense fallback={<div className="min-h-screen bg-game-bg" />}>
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
           <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))]">
-            <header className="mb-2 flex items-center justify-between">
-              <div className={`${currentTab !== 'dashboard' ? 'opacity-0 pointer-events-none' : ''}`}>
-                <h1
-                  onClick={() => setIsSettingsOpen(true)}
-                  className="text-4xl md:text-5xl font-black font-game text-transparent bg-clip-text bg-gradient-to-r from-game-accent to-game-gold tracking-tighter drop-shadow-lg p-1 cursor-pointer hover:opacity-80 transition-opacity"
-                >
-                  LIFEQUEST
-                </h1>
-              </div>
-              <div className="text-right hidden md:block">
-                <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs">System Online</p>
-                <p className="text-10px text-slate-600 font-mono">{new Date().toLocaleDateString()}</p>
-              </div>
-            </header>
+            {currentTab === 'dashboard' && (
+              <header className="mb-2 flex items-center justify-between">
+                <div>
+                  <h1
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="text-4xl md:text-5xl font-black font-game text-transparent bg-clip-text bg-gradient-to-r from-game-accent to-game-gold tracking-tighter drop-shadow-lg p-1 cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    LIFEQUEST
+                  </h1>
+                </div>
+                <div className="text-right hidden md:block">
+                  <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs">System Online</p>
+                  <p className="text-10px text-slate-600 font-mono">{new Date().toLocaleDateString()}</p>
+                </div>
+              </header>
+            )}
 
             <motion.main
               className="min-h-[600px] relative z-10"

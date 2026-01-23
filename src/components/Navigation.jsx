@@ -10,7 +10,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
     const dragOffset = useMotionValue(0);
 
     const outerTabs = [
-        { id: 'quests', label: 'Quests', icon: Scroll, color: 'text-blue-400' },
+        { id: 'quests', label: 'Quests', icon: Scroll, color: 'text-emerald-400' },
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-game-accent' },
         { id: 'protocols', label: 'Protocols', icon: Zap, color: 'text-purple-400' },
     ];
@@ -90,6 +90,9 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
     // -- Global Gestures --
 
     const onPanEnd = (event, info) => {
+        // FIX: Ignore events originating from elements that request isolation (like Quest Cards)
+        if (event.target.closest('[data-no-swipe="true"]')) return;
+
         const threshold = 30;
         const { x, y } = info.offset;
         const absX = Math.abs(x);
@@ -156,6 +159,9 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
     };
 
     const onPan = (event, info) => {
+        // FIX: Ignore events originating from elements that request isolation
+        if (event.target.closest('[data-no-swipe="true"]')) return;
+
         // Direct update to motion value - NO RE-RENDER
         if (Math.abs(info.offset.x) > Math.abs(info.offset.y)) {
             // SENSITIVITY FIX:

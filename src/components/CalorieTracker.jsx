@@ -36,8 +36,8 @@ const CalorieTracker = () => {
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
 
             {/* Header / Summary Card */}
-            <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 shadow-2xl overflow-hidden relative">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-game-danger to-transparent opacity-50"></div>
+            <div className="bg-rose-900/10 rounded-3xl border border-rose-500/20 shadow-2xl overflow-hidden relative">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent opacity-50"></div>
                 <div className="p-6 flex flex-col items-center justify-center relative">
 
                     <h2 className="text-xl font-game text-white flex items-center gap-2 mb-6">
@@ -45,7 +45,7 @@ const CalorieTracker = () => {
                         Metabolic Monitor
                     </h2>
 
-                    <div className="w-48 h-48 rounded-full border-8 border-slate-800 flex items-center justify-center relative">
+                    <div className="w-48 h-48 rounded-full border-8 border-rose-900/20 flex items-center justify-center relative">
                         <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
                             <circle
                                 cx="50" cy="50" r="46"
@@ -91,7 +91,7 @@ const CalorieTracker = () => {
             </div>
 
             {/* Input Section */}
-            <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 shadow-2xl p-4">
+            <div className="bg-rose-900/10 rounded-3xl border border-rose-500/20 shadow-2xl p-4">
                 <form onSubmit={handleAdd} className="flex gap-2 mb-4">
                     <input
                         type="number"
@@ -114,7 +114,7 @@ const CalorieTracker = () => {
                         <button
                             key={amt}
                             onClick={() => addCalories(amt)}
-                            className="bg-slate-900/50 hover:bg-slate-800 text-gray-400 hover:text-white py-3 rounded-xl text-xs font-bold transition-colors border border-slate-700/50 hover:border-game-danger/50"
+                            className="bg-rose-900/20 hover:bg-rose-800/40 text-rose-300 hover:text-white py-3 rounded-xl text-xs font-bold transition-colors border border-rose-500/20 hover:border-rose-500/50"
                         >
                             +{amt} kcal
                         </button>
@@ -123,7 +123,7 @@ const CalorieTracker = () => {
             </div>
 
             {/* History Section */}
-            <div className="bg-slate-800/40 rounded-3xl border border-slate-700/50 shadow-2xl p-4">
+            <div className="bg-rose-900/10 rounded-3xl border border-rose-500/20 shadow-2xl p-4">
                 <h3 className="text-sm font-game text-white flex items-center gap-2 mb-4 uppercase tracking-wider opacity-80 pl-2">
                     <Clock size={16} className="text-game-muted" /> Recent Intake
                 </h3>

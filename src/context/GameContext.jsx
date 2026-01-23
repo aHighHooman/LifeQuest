@@ -201,12 +201,47 @@ export const GameProvider = ({ children }) => {
         setHabits(prev => prev.filter(h => h.id !== id));
     };
 
+    // --- TODAY'S FOCUS MANAGEMENT ---
+    const toggleToday = (id, type) => {
+        if (type === 'quest') {
+            setQuests(prev => prev.map(q => {
+                if (q.id === id) {
+                    return { ...q, isToday: !q.isToday };
+                }
+                return q;
+            }));
+        } else if (type === 'habit') {
+            setHabits(prev => prev.map(h => {
+                if (h.id === id) {
+                    return { ...h, isToday: !h.isToday };
+                }
+                return h;
+            }));
+        }
+    };
+
+    // Auto-populate logic (run on load or day change)
+    useEffect(() => {
+        const today = new Date().toISOString().split('T')[0];
+
+        setQuests(prev => prev.map(q => {
+            // If due date is today AND not completed/already in focus
+            if (q.dueDate === today && !q.completed && !q.isToday) {
+                return { ...q, isToday: true };
+            }
+            return q;
+        }));
+
+        // Future: Reset daily focus or handle specific habit logic here
+    }, []); // Run once on mount for now
+
     return (
         <GameContext.Provider value={{
             stats, quests, habits, settings, calories, coinHistory,
             addQuest, completeQuest, deleteQuest,
             addHabit, checkHabit, deleteHabit,
-            updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins
+            updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins,
+            toggleToday
         }}>
             {children}
         </GameContext.Provider>
