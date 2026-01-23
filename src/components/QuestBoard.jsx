@@ -6,7 +6,7 @@ import clsx from 'clsx';
 
 const USE_DECK_VIEW = true;
 
-const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious }) => {
+const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious, custom }) => {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
     const rotate = useTransform(x, [-200, 200], [-30, 30]);
@@ -86,11 +86,32 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
             onPanEnd={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
 
-            animate={{
-                y: index * 10,
-                scale: 1 - index * 0.05,
-                opacity: index > 2 ? 0 : 1
+            custom={custom}
+            variants={{
+                initial: (direction) => {
+                    if (direction === -1) {
+                        return { y: -300, opacity: 0, scale: 1.1 };
+                    }
+                    return { scale: 0.9, y: 40, opacity: 0 };
+                },
+                animate: {
+                    y: index * 10,
+                    scale: 1 - index * 0.05,
+                    opacity: index > 2 ? 0 : 1
+                },
+                exit: (direction) => {
+                    if (direction === 1) {
+                        // Skip/Complete: fly up
+                        return { y: -400, opacity: 0, transition: { duration: 0.2 } };
+                    }
+                    // Reverse/Previous: usually we don't 'exit' cards unless they fall off the stack
+                    // But if we did, maybe they drop down?
+                    return { y: 200, opacity: 0 };
+                }
             }}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className={clsx(
                 "absolute w-full max-w-md bg-slate-900 rounded-2xl border-2 overflow-hidden shadow-2xl origin-bottom touch-none",
                 rarity.border,
@@ -190,7 +211,7 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
     );
 };
 
-const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate, onPrevious }) => {
+const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate, onPrevious, slideDirection = 1 }) => {
     const visibleQuests = quests.slice(0, 4);
 
     if (quests.length === 0) {
@@ -207,7 +228,7 @@ const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate, onPrevious 
 
     return (
         <div className="relative h-[320px] w-full max-w-md mx-auto perspective-1000 mb-8">
-            <AnimatePresence>
+            <AnimatePresence custom={slideDirection}>
                 {visibleQuests.map((quest, index) => (
                     <QuestDeckCard
                         key={quest.id}
@@ -219,6 +240,7 @@ const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate, onPrevious 
                         onSkip={onSkip}
                         onUpdate={onUpdate}
                         onPrevious={onPrevious}
+                        custom={slideDirection}
                     />
                 ))}
             </AnimatePresence>
@@ -287,6 +309,9 @@ const QuestBoard = () => {
     const [showVictoryLog, setShowVictoryLog] = useState(false);
     const [showDiscardedLog, setShowDiscardedLog] = useState(false);
 
+    // Animation State
+    const [slideDirection, setSlideDirection] = useState(1); // 1 = Next/Skip, -1 = Previous/Reverse
+
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!newQuestTitle.trim()) return;
@@ -309,10 +334,12 @@ const QuestBoard = () => {
     const [skippedOffsets, setSkippedOffsets] = useState({});
 
     const handleSkip = (id) => {
+        setSlideDirection(1);
         setSkippedOffsets(prev => ({ ...prev, [id]: Date.now() }));
     };
 
     const handlePrevious = () => {
+        setSlideDirection(-1);
         // Calculate current order to find the last item
         const active = quests
             .filter(q => !q.completed && !q.discarded)
@@ -352,7 +379,7 @@ const QuestBoard = () => {
     const discardedQuests = quests.filter(q => q.discarded);
 
     return (
-        <div className="pb-24 md:pb-0 relative min-h-[600px] flex flex-col">
+        <div className="pb-4 md:pb-0 relative flex flex-col">
             <div className="flex justify-between items-center mb-5 pl-4">
                 <div>
                     <h2 className="text-3xl font-game font-bold text-emerald-400 tracking-widest uppercase text-glow">
@@ -374,6 +401,7 @@ const QuestBoard = () => {
                     onSkip={handleSkip}
                     onUpdate={updateQuest}
                     onPrevious={handlePrevious}
+                    slideDirection={slideDirection}
                 />
             </div>
 
@@ -488,7 +516,7 @@ const QuestBoard = () => {
                                                     </button>
                                                 )}
                                             </div>
-                                            <div className="flex gap-2 justify-start">
+                                            <div className="flex justify-between w-full px-1">
                                                 <button
                                                     type="button"
                                                     onClick={() => setDueDate(new Date().toISOString().split('T')[0])}
@@ -505,7 +533,7 @@ const QuestBoard = () => {
                                                     }}
                                                     className="text-[10px] uppercase font-bold text-emerald-600 hover:text-emerald-400 transition-colors"
                                                 >
-                                                    Tom
+                                                    Tomorrow
                                                 </button>
                                                 <button
                                                     type="button"
