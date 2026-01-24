@@ -41,7 +41,7 @@ function AppContent({ currentTab, setCurrentTab }) {
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
           <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))]">
             {currentTab === 'dashboard' && (
-              <header className="mb-2 flex items-center justify-between">
+              <header className="mb-2 flex items-center justify-between px-6">
                 <div>
                   <h1
                     onClick={() => setIsSettingsOpen(true)}

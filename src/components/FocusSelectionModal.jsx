@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CheckCircle, Circle, Shield, Swords } from 'lucide-react';
+import { X, CheckCircle, Circle, Shield, Swords, Crosshair } from 'lucide-react';
 import { useGame } from '../context/GameContext';
 
 const FocusSelectionModal = ({ isOpen, onClose }) => {
@@ -19,7 +19,7 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+                <div className="fixed inset-0 z-50 flex items-start justify-center">
                     {/* Backdrop */}
                     <motion.div
                         initial={{ opacity: 0 }}
@@ -29,49 +29,38 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
                     />
 
-                    {/* Modal Content */}
+                    {/* Modal Content - Top Dropdown (Hanging Style) */}
                     <motion.div
-                        initial={{ y: "100%" }}
+                        initial={{ y: "-100%" }}
                         animate={{ y: 0 }}
-                        exit={{ y: "100%" }}
-                        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative w-full max-w-lg bg-slate-900 border-t border-slate-700 rounded-t-2xl sm:rounded-2xl sm:border max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
+                        exit={{ y: "-100%" }}
+                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                        // Hanging Style: rounded-b-2xl ONLY. No border-t.
+                        className="relative w-full max-w-lg bg-slate-900 border-b-2 border-x border-slate-700/80 rounded-b-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col max-h-[75vh]"
+                        style={{ marginTop: 0 }}
                     >
                         {/* Header */}
-                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90 backdrop-blur z-10">
-                            <h2 className="text-lg font-game font-bold text-white tracking-wider">Plan Your Day</h2>
+                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/95 backdrop-blur z-10">
+                            <h2 className="text-lg font-game font-bold text-white tracking-wider flex items-center gap-2">
+                                <Swords size={20} className="text-game-accent" />
+                                Mission Control
+                            </h2>
                             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-800 text-gray-400 hover:text-white transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
 
-                        {/* Tabs */}
-                        <div className="flex p-2 gap-2 bg-slate-950/50">
-                            <button
-                                onClick={() => setActiveTab('quests')}
-                                className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'quests'
-                                    ? 'bg-game-accent text-slate-900 shadow-[0_0_10px_rgba(56,189,248,0.4)]'
-                                    : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
-                                    }`}
-                            >
-                                <Swords size={16} /> Objectives
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('protocols')}
-                                className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'protocols'
-                                    ? 'bg-game-gold text-slate-900 shadow-[0_0_10px_rgba(255,215,0,0.4)]'
-                                    : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
-                                    }`}
-                            >
-                                <Shield size={16} /> Protocols
-                            </button>
-                        </div>
-
-                        {/* Content List */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-20">
+                        {/* Content List - Middle (Scrollable) */}
+                        {/* data-no-swipe="true" checks Navigation.jsx to prevent drag gestures from triggering tab switch */}
+                        <div
+                            className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 bg-slate-950/30"
+                            data-no-swipe="true"
+                        >
                             {activeTab === 'quests' ? (
                                 availableQuests.length === 0 ? (
-                                    <div className="text-center py-10 text-gray-500 italic">No pending objectives found.</div>
+                                    <div className="text-center py-8 text-gray-500 italic border-2 border-dashed border-slate-800 rounded-xl">
+                                        No pending objectives found.
+                                    </div>
                                 ) : (
                                     availableQuests.map(quest => (
                                         <div
@@ -91,9 +80,9 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                                 </div>
                                                 <div className="flex gap-2 text-[10px] mt-1">
                                                     <span className={`px-1.5 py-0.5 rounded capitalize ${quest.difficulty === 'legendary' ? 'bg-orange-500/20 text-orange-400' :
-                                                            quest.difficulty === 'hard' ? 'bg-red-500/20 text-red-400' :
-                                                                quest.difficulty === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                                    'bg-green-500/20 text-green-400'
+                                                        quest.difficulty === 'hard' ? 'bg-purple-500/20 text-purple-400' :
+                                                            quest.difficulty === 'medium' ? 'bg-blue-500/20 text-blue-400' :
+                                                                'bg-emerald-500/20 text-emerald-400'
                                                         }`}>
                                                         {quest.difficulty}
                                                     </span>
@@ -108,26 +97,28 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                             ) : (
                                 // Protocols Tab
                                 availableHabits.length === 0 ? (
-                                    <div className="text-center py-10 text-gray-500 italic">No protocols found.</div>
+                                    <div className="text-center py-8 text-gray-500 italic border-2 border-dashed border-slate-800 rounded-xl">
+                                        No protocols found.
+                                    </div>
                                 ) : (
                                     availableHabits.map(habit => (
                                         <div
                                             key={habit.id}
                                             onClick={() => toggleItem(habit.id, 'habit')}
                                             className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all active:scale-[0.98] ${habit.isToday
-                                                ? 'bg-game-gold/10 border-game-gold/50'
+                                                ? 'bg-purple-500/10 border-purple-500/50'
                                                 : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800'
                                                 }`}
                                         >
-                                            <div className={`p-1 rounded-full ${habit.isToday ? 'text-game-gold' : 'text-gray-500'}`}>
+                                            <div className={`p-1 rounded-full ${habit.isToday ? 'text-purple-400' : 'text-gray-500'}`}>
                                                 {habit.isToday ? <CheckCircle size={20} className="fill-current" /> : <Circle size={20} />}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className={`font-bold text-sm truncate ${habit.isToday ? 'text-white' : 'text-gray-300'}`}>
                                                     {habit.title}
                                                 </div>
-                                                <div className="text-[10px] text-gray-500 mt-1 capitalize">
-                                                    {habit.frequency}
+                                                <div className="text-[10px] text-gray-500 mt-1 capitalize flex items-center gap-2">
+                                                    <span className="bg-slate-800 px-1.5 py-0.5 rounded">{habit.frequency}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -136,12 +127,35 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                             )}
                         </div>
 
-                        {/* Footer Button (Mobile Sticky) */}
-                        <div className="p-4 border-t border-slate-800 bg-slate-900/95 backdrop-blur absolute bottom-0 w-full">
+                        {/* Tabs - Moved Below List */}
+                        <div className="flex p-2 gap-2 bg-slate-900 border-t border-slate-800 z-10 shrink-0">
+                            <button
+                                onClick={() => setActiveTab('quests')}
+                                className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeTab === 'quests'
+                                    ? 'bg-game-accent text-slate-900 shadow-[0_0_15px_rgba(56,189,248,0.3)]'
+                                    : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+                                    }`}
+                            >
+                                <Crosshair size={16} /> Objectives
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('protocols')}
+                                className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeTab === 'protocols'
+                                    ? 'bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+                                    : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+                                    }`}
+                            >
+                                <Shield size={16} /> Protocols
+                            </button>
+                        </div>
+
+                        {/* Footer Button */}
+                        <div className="p-4 border-t border-slate-800 bg-slate-900 z-20 shrink-0">
                             <button
                                 onClick={onClose}
-                                className="w-full bg-white text-slate-900 font-game font-bold py-3 rounded-xl shadow-lg active:scale-[0.98] transition-transform"
+                                className="w-full bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-black font-game font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(56,189,248,0.4)] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                             >
+                                <CheckCircle size={20} />
                                 Confirm Selection
                             </button>
                         </div>

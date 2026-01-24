@@ -160,7 +160,7 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
 
                 <div className="mt-4 pt-4 border-t border-white/10 flex justify-between text-xs text-gray-500 font-mono">
                     <div className="flex items-center gap-1"><span className="text-purple-400">►</span> COMPLETE</div>
-                    <div className="flex items-center gap-1">DISMISS <span className="text-rose-400">◄</span></div>
+                    <div className="flex items-center gap-1">SKIP <span className="text-rose-400">◄</span></div>
                 </div>
             </div>
         </motion.div>
@@ -409,16 +409,16 @@ const HabitTracker = () => {
     return (
         <div className="pb-4 md:pb-0 relative flex flex-col w-full">
             {/* HEADER */}
-            <div className="flex justify-between items-end mb-6 px-6">
-                <div className="flex-1 min-w-0 mr-2">
-                    <h2 className="text-xl md:text-3xl font-game font-bold text-purple-400 tracking-widest uppercase text-glow truncate">
+            <div className="flex justify-between items-center mb-5 px-6">
+                <div>
+                    <h2 className="text-3xl font-game font-bold text-purple-400 tracking-widest uppercase text-glow">
                         Protocols
                     </h2>
-                    <p className="text-sm text-purple-400/60 leading-tight hidden md:block">System routines.</p>
+                    <p className="text-sm text-purple-400/60">System routines.</p>
                 </div>
 
                 <span className="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-4 py-1 rounded-full text-xs font-bold shadow-[0_0_10px_rgba(168,85,247,0.2)]">
-                    {activeHabits.length} ACTIVE
+                    {deckHabits.length} PENDING
                 </span>
             </div>
 
