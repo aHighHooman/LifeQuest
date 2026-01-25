@@ -198,10 +198,11 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
 
             <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-0 pointer-events-none overflow-visible">
 
-                <div className="relative flex items-end justify-center pointer-events-auto mb-[-80px]">
+                <div className="relative flex items-end justify-center pointer-events-auto mb-[-50px]">
 
                     {/* Inner Disk (Budget/Health) */}
                     <motion.div
+                        initial={{ y: 0, scale: 0.9, opacity: 0 }}
                         animate={{
                             y: isExpanded ? -70 : 0,
                             scale: isExpanded ? 1 : 0.9,
@@ -259,6 +260,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
 
                     {/* Outer Disk (Quests/Dash/Proto) */}
                     <motion.div
+                        initial={{ y: 0 }}
                         animate={{
                             y: isExpanded ? -80 : 0,
                             // rotate: handled in style by transform
