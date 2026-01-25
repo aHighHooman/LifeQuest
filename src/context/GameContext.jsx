@@ -33,7 +33,7 @@ const INITIAL_CALORIES = { current: 0, target: 2000, history: [] };
 const INITIAL_COIN_HISTORY = [];
 
 export const GameProvider = ({ children }) => {
-    const { addRewardFromGold } = useBudget();
+    const { addRewardFromGold, removeRewardFromGold } = useBudget();
 
     // Using usePersistentState for automatic localStorage handling and backup on corruption
     const [stats, setStats] = usePersistentState('lq_stats', INITIAL_STATS);
@@ -71,7 +71,8 @@ export const GameProvider = ({ children }) => {
 
     // Misc Coin Spending
     const spendCoins = (amount, description) => {
-        if (stats.gold < amount) return false;
+        // ALLOW NEGATIVE: Removed check
+        // if (stats.gold < amount) return false;
 
         setStats(prev => ({ ...prev, gold: prev.gold - amount }));
         setCoinHistory(prev => [...prev, {
@@ -85,18 +86,28 @@ export const GameProvider = ({ children }) => {
     };
 
     const addXp = (amount) => {
+        const numAmount = Number(amount);
         setStats(prev => {
-            let newXp = prev.xp + amount;
+            let newXp = Number(prev.xp || 0) + numAmount;
             let newLevel = prev.level;
             let newMaxXp = prev.maxXp;
             let newHp = prev.hp;
             let newMaxHp = prev.maxHp;
 
-            if (newXp >= prev.maxXp) {
+            // Level Up Logic
+            while (newXp >= newMaxXp) {
                 newLevel += 1;
-                newXp -= prev.maxXp;
-                newMaxXp = Math.floor(prev.maxXp * 1.2);
+                newXp -= newMaxXp;
+                newMaxXp = Math.floor(newMaxXp * 1.2);
                 newHp = newMaxHp; // Heal on level up
+            }
+
+            // Level Down Logic (Handle Negative XP)
+            while (newXp < 0 && newLevel > 1) {
+                newLevel -= 1;
+                // Reverse growth formula: Math.floor(prev * 1.2) -> Math.ceil(current / 1.2)
+                newMaxXp = Math.ceil(newMaxXp / 1.2);
+                newXp += newMaxXp;
             }
 
             return { ...prev, xp: newXp, level: newLevel, maxXp: newMaxXp, hp: newHp };
@@ -104,14 +115,15 @@ export const GameProvider = ({ children }) => {
     };
 
     const addGold = (amount, source = 'reward') => {
-        setStats(prev => ({ ...prev, gold: prev.gold + amount }));
-        if (amount > 0) {
+        const numAmount = Number(amount);
+        setStats(prev => ({ ...prev, gold: Number(prev.gold || 0) + numAmount }));
+        if (numAmount !== 0) {
             setCoinHistory(prev => [...prev, {
                 id: Date.now().toString(),
                 date: new Date().toISOString(),
-                amount,
-                description: `Earned from ${source}`,
-                type: 'earned'
+                amount: numAmount,
+                description: numAmount > 0 ? `Earned from ${source}` : `Reverted ${source}`,
+                type: numAmount > 0 ? 'earned' : 'spent'
             }]);
         }
     };
@@ -141,7 +153,9 @@ export const GameProvider = ({ children }) => {
             missionBrief,
             completed: false,
             discarded: false,
+            // If customReward is passed, use it. Otherwise use defaults. Flag it.
             reward: customReward || defaultRewards[difficulty] || defaultRewards.easy,
+            isCustomReward: !!customReward,
             createdAt: new Date().toISOString(),
         };
         setQuests(prev => [newQuest, ...prev]);
@@ -152,15 +166,70 @@ export const GameProvider = ({ children }) => {
     };
 
     const completeQuest = (id) => {
+        const quest = quests.find(q => q.id === id);
+        if (!quest || quest.completed) return;
+
+        const diff = quest.difficulty || 'easy';
+        const xpAmount = Number(quest.reward.xp || 0);
+        let goldAmount = Number(quest.reward.gold || 0);
+
+        // If not custom, force use of settings
+        if (!quest.isCustomReward) {
+            const settingVal = settings.questRewards[diff];
+            if (settingVal !== undefined) {
+                goldAmount = Number(settingVal);
+            }
+        }
+
+        // Side Effects (Run only once)
+        addXp(xpAmount);
+        addGold(goldAmount, 'Quest');
+        addRewardFromGold(goldAmount);
+
         setQuests(prev => prev.map(q => {
-            if (q.id === id && !q.completed) {
-                addXp(q.reward.xp);
-                addGold(q.reward.gold, 'Quest');
-                addRewardFromGold(q.reward.gold);
-                return { ...q, completed: true, completedAt: new Date().toISOString() };
+            if (q.id === id) {
+                return {
+                    ...q,
+                    completed: true,
+                    completedAt: new Date().toISOString(),
+                    completedReward: { xp: xpAmount, gold: goldAmount } // Snapshot used for undo stability
+                };
             }
             return q;
         }));
+    };
+
+    const undoCompleteQuest = (id) => {
+        const quest = quests.find(q => q.id === id);
+        if (!quest || !quest.completed) return;
+
+        let xpAmount = 0;
+        let goldAmount = 0;
+
+        // Strategy 1: Use Snapshot (Best for accuracy)
+        if (quest.completedReward) {
+            xpAmount = Number(quest.completedReward.xp || 0);
+            goldAmount = Number(quest.completedReward.gold || 0);
+        } else {
+            // Strategy 2: Reconstruct logic (Fallback for legacy data)
+            const diff = quest.difficulty || 'easy';
+            xpAmount = Number(quest.reward.xp || 0);
+            goldAmount = Number(quest.reward.gold || 0);
+
+            if (!quest.isCustomReward) {
+                const settingVal = settings.questRewards[diff];
+                if (settingVal !== undefined) {
+                    goldAmount = Number(settingVal);
+                }
+            }
+        }
+
+        addXp(-xpAmount);
+        addGold(-goldAmount, 'Quest Undo');
+        removeRewardFromGold(goldAmount);
+
+        // Update Quest State - clear snapshot
+        setQuests(prev => prev.map(q => q.id === id ? { ...q, completed: false, completedAt: null, completedReward: null } : q));
     };
 
     const deleteQuest = (id) => {
@@ -271,7 +340,7 @@ export const GameProvider = ({ children }) => {
     return (
         <GameContext.Provider value={{
             stats, quests, habits, settings, calories, coinHistory,
-            addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest,
+            addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
             addHabit, checkHabit, deleteHabit, toggleHabitActivation,
             updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins,
             toggleToday

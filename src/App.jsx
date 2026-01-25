@@ -50,7 +50,7 @@ function AppContent({ currentTab, setCurrentTab }) {
                     LIFEQUEST
                   </h1>
                 </div>
-                <div className="text-right hidden md:block">
+                <div className="text-right">
                   <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs">System Online</p>
                   <p className="text-10px text-slate-600 font-mono">{new Date().toLocaleDateString()}</p>
                 </div>

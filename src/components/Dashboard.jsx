@@ -314,8 +314,7 @@ const Dashboard = ({ onTabChange }) => {
 
             {/* HUD Stats Area */}
             <div className="px-6">
-                <div className="bg-game-panel p-3 rounded-2xl border border-sky-500/30 shadow-2xl relative overflow-hidden backdrop-blur-sm">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-sky-400 to-transparent opacity-50"></div>
+                <div className="p-3 relative">
 
                     <div className="flex flex-col gap-4">
                         {/* Top Row: Level and Credits */}
@@ -324,7 +323,7 @@ const Dashboard = ({ onTabChange }) => {
                                 <motion.div
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => setShowStats(true)}
-                                    className="w-14 h-14 rounded-full bg-slate-900 border-2 border-sky-400 flex items-center justify-center text-xl font-bold font-game text-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.3)] cursor-pointer hover:bg-sky-400/10 transition-colors"
+                                    className="w-14 h-14 flex items-center justify-center text-xl font-bold font-game text-sky-400 drop-shadow-[0_0_10px_rgba(56,189,248,0.8)] cursor-pointer hover:scale-110 transition-transform"
                                 >
                                     {stats.level}
                                 </motion.div>
@@ -334,12 +333,12 @@ const Dashboard = ({ onTabChange }) => {
                             <motion.div
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => onTabChange('budget')}
-                                className="bg-slate-950/50 px-4 py-2 rounded-xl border border-sky-500/30 flex items-center gap-3 cursor-pointer hover:bg-sky-500/10 transition-colors relative group shadow-[0_0_10px_rgba(56,189,248,0.1)]"
+                                className="px-4 py-2 rounded-xl flex items-center gap-3 cursor-pointer hover:bg-sky-500/10 transition-colors relative group"
                             >
                                 <div className="absolute inset-0 bg-game-gold/0 group-hover:bg-game-gold/5 rounded-xl transition-colors" />
                                 <Coins size={20} className="text-game-gold group-hover:drop-shadow-[0_0_5px_rgba(255,215,0,0.5)]" />
                                 <div className="flex flex-col items-end relative z-10">
-                                    <span className="text-lg font-black text-white leading-none group-hover:text-game-gold transition-colors">{stats.gold}</span>
+                                    <span className="text-lg font-black text-game-gold leading-none transition-colors">{stats.gold}</span>
                                     <span className="text-[8px] text-game-gold uppercase tracking-tighter">Credits</span>
                                 </div>
                             </motion.div>
@@ -352,13 +351,14 @@ const Dashboard = ({ onTabChange }) => {
                                 onClick={() => onTabChange('calories')}
                                 className="cursor-pointer group"
                             >
-                                <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1 px-1 group-hover:text-white transition-colors">
+                                <div className="flex justify-between text-[10px] font-bold text-game-danger mb-1 px-1 transition-colors">
                                     <span className="flex items-center gap-1 uppercase"><Heart size={10} className="text-game-danger fill-game-danger/20" /> Health</span>
-                                    <span className="font-mono text-gray-500 group-hover:text-white">{stats.hp}/{stats.maxHp}</span>
+                                    <span className="font-mono text-game-danger">{stats.hp}/{stats.maxHp}</span>
                                 </div>
                                 <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 relative group-hover:border-game-danger/50 transition-colors">
                                     <motion.div
-                                        className="h-full bg-game-danger shadow-[0_0_10px_rgba(244,63,94,0.4)]"
+                                        className="h-full shadow-[0_0_10px_rgba(244,63,94,0.4)]"
+                                        style={{ background: 'linear-gradient(90deg, #9f1239 0%, #f43f5e 50%, #9f1239 100%)' }}
                                         initial={{ width: 0 }}
                                         animate={{ width: `${hpPercentage}%` }}
                                         transition={{ type: "spring", bounce: 0, duration: 1 }}
@@ -368,13 +368,14 @@ const Dashboard = ({ onTabChange }) => {
 
                             {/* XP */}
                             <div>
-                                <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1 px-1">
+                                <div className="flex justify-between text-[10px] font-bold text-game-accent mb-1 px-1">
                                     <span className="flex items-center gap-1 uppercase"><Zap size={10} className="text-game-accent fill-game-accent/20" /> Experience</span>
-                                    <span className="font-mono text-gray-500">{stats.xp}/{stats.maxXp}</span>
+                                    <span className="font-mono text-game-accent">{stats.xp}/{stats.maxXp}</span>
                                 </div>
                                 <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 relative">
                                     <motion.div
-                                        className="h-full bg-game-accent shadow-[0_0_10px_rgba(56,189,248,0.4)]"
+                                        className="h-full shadow-[0_0_10px_rgba(56,189,248,0.4)]"
+                                        style={{ background: 'linear-gradient(90deg, #0369a1 0%, #38bdf8 50%, #0369a1 100%)' }}
                                         initial={{ width: 0 }}
                                         animate={{ width: `${xpPercentage}%` }}
                                         transition={{ type: "spring", bounce: 0, duration: 1 }}
@@ -388,15 +389,11 @@ const Dashboard = ({ onTabChange }) => {
 
             {/* Today's Focus Section */}
             <div>
-                <div className="flex items-center justify-between mb-3 px-6">
-                    <h2 className="text-lg font-game font-bold text-white tracking-wide shadow-black drop-shadow-md flex items-center gap-2">
-                        <Crosshair className="text-game-accent" size={20} />
-                        Today's Focus
-                    </h2>
+                <div className="flex items-center justify-center mb-3 px-6">
                     <motion.button
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setShowFocusModal(true)}
-                        className="bg-slate-800 hover:bg-slate-700 text-game-accent text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-2 transition-colors"
+                        className="text-game-accent text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors hover:bg-slate-800/30"
                     >
                         <Plus size={14} /> Manage
                     </motion.button>

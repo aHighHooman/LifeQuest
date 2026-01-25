@@ -22,6 +22,11 @@ export const BudgetProvider = ({ children }) => {
         setEarnedRewards(prev => prev + usdValue);
     };
 
+    const removeRewardFromGold = (goldAmount) => {
+        const usdValue = Number(goldAmount) / goldToUsdRatio;
+        setEarnedRewards(prev => prev - usdValue);
+    };
+
     const updatePrice = (name, price) => {
         setPriceDatabase(prev => ({ ...prev, [name]: parseFloat(price) }));
     };
@@ -72,7 +77,7 @@ export const BudgetProvider = ({ children }) => {
             priceDatabase, updatePrice,
             groceryPeriod, setGroceryPeriod,
             goldToUsdRatio, setGoldToUsdRatio,
-            addRewardFromGold,
+            addRewardFromGold, removeRewardFromGold,
             addGroceryItem, toggleGroceryItem, removeGroceryItem,
             resetGroceryList, clearGroceryList,
             totalGrocerySpent, totalGroceryEstimated

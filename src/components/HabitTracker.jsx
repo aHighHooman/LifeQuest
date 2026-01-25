@@ -589,7 +589,7 @@ const HabitTracker = () => {
                         <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px]">{inactiveHabits.length}</span>
                         <span className="uppercase font-bold tracking-widest">Database</span>
                     </div>
-                    <div className="flex -space-x-4 overflow-hidden py-2 px-1 justify-end flex-row-reverse">
+                    <div className="flex -space-x-4 space-x-reverse overflow-hidden py-2 px-1 justify-end flex-row-reverse">
                         {inactiveHabits.slice(0, 5).map((h) => (
                             <div key={h.id} className="w-10 h-10 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-slate-500 shadow-lg relative z-0 hover:z-10 hover:scale-110 transition-all" title={h.title}>
                                 <Power size={18} />

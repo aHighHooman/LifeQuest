@@ -198,7 +198,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
 
             <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-0 pointer-events-none overflow-visible">
 
-                <div className="relative flex items-end justify-center pointer-events-auto mb-[-50px]">
+                <div className="relative flex items-end justify-center pointer-events-auto mb-[-80px]">
 
                     {/* Inner Disk (Budget/Health) */}
                     <motion.div

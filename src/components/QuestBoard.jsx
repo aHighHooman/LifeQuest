@@ -283,7 +283,7 @@ const LogModal = ({ title, items, onClose, type, onRestore }) => {
                                     }
                                 </div>
                             </div>
-                            {type === 'discarded' && (
+                            {(type === 'discarded' || type === 'victory') && (
                                 <button
                                     onClick={() => onRestore(item.id)}
                                     className="p-2 bg-slate-700 hover:bg-emerald-600 text-white rounded-full transition-colors"
@@ -301,7 +301,7 @@ const LogModal = ({ title, items, onClose, type, onRestore }) => {
 };
 
 const QuestBoard = () => {
-    const { quests, addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest } = useGame();
+    const { quests, addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, undoCompleteQuest } = useGame();
 
     // Form States
     const [newQuestTitle, setNewQuestTitle] = useState('');
@@ -631,6 +631,9 @@ const QuestBoard = () => {
                         type="victory"
                         items={recentVictories}
                         onClose={() => setShowVictoryLog(false)}
+                        onRestore={(id) => {
+                            undoCompleteQuest(id);
+                        }}
                     />
                 )}
                 {showDiscardedLog && (
