@@ -5,8 +5,16 @@
 @tailwind utilities;
 
 @layer base {
+
+  html,
   body {
-    @apply bg-game-bg text-game-text font-sans overflow-x-hidden;
+    @apply bg-game-bg text-game-text font-sans;
+    /* Prevent elastic scrolling without forcefully locking browser UI */
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   #root {
