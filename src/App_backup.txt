@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Settings } from 'lucide-react';
 import { GameProvider, useGame } from './context/GameContext';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
@@ -42,22 +41,20 @@ function AppContent({ currentTab, setCurrentTab }) {
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
           <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))]">
             {currentTab === 'dashboard' && (
-              // <header className="mb-2 flex items-center justify-between px-6">
-              //   <div>
-              //     <motion.button
-              //       whileTap={{ scale: 0.9 }}
-              //       onClick={() => setIsSettingsOpen(true)}
-              //       className="p-2 text-slate-400 hover:text-game-accent transition-colors"
-              //     >
-              //       <Settings size={28} />
-              //     </motion.button>
-              //   </div>
-              //   <div className="text-right">
-              //     {/* <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs">System Online</p> */}
-              //     {/* <p className="text-10px text-slate-600 font-mono">{new Date().toLocaleDateString()}</p> */}
-              //   </div>
-              // </header>
-              null
+              <header className="mb-2 flex items-center justify-between px-6">
+                <div>
+                  <h1
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="text-4xl md:text-5xl font-black font-game text-transparent bg-clip-text bg-gradient-to-r from-game-accent to-game-gold tracking-tighter drop-shadow-lg p-1 cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    LIFEQUEST
+                  </h1>
+                </div>
+                <div className="text-right">
+                  <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs">System Online</p>
+                  <p className="text-10px text-slate-600 font-mono">{new Date().toLocaleDateString()}</p>
+                </div>
+              </header>
             )}
 
             <motion.main
@@ -67,7 +64,7 @@ function AppContent({ currentTab, setCurrentTab }) {
               transition={{ duration: 0.5 }}
             >
               <React.Suspense fallback={<LoadingSpinner />}>
-                {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} onOpenSettings={() => setIsSettingsOpen(true)} />}
+                {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} />}
                 {currentTab === 'quests' && <QuestBoard />}
                 {currentTab === 'protocols' && <HabitTracker />}
                 {currentTab === 'budget' && <BudgetView />}

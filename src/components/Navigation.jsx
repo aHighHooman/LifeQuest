@@ -271,7 +271,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                         transition={{ type: "spring", stiffness: 160, damping: 20 }}
                         onPan={onPan}
                         onPanEnd={onPanEnd}
-                        className="absolute bottom-[-330px] w-[500px] h-[500px] rounded-full bg-slate-950 shadow-2xl z-30 flex justify-center items-start pt-10 pointer-events-auto"
+                        className="absolute bottom-[-330px] w-[500px] h-[500px] rounded-full bg-gradient-to-r from-black via-slate-950 to-black shadow-2xl z-30 flex justify-center items-start pt-10 pointer-events-auto border-t border-white/5"
                     >
                         <div className="absolute top-4 w-[480px] h-[480px] rounded-full pointer-events-none" />
 

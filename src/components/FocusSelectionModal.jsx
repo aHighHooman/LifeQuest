@@ -19,7 +19,7 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-50 flex items-start justify-center">
+                <div className="fixed inset-0 z-50 flex items-start justify-center" data-no-swipe="true">
                     {/* Backdrop */}
                     <motion.div
                         initial={{ opacity: 0 }}
@@ -35,9 +35,17 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                         animate={{ y: 0 }}
                         exit={{ y: "-100%" }}
                         transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                        drag="y"
+                        dragConstraints={{ top: -600, bottom: 0 }}
+                        dragElastic={0.1}
+                        onDragEnd={(e, info) => {
+                            if (info.offset.y < -100) {
+                                onClose();
+                            }
+                        }}
                         // Hanging Style: rounded-b-2xl ONLY. No border-t.
                         className="relative w-full max-w-lg bg-slate-900 border-b-2 border-x border-slate-700/80 rounded-b-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col max-h-[75vh]"
-                        style={{ marginTop: 0 }}
+                        style={{ marginTop: 0, touchAction: 'none' }}
                     >
                         {/* Header */}
                         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/95 backdrop-blur z-10">
@@ -45,9 +53,7 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                 <Swords size={20} className="text-game-accent" />
                                 Mission Control
                             </h2>
-                            <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-800 text-gray-400 hover:text-white transition-colors">
-                                <X size={20} />
-                            </button>
+                            {/* "X" Button Removed for Blindfold Style */}
                         </div>
 
                         {/* Content List - Middle (Scrollable) */}
@@ -150,14 +156,9 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                         </div>
 
                         {/* Footer Button */}
-                        <div className="p-4 border-t border-slate-800 bg-slate-900 z-20 shrink-0">
-                            <button
-                                onClick={onClose}
-                                className="w-full bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-black font-game font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(56,189,248,0.4)] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                            >
-                                <CheckCircle size={20} />
-                                Confirm Selection
-                            </button>
+                        {/* Drag Handle (Footer) - Blindfold Pull-Up Indicator */}
+                        <div className="w-full flex justify-center pb-6 pt-4 bg-slate-900 border-t border-slate-800/50 cursor-grab active:cursor-grabbing z-20 shrink-0">
+                            <div className="w-16 h-1.5 bg-slate-600/50 rounded-full" />
                         </div>
                     </motion.div>
                 </div>
