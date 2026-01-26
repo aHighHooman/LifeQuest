@@ -210,10 +210,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
             >
 
 
-                <div
-                    className="relative flex items-end justify-center pointer-events-auto"
-                    style={{ marginBottom: 'calc(-50px - env(safe-area-inset-bottom))' }}
-                >
+                <div className="relative flex items-end justify-center pointer-events-auto mb-[-20px]">
 
                     {/* Inner Disk (Budget/Health) */}
                     <motion.div
