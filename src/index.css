@@ -8,17 +8,16 @@
 
   html,
   body {
-    @apply bg-game-bg text-game-text font-sans;
-    /* Prevent elastic scrolling without forcefully locking browser UI */
+    @apply bg-game-bg text-game-text font-sans overflow-hidden;
+    /* This stops the "rubber band" effect that triggers the Safari bars */
+    overscroll-behavior-y: none;
     height: 100%;
     width: 100%;
-    overflow: hidden;
-    overscroll-behavior-y: none;
-    -webkit-overflow-scrolling: touch;
   }
 
   #root {
     @apply w-full h-full overflow-hidden relative;
+    overscroll-behavior-y: none;
   }
 }
 
