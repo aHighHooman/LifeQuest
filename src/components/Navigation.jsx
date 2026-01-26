@@ -197,20 +197,19 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                 onPan={onPan}
                 onPanEnd={onPanEnd}
                 style={{
-                    touchAction: 'none',
-                    paddingBottom: 'env(safe-area-inset-bottom)' // Safe Area Padding
+                    touchAction: 'none'
                 }}
             />
 
             <div
-                className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-0 pointer-events-none overflow-visible transition-opacity duration-300"
+                className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-0 pointer-events-none overflow-visible"
                 style={{
 
                 }}
             >
 
 
-                <div className="relative flex items-end justify-center pointer-events-auto mb-[-20px]">
+                <div className="relative flex items-end justify-center pointer-events-auto mb-[-50px]">
 
                     {/* Inner Disk (Budget/Health) */}
                     <motion.div
