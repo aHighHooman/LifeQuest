@@ -197,14 +197,17 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                 onPan={onPan}
                 onPanEnd={onPanEnd}
                 style={{
-                    touchAction: 'none'
+                    touchAction: 'none',
+                    transform: 'translateZ(0)',
+                    WebkitTransform: 'translate3d(0, 0, 0)',
                 }}
             />
 
             <div
                 className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-0 pointer-events-none overflow-visible"
                 style={{
-
+                    transform: 'translateZ(0)',
+                    WebkitTransform: 'translate3d(0, 0, 0)',
                 }}
             >
 
