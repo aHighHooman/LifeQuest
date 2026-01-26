@@ -185,8 +185,9 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
         >
             {/* Main Content Content (Injected) */}
             <div className={clsx(
-                "flex-1 w-full min-h-0 relative z-10 select-text pb-64",
-                currentTab === 'dashboard' ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
+                "flex-1 w-full min-h-0 relative z-10 select-text",
+                currentTab !== 'budget' && "pb-64",
+                currentTab === 'dashboard' || currentTab === 'budget' ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
             )}>
                 {children}
             </div>
@@ -230,7 +231,8 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                         transition={{ type: "spring", stiffness: 160, damping: 20 }}
                         onPan={onPan}
                         onPanEnd={onPanEnd}
-                        className="absolute bottom-[-180px] w-[300px] h-[300px] rounded-full flex justify-center items-start pt-6 z-40 pointer-events-auto bg-slate-900/90 backdrop-blur-md"
+                        className="absolute bottom-[-200px] w-[300px] h-[300px] rounded-full flex justify-center items-start pt-6 z-40 pointer-events-auto bg-slate-900/90 backdrop-blur-md"
+
                     >
                         {/* Visual Arc for Inner */}
 
@@ -286,7 +288,9 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                         transition={{ type: "spring", stiffness: 160, damping: 20 }}
                         onPan={onPan}
                         onPanEnd={onPanEnd}
-                        className="absolute bottom-[-330px] w-[500px] h-[500px] rounded-full bg-gradient-to-r from-black via-slate-950 to-black shadow-2xl z-30 flex justify-center items-start pt-10 pointer-events-auto border-t border-white/5"
+                        className="absolute bottom-[-360px] w-[500px] h-[500px] rounded-full bg-gradient-to-r from-black via-slate-950 to-black shadow-2xl z-30 flex justify-center items-start pt-10 pointer-events-auto border-t border-white/5"
+
+
                     >
                         <div className="absolute top-4 w-[480px] h-[480px] rounded-full pointer-events-none" />
 

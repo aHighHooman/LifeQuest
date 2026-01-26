@@ -388,6 +388,8 @@ const HabitTracker = () => {
     return (
         <div className="pb-4 md:pb-0 relative flex flex-col w-full">
             {/* HEADER */}
+
+
             <div className="flex justify-between items-center mb-5 px-6">
                 <div>
                     <h2 className="text-3xl font-game font-bold text-purple-400 tracking-widest uppercase text-glow">
@@ -396,9 +398,10 @@ const HabitTracker = () => {
                     <p className="text-sm text-purple-400/60">System routines.</p>
                 </div>
 
-                <span className="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-4 py-1 rounded-full text-xs font-bold shadow-[0_0_10px_rgba(168,85,247,0.2)]">
+                <span className="text-purple-400 px-4 py-1 rounded-full text-xs font-bold">
                     {deckHabits.length} PENDING
                 </span>
+
             </div>
 
             {/* DECK */}
@@ -415,7 +418,8 @@ const HabitTracker = () => {
             </div>
 
             {/* CREATION FORM */}
-            <div className="bg-purple-900/10 p-4 rounded-xl border border-purple-500/20 mb-8 relative overflow-hidden z-20">
+            <div className="p-4 rounded-xl mb-8 relative overflow-hidden z-20">
+
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-col md:flex-row gap-4 items-end">
                         <div className="flex-1 w-full relative">
@@ -432,9 +436,10 @@ const HabitTracker = () => {
                                     type="button"
                                     onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
                                     className={clsx(
-                                        "p-2 rounded-lg border transition-all shrink-0",
-                                        isAdvancedOpen ? "bg-purple-500/20 border-purple-500 text-purple-400" : "bg-slate-800 border-slate-700 text-gray-400 hover:text-white"
+                                        "p-2 rounded-lg transition-all shrink-0",
+                                        isAdvancedOpen ? "text-purple-400" : "text-gray-400 hover:text-white"
                                     )}
+
                                     title="Advanced Settings"
                                 >
                                     <Settings size={20} />
@@ -539,49 +544,116 @@ const HabitTracker = () => {
                 </form>
             </div>
 
-            {/* BOTTOM LISTS */}
-            <div className="pt-4 flex justify-between items-end px-6 md:px-2">
-                {/* ONGOING LIST (Active) */}
-                <div onClick={() => setShowActiveList(true)} className="cursor-pointer group">
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-2 group-hover:text-purple-400 transition-colors">
-                        <span className="uppercase font-bold tracking-widest">Active Protocols</span>
-                        <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px]">{activeHabits.length}</span>
-                    </div>
-                    {/* Preview Circles */}
-                    <div className="flex -space-x-4 overflow-hidden py-2 px-1">
-                        {activeHabits.slice(0, 5).map((h) => (
-                            <div key={h.id} className="w-10 h-10 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-purple-400 shadow-lg relative z-0 hover:z-10 hover:scale-110 transition-all" title={h.title}>
-                                <Zap size={18} />
-                            </div>
-                        ))}
-                        {activeHabits.length === 0 && (
-                            <div className="w-10 h-10 rounded-full border-2 border-slate-800 border-dashed flex items-center justify-center text-slate-700">
-                                <Zap size={16} />
-                            </div>
-                        )}
+            {/* RADIAL LISTS - ORBITING NAVIGATION */}
+            <div
+                className="fixed left-1/2 z-50 pointer-events-none w-0 h-0 flex items-center justify-center"
+                style={{ bottom: 'calc(-160px + env(safe-area-inset-bottom, 0px))' }}
+            >
+
+                {/* --- ACTIVE PROTOCOLS (LEFT) --- */}
+                {/* Label: Radially above the icon group (Center angle ~ -32deg) */}
+                <div
+                    className="absolute cursor-pointer pointer-events-auto group"
+                    style={{
+                        transform: `rotate(-27.5deg) translateY(-330px)`,
+                        transformOrigin: 'center'
+                    }}
+                    onClick={() => setShowActiveList(true)}
+                >
+                    <div className="flex flex-col items-center text-xs w-[120px] text-center" style={{ transform: 'rotate(0deg)' }}> {/* Keep text upright or tangent? User requested "seem radial". Let's try slight rotation to match curve flow, or just upright relative to the rotated container? Container is rotated -35. Text is now effectively rotated -35. */}
+                        <span className="uppercase font-bold tracking-widest text-purple-400/80 group-hover:text-purple-400 transition-colors text-[10px]">Active</span>
+                        <div className="flex items-center justify-center gap-1">
+                            <span className="bg-slate-800 px-1.5 py-px rounded text-[9px] text-gray-400 group-hover:text-white transition-colors">{activeHabits.length}</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* INACTIVE LIST */}
-                <div onClick={() => setShowInactiveList(true)} className="cursor-pointer group flex flex-col items-end">
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-2 group-hover:text-slate-200 transition-colors">
-                        <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px]">{inactiveHabits.length}</span>
-                        <span className="uppercase font-bold tracking-widest">Database</span>
+                {/* Icons Arc: 6 Icons, overlapping */}
+                {/* Range: -20 to -45 deg (Center -32.5) */}
+                {activeHabits.slice(0, 6).map((h, i) => {
+                    const angle = -15 - (i * 6);
+
+                    return (
+                        <div
+                            key={h.id}
+                            className="absolute pointer-events-auto transition-transform hover:scale-110 hover:z-50"
+                            style={{
+                                transform: `rotate(${angle}deg) translateY(-285px) rotate(${-angle}deg)`,
+                                zIndex: 40 - i
+                            }}
+                            title={h.title}
+                            onClick={() => setShowActiveList(true)}
+                        >
+                            <div className="w-10 h-10 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center text-purple-400 shadow-lg shadow-purple-900/20">
+                                <Zap size={18} />
+                            </div>
+                        </div>
+                    );
+                })}
+                {activeHabits.length === 0 && (
+                    <div
+                        className="absolute pointer-events-auto opacity-50"
+                        style={{ transform: `rotate(-20deg) translateY(-260px) rotate(20deg)` }}
+                    >
+                        <div className="w-10 h-10 rounded-full border border-slate-800 border-dashed flex items-center justify-center text-slate-700">
+                            <Zap size={16} />
+                        </div>
                     </div>
-                    <div className="flex -space-x-4 space-x-reverse overflow-hidden py-2 px-1 justify-end flex-row-reverse">
-                        {inactiveHabits.slice(0, 5).map((h) => (
-                            <div key={h.id} className="w-10 h-10 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-slate-500 shadow-lg relative z-0 hover:z-10 hover:scale-110 transition-all" title={h.title}>
-                                <Power size={18} />
-                            </div>
-                        ))}
-                        {inactiveHabits.length === 0 && (
-                            <div className="w-10 h-10 rounded-full border-2 border-slate-800 border-dashed flex items-center justify-center text-slate-700">
-                                <Power size={16} />
-                            </div>
-                        )}
+                )}
+
+
+                {/* --- INACTIVE DATABASE (RIGHT) --- */}
+                {/* Label */}
+                <div
+                    className="absolute cursor-pointer pointer-events-auto group"
+                    style={{
+                        transform: `rotate(27.5deg) translateY(-330px)`,
+                        transformOrigin: 'center'
+                    }}
+                    onClick={() => setShowInactiveList(true)}
+                >
+                    <div className="flex flex-col items-center text-xs w-[120px] text-center" style={{ transform: 'rotate(0deg)' }}>
+                        <span className="uppercase font-bold tracking-widest text-slate-500 group-hover:text-slate-200 transition-colors text-[10px]">Database</span>
+                        <div className="flex items-center justify-center gap-1">
+                            <span className="bg-slate-800 px-1.5 py-px rounded text-[9px] text-gray-500 group-hover:text-gray-300 transition-colors">{inactiveHabits.length}</span>
+                        </div>
                     </div>
                 </div>
+
+                {/* Icons Arc */}
+                {inactiveHabits.slice(0, 6).map((h, i) => {
+                    const angle = 15 + (i * 6);
+
+                    return (
+                        <div
+                            key={h.id}
+                            className="absolute pointer-events-auto transition-transform hover:scale-110 hover:z-50"
+                            style={{
+                                transform: `rotate(${angle}deg) translateY(-285px) rotate(${-angle}deg)`,
+                                zIndex: 40 - i
+                            }}
+                            title={h.title}
+                            onClick={() => setShowInactiveList(true)}
+                        >
+                            <div className="w-10 h-10 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center text-slate-600 shadow-lg">
+                                <Power size={18} />
+                            </div>
+                        </div>
+                    );
+                })}
+                {inactiveHabits.length === 0 && (
+                    <div
+                        className="absolute pointer-events-auto opacity-50"
+                        style={{ transform: `rotate(20deg) translateY(-260px) rotate(-20deg)` }}
+                    >
+                        <div className="w-10 h-10 rounded-full border border-slate-800 border-dashed flex items-center justify-center text-slate-700">
+                            <Power size={16} />
+                        </div>
+                    </div>
+                )}
+
             </div>
+
 
             {/* MODALS */}
             <AnimatePresence>

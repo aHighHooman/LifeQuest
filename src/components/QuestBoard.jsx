@@ -582,46 +582,111 @@ const QuestBoard = () => {
                 </form>
             </div>
 
-            {/* 3. LOGS (Victory Left, Discarded Right) */}
-            <div className="pt-4 flex justify-between items-end px-6 md:px-2">                {/* VICTORY LOG */}
-                <div onClick={() => setShowVictoryLog(true)} className="cursor-pointer group">
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-2 group-hover:text-emerald-400 transition-colors">
-                        <span className="uppercase font-bold tracking-widest">Victory Log</span>
-                        <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px]">{recentVictories.length}</span>
-                    </div>
-                    <div className="flex -space-x-4 overflow-hidden py-2 px-1">
-                        {recentVictories.length === 0 && (
-                            <div className="w-10 h-10 rounded-full border-2 border-slate-800 border-dashed flex items-center justify-center text-slate-700">
-                                <CheckCircle size={16} />
-                            </div>
-                        )}
-                        {recentVictories.slice(0, 5).map((q) => (
-                            <div key={q.id} className="w-10 h-10 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-game-success shadow-lg relative z-0 hover:z-10 hover:scale-110 transition-all" title={q.title}>
-                                <CheckCircle size={20} />
-                            </div>
-                        ))}
+            {/* RADIAL LISTS - ORBITING NAVIGATION */}
+            <div
+                className="fixed left-1/2 z-50 pointer-events-none w-0 h-0 flex items-center justify-center"
+                style={{ bottom: 'calc(-160px + env(safe-area-inset-bottom, 0px))' }}
+            >
+
+                {/* --- VICTORY LOG (LEFT) --- */}
+                <div
+                    className="absolute cursor-pointer pointer-events-auto group"
+                    style={{
+                        transform: `rotate(-27.5deg) translateY(-330px)`,
+                        transformOrigin: 'center'
+                    }}
+                    onClick={() => setShowVictoryLog(true)}
+                >
+                    <div className="flex flex-col items-center text-xs w-[120px] text-center" style={{ transform: 'rotate(0deg)' }}>
+                        <span className="uppercase font-bold tracking-widest text-emerald-400/80 group-hover:text-emerald-400 transition-colors text-[10px]">Victory Log</span>
+                        <div className="flex items-center justify-center gap-1">
+                            <span className="bg-slate-800 px-1.5 py-px rounded text-[9px] text-gray-400 group-hover:text-white transition-colors">{recentVictories.length}</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* DISCARDED LOG */}
-                <div onClick={() => setShowDiscardedLog(true)} className="cursor-pointer group flex flex-col items-end">
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-2 group-hover:text-rose-400 transition-colors">
-                        <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px]">{discardedQuests.length}</span>
-                        <span className="uppercase font-bold tracking-widest">Discarded</span>
+                {/* Icons Arc: Victory */}
+                {recentVictories.slice(0, 6).map((q, i) => {
+                    const angle = -15 - (i * 6);
+
+                    return (
+                        <div
+                            key={q.id}
+                            className="absolute pointer-events-auto transition-transform hover:scale-110 hover:z-50"
+                            style={{
+                                transform: `rotate(${angle}deg) translateY(-285px) rotate(${-angle}deg)`,
+                                zIndex: 40 - i
+                            }}
+                            title={q.title}
+                            onClick={() => setShowVictoryLog(true)}
+                        >
+                            <div className="w-10 h-10 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-900/20">
+                                <CheckCircle size={18} />
+                            </div>
+                        </div>
+                    );
+                })}
+                {recentVictories.length === 0 && (
+                    <div
+                        className="absolute pointer-events-auto opacity-50"
+                        style={{ transform: `rotate(-20deg) translateY(-260px) rotate(20deg)` }}
+                    >
+                        <div className="w-10 h-10 rounded-full border border-slate-800 border-dashed flex items-center justify-center text-slate-700">
+                            <CheckCircle size={16} />
+                        </div>
                     </div>
-                    <div className="flex -space-x-4 overflow-hidden py-2 px-1 justify-end flex-row-reverse">
-                        {discardedQuests.length === 0 && (
-                            <div className="w-10 h-10 rounded-full border-2 border-slate-800 border-dashed flex items-center justify-center text-slate-700">
-                                <Trash2 size={16} />
-                            </div>
-                        )}
-                        {discardedQuests.slice(0, 5).map((q) => (
-                            <div key={q.id} className="w-10 h-10 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-rose-500 shadow-lg relative z-0 hover:z-10 hover:scale-110 transition-all" title={q.title}>
-                                <Trash2 size={18} />
-                            </div>
-                        ))}
+                )}
+
+
+                {/* --- DISCARDED LOG (RIGHT) --- */}
+                <div
+                    className="absolute cursor-pointer pointer-events-auto group"
+                    style={{
+                        transform: `rotate(27.5deg) translateY(-330px)`,
+                        transformOrigin: 'center'
+                    }}
+                    onClick={() => setShowDiscardedLog(true)}
+                >
+                    <div className="flex flex-col items-center text-xs w-[120px] text-center" style={{ transform: 'rotate(0deg)' }}>
+                        <span className="uppercase font-bold tracking-widest text-slate-500 group-hover:text-rose-400 transition-colors text-[10px]">Discarded</span>
+                        <div className="flex items-center justify-center gap-1">
+                            <span className="bg-slate-800 px-1.5 py-px rounded text-[9px] text-gray-500 group-hover:text-gray-300 transition-colors">{discardedQuests.length}</span>
+                        </div>
                     </div>
                 </div>
+
+                {/* Icons Arc: Discarded */}
+                {discardedQuests.slice(0, 6).map((q, i) => {
+                    const angle = 15 + (i * 6);
+
+                    return (
+                        <div
+                            key={q.id}
+                            className="absolute pointer-events-auto transition-transform hover:scale-110 hover:z-50"
+                            style={{
+                                transform: `rotate(${angle}deg) translateY(-285px) rotate(${-angle}deg)`,
+                                zIndex: 40 - i
+                            }}
+                            title={q.title}
+                            onClick={() => setShowDiscardedLog(true)}
+                        >
+                            <div className="w-10 h-10 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center text-rose-500 shadow-lg">
+                                <Trash2 size={18} />
+                            </div>
+                        </div>
+                    );
+                })}
+                {discardedQuests.length === 0 && (
+                    <div
+                        className="absolute pointer-events-auto opacity-50"
+                        style={{ transform: `rotate(20deg) translateY(-260px) rotate(-20deg)` }}
+                    >
+                        <div className="w-10 h-10 rounded-full border border-slate-800 border-dashed flex items-center justify-center text-slate-700">
+                            <Trash2 size={16} />
+                        </div>
+                    </div>
+                )}
+
             </div>
 
             <AnimatePresence>
