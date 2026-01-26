@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useBudget } from './BudgetContext';
 import { usePersistentState } from '../utils/persistence';
+import { getDaysUntilDue } from '../utils/gameLogic';
+
 
 const GameContext = createContext();
 
@@ -258,11 +260,33 @@ export const GameProvider = ({ children }) => {
             createdAt: new Date().toISOString(),
         };
         setHabits(prev => [newHabit, ...prev]);
+
+
     };
 
     const toggleHabitActivation = (id, isActive) => {
-        setHabits(prev => prev.map(h => h.id === id ? { ...h, isActive } : h));
+        setHabits(prev => prev.map(h => {
+            if (h.id === id) {
+                // Reactive Update: If activating, check if due and add to dashboard
+                let isToday = h.isToday;
+                if (isActive) {
+                    const daysUntil = getDaysUntilDue(h);
+                    if (daysUntil <= 0) {
+                        isToday = true;
+                    }
+                } else {
+                    // Optionally remove from dashboard if deactivated?
+                    // User said "move to database", implying it leaves the active view.
+                    // It makes sense to set isToday = false if deactivated.
+                    isToday = false;
+                }
+
+                return { ...h, isActive, isToday };
+            }
+            return h;
+        }));
     };
+
 
     const checkHabit = (id, direction = 'positive') => {
         const today = new Date().toISOString().split('T')[0];
@@ -318,14 +342,45 @@ export const GameProvider = ({ children }) => {
     // Auto-populate logic (run on load or day change)
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
+        const lastLoginDate = stats.lastLoginDate;
 
-        setQuests(prev => prev.map(q => {
-            // If due date is today AND not completed/already in focus
-            if (q.dueDate === today && !q.completed && !q.isToday) {
-                return { ...q, isToday: true };
-            }
-            return q;
-        }));
+        // --- DAILY RESET & AUTO-ADD LOGIC ---
+        if (lastLoginDate !== today) {
+            console.log("New Day Detected! Performing Daily Reset...");
+
+            // 1. Reset 'isToday' for all
+            // 2. Auto-Add Quests due today
+            setQuests(prev => prev.map(q => {
+                let shouldBeToday = false;
+                // If it was already today, but day changed, we reset it (unless it's due today, then we read it)
+                // Actually, logic: RESET everything. Then ADD what is due.
+
+                // Check if due today
+                if (q.dueDate === today && !q.completed) {
+                    shouldBeToday = true;
+                }
+
+                return { ...q, isToday: shouldBeToday };
+            }));
+
+            // 3. Auto-Add Protocols due today
+            setHabits(prev => prev.map(h => {
+                // If inactive, ignore
+                if (h.isActive === false) return { ...h, isToday: false };
+
+                // Calculate if due
+                // Import helper logically here (or duplicate for now since we can't import inside useEffect easily without moving file up)
+                // Actually we can import at top of file. 
+                // Using the imported utility:
+                const daysUntil = getDaysUntilDue(h);
+                const isDue = daysUntil <= 0;
+
+                return { ...h, isToday: isDue };
+            }));
+
+            // Update Last Login Date
+            setStats(prev => ({ ...prev, lastLoginDate: today }));
+        }
 
         // MIGRATION: Ensure all existing habits have isActive: true
         setHabits(prev => prev.map(h => {
@@ -335,7 +390,7 @@ export const GameProvider = ({ children }) => {
             return h;
         }));
 
-    }, []); // Run once on mount for now
+    }, []); // Run once on mount (dependency array empty so it runs on load)
 
     return (
         <GameContext.Provider value={{

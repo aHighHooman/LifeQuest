@@ -424,7 +424,24 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                                     onClick={() => onTabChange('budget')}
                                 />
                             </div>
+
+                            {/* System Online Text - Positioned Relative to Grid Center (Hugging Gold Hex) */}
+                            {/* Gold Hex is at y: 256. Height ~160 (half 80). Bottom ~336. We put text at 360 to be safe. */}
+                            <div
+                                onClick={onOpenSettings}
+                                className="absolute left-0 top-0 flex flex-col items-center justify-center z-10 cursor-pointer pointer-events-auto w-40"
+                                style={{ transform: 'translate(-50%, 360px)' }}
+                            >
+                                <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs opacity-70 w-full text-center">
+                                    System Online
+                                </p>
+                                <p className="text-[10px] text-slate-600 font-mono mt-0.5">
+                                    {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}
+                                </p>
+                            </div>
+
                         </div>
+
                     </div>
 
                     {/* Actual Hex Grid */}
@@ -434,19 +451,7 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                         ) : null}
                     </div>
 
-                    {/* System Online Text - Positioned Relative to Grid Center */}
-                    <div
-                        onClick={onOpenSettings}
-                        className="absolute left-0 right-0 text-center z-10 cursor-pointer"
-                        style={{ top: '475px' }}
-                    >
-                        <p className="text-game-muted font-game uppercase tracking-[0.2em] text-[10px] opacity-70">
-                            System Online
-                        </p>
-                        <p className="text-[10px] text-slate-600 font-mono mt-0.5">
-                            {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}
-                        </p>
-                    </div>
+
 
                 </div>
             </div>

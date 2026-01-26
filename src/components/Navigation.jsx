@@ -5,6 +5,32 @@ import { motion, AnimatePresence, useMotionValue, useTransform, animate } from '
 
 const Navigation = ({ currentTab, onTabChange, children }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+
+    // KEYBOARD DETECTION LOGIC
+    useEffect(() => {
+        const initialHeight = window.innerHeight;
+
+        const handleResize = () => {
+            const currentHeight = window.innerHeight;
+            // If height drops by more than 25%, assume keyboard is open
+            // (Keyboards usually take up 30-50% of screen)
+            const heightDifference = initialHeight - currentHeight;
+            const threshold = initialHeight * 0.25;
+
+            if (heightDifference > threshold) {
+                setIsKeyboardOpen(true);
+            } else {
+                setIsKeyboardOpen(false);
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
+
 
     // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
     const dragOffset = useMotionValue(0);
@@ -193,10 +219,22 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                 className="fixed bottom-0 left-0 right-0 h-20 z-10 pointer-events-auto"
                 onPan={onPan}
                 onPanEnd={onPanEnd}
-                style={{ touchAction: 'none' }}
+                style={{
+                    touchAction: 'none',
+                    opacity: isKeyboardOpen ? 0 : 1,
+                    pointerEvents: isKeyboardOpen ? 'none' : 'auto',
+                    paddingBottom: 'env(safe-area-inset-bottom)' // Safe Area Padding
+                }}
             />
 
-            <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-0 pointer-events-none overflow-visible">
+            <div
+                className="fixed bottom-0 left-0 right-0 z-50 flex justify-center h-0 pointer-events-none overflow-visible transition-opacity duration-300"
+                style={{
+                    opacity: isKeyboardOpen ? 0 : 1,
+                    pointerEvents: isKeyboardOpen ? 'none' : undefined
+                }}
+            >
+
 
                 <div className="relative flex items-end justify-center pointer-events-auto mb-[-50px]">
 
