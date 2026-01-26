@@ -208,6 +208,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                 style={{
                     transform: 'translateZ(0)',
                     WebkitTransform: 'translate3d(0, 0, 0)',
+                    paddingBottom: 'env(safe-area-inset-bottom)',
                 }}
             >
 

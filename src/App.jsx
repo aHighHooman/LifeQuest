@@ -89,32 +89,6 @@ function App() {
   useEffect(() => {
     // Check for version updates and ensure persistence validity on app launch
     checkVersionAndEnsurePersistence();
-
-    // Prevent iOS from resizing viewport on keyboard open
-    const viewport = document.querySelector('meta[name=viewport]');
-
-    const handleFocusIn = (e) => {
-      // Only trigger if the focused element is an input or textarea
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-        if (viewport) {
-          viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
-        }
-      }
-    };
-
-    const handleFocusOut = () => {
-      if (viewport) {
-        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
-      }
-    };
-
-    window.addEventListener('focusin', handleFocusIn);
-    window.addEventListener('focusout', handleFocusOut);
-
-    return () => {
-      window.removeEventListener('focusin', handleFocusIn);
-      window.removeEventListener('focusout', handleFocusOut);
-    };
   }, []);
 
   return (
