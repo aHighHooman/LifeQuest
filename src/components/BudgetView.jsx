@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useBudget } from '../context/BudgetContext';
 import {
     Plus,
@@ -23,6 +23,102 @@ import clsx from 'clsx';
 // Constants
 const TAB_PROVISIONS = 'provisions';
 const TAB_LEDGER = 'ledger';
+
+const CoinSwitch = ({ onClick }) => {
+    const [spinCount, setSpinCount] = useState(0);
+    const rotating = useRef(false);
+
+    const handleClick = () => {
+        if (rotating.current) return;
+        rotating.current = true;
+        setSpinCount(prev => prev + 1);
+        onClick();
+        setTimeout(() => { rotating.current = false; }, 900);
+    };
+
+    return (
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 overflow-visible pointer-events-none">
+            <button
+                onClick={handleClick}
+                style={{ pointerEvents: 'auto', perspective: '1000px' }}
+                className="relative w-28 h-28 group"
+            >
+                <motion.div
+                    className="w-full h-full relative preserve-3d"
+                    initial={false}
+                    animate={{ rotateY: spinCount * 180 }}
+                    transition={{ duration: 0.9, ease: [0.22, 0.9, 0.3, 1] }}
+                    style={{ transformStyle: 'preserve-3d' }}
+                >
+                    {/* THICKNESS / EDGE LAYERS (The "meat" of the coin) */}
+                    {/* We stack discs between Front (Z=6) and Back (Z=-6) */}
+                    {[4, 3, 2, 1, 0, -1, -2, -3, -4].map((z) => (
+                        <div
+                            key={z}
+                            className="absolute inset-0 rounded-full bg-amber-800 border-2 border-amber-900/50"
+                            style={{ transform: `translateZ(${z}px)` }}
+                        />
+                    ))}
+
+                    {/* FRONT FACE (Provisions) */}
+                    <div
+                        className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 shadow-[0_0_15px_rgba(251,191,36,0.5)] border-4 border-amber-400/50 flex flex-col items-center justify-center backface-hidden"
+                        style={{
+                            backfaceVisibility: 'hidden',
+                            transform: 'translateZ(6px)' // Moved forward
+                        }}
+                    >
+                        <div className="absolute inset-1 rounded-full border border-amber-900/20" />
+                        <div className="absolute inset-[6px] rounded-full border border-amber-100/30" />
+
+                        {/* SVG Rim (Restored) */}
+                        <div className="absolute inset-0 pointer-events-none opacity-50">
+                            <svg width="100%" height="100%" viewBox="0 0 100 100" className="rounded-full">
+                                <circle cx="50" cy="50" r="46" fill="none" stroke="#78350f" strokeWidth="2" />
+                            </svg>
+                        </div>
+
+                        <ShoppingCart size={32} className="text-amber-900 drop-shadow-sm mb-1" />
+                        <span className="text-[10px] font-black text-amber-900 uppercase tracking-widest drop-shadow-sm">Provisions</span>
+
+                        {/* Shine Effect */}
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+
+                    {/* BACK FACE (Ledger) */}
+                    <div
+                        className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-400 via-amber-600 to-amber-800 shadow-[0_0_15px_rgba(251,191,36,0.5)] border-4 border-amber-400/50 flex flex-col items-center justify-center backface-hidden"
+                        style={{
+                            backfaceVisibility: 'hidden',
+                            transform: 'rotateY(180deg) translateZ(6px)' // Rotated and moved "forward" (which is backward relative to scene)
+                        }}
+                    >
+                        <div className="absolute inset-1 rounded-full border border-amber-900/20" />
+                        <div className="absolute inset-[6px] rounded-full border border-amber-100/30" />
+
+                        {/* SVG Rim (Restored) */}
+                        <div className="absolute inset-0 pointer-events-none opacity-50">
+                            <svg width="100%" height="100%" viewBox="0 0 100 100" className="rounded-full">
+                                <circle cx="50" cy="50" r="46" fill="none" stroke="#78350f" strokeWidth="2" />
+                            </svg>
+                        </div>
+
+                        <CreditCard size={32} className="text-amber-100 drop-shadow-sm mb-1" />
+                        <span className="text-[10px] font-black text-amber-100 uppercase tracking-widest drop-shadow-sm">Ledger</span>
+
+                        {/* Shine Effect */}
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                </motion.div>
+
+                {/* Shadow underneath */}
+                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-20 h-5 bg-black/60 blur-xl rounded-[100%] pointer-events-none transition-transform duration-1000"
+                    style={{ transform: `translateX(-50%) scale(${rotating.current ? 0.8 : 1})` }}
+                />
+            </button>
+        </div>
+    );
+};
 
 const BudgetView = () => {
     const {
@@ -60,7 +156,11 @@ const BudgetView = () => {
         return Math.floor(usdAmount * goldToUsdRatio).toLocaleString();
     }
 
+
+
     // --- SUB-COMPONENTS ---
+
+
 
     const VaultHeader = () => (
         <div className="shrink-0 grid grid-cols-3 gap-2 p-2 bg-black/40 border-b border-amber-900/50 backdrop-blur-md z-20">
@@ -239,6 +339,59 @@ const BudgetView = () => {
 
         return (
             <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                {/* INPUT BAR (Moved to Top) */}
+                <div className="shrink-0 p-3 bg-black/90 border-b border-amber-900/50 backdrop-blur-xl z-30 shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
+                    <form onSubmit={handleAdd} className="flex gap-2 items-center">
+                        <div className="flex-1 relative">
+                            <input
+                                type="text"
+                                placeholder="PROVISION"
+                                value={itemName}
+                                onChange={(e) => {
+                                    setItemName(e.target.value);
+                                    setIsDropdownOpen(true);
+                                }}
+                                className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-3 py-3 text-sm text-amber-100 placeholder-amber-900/30 focus:border-amber-500/50 outline-none uppercase font-mono tracking-wide"
+                            />
+                            {/* Autocomplete Dropdown */}
+                            {isDropdownOpen && filteredDbItems.length > 0 && itemName && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-black border border-amber-900 rounded-lg shadow-2xl overflow-hidden max-h-32 overflow-y-auto z-50">
+                                    {filteredDbItems.map(item => (
+                                        <button
+                                            key={item}
+                                            type="button"
+                                            onClick={() => selectFromDb(item)}
+                                            className="w-full text-left px-3 py-2 hover:bg-amber-900/30 text-xs text-amber-100/80 flex justify-between items-center border-b border-amber-900/20 last:border-0"
+                                        >
+                                            <span>{item}</span>
+                                            <span className="font-mono text-amber-500 flex items-center gap-1">
+                                                <Coins size={10} />
+                                                {toCredits(priceDatabase[item])}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="w-24 relative">
+                            <input
+                                type="number"
+                                placeholder="0"
+                                value={itemPriceCredits}
+                                onChange={(e) => setItemPriceCredits(e.target.value)}
+                                className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-2 py-3 text-sm text-amber-400 placeholder-amber-900/30 focus:border-amber-500/50 outline-none text-right font-mono"
+                            />
+                            <Coins size={12} className="absolute left-2 top-4 text-amber-600/50" />
+                        </div>
+                        <button
+                            type="submit"
+                            className="bg-amber-600 hover:bg-amber-500 text-black py-3 px-4 rounded transition-colors shadow-[0_0_10px_rgba(245,158,11,0.2)] font-bold"
+                        >
+                            <Plus size={20} />
+                        </button>
+                    </form>
+                </div>
+
                 {/* STATUS BAR */}
                 <div className="shrink-0 px-4 py-2 flex items-center justify-between text-[10px] font-game text-amber-500/60 uppercase tracking-widest border-b border-white/5 bg-black/20">
                     <div className="flex gap-4">
@@ -251,7 +404,7 @@ const BudgetView = () => {
                 </div>
 
                 {/* SCROLLABLE LIST AREA */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 pb-[220px]">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 pb-48">
                     {groceryList.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-48 text-amber-900/40 border-2 border-dashed border-amber-900/20 rounded-xl m-4">
                             <ShoppingCart size={32} className="mb-2 opacity-50" />
@@ -308,59 +461,6 @@ const BudgetView = () => {
                             ))}
                         </AnimatePresence>
                     )}
-                </div>
-
-                {/* BOTTOM INPUT BAR */}
-                <div className="shrink-0 p-3 bg-black/90 border-t border-amber-900/50 backdrop-blur-xl absolute bottom-[150px] left-0 right-0 z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
-                    <form onSubmit={handleAdd} className="flex gap-2 items-center">
-                        <div className="flex-1 relative">
-                            <input
-                                type="text"
-                                placeholder="PROVISION"
-                                value={itemName}
-                                onChange={(e) => {
-                                    setItemName(e.target.value);
-                                    setIsDropdownOpen(true);
-                                }}
-                                className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-3 py-3 text-sm text-amber-100 placeholder-amber-900/30 focus:border-amber-500/50 outline-none uppercase font-mono tracking-wide"
-                            />
-                            {/* Autocomplete Dropdown */}
-                            {isDropdownOpen && filteredDbItems.length > 0 && itemName && (
-                                <div className="absolute bottom-full left-0 right-0 mb-2 bg-black border border-amber-900 rounded-lg shadow-2xl overflow-hidden max-h-32 overflow-y-auto z-50">
-                                    {filteredDbItems.map(item => (
-                                        <button
-                                            key={item}
-                                            type="button"
-                                            onClick={() => selectFromDb(item)}
-                                            className="w-full text-left px-3 py-2 hover:bg-amber-900/30 text-xs text-amber-100/80 flex justify-between items-center border-b border-amber-900/20 last:border-0"
-                                        >
-                                            <span>{item}</span>
-                                            <span className="font-mono text-amber-500 flex items-center gap-1">
-                                                <Coins size={10} />
-                                                {toCredits(priceDatabase[item])}
-                                            </span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        <div className="w-24 relative">
-                            <input
-                                type="number"
-                                placeholder="0"
-                                value={itemPriceCredits}
-                                onChange={(e) => setItemPriceCredits(e.target.value)}
-                                className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-2 py-3 text-sm text-amber-400 placeholder-amber-900/30 focus:border-amber-500/50 outline-none text-right font-mono"
-                            />
-                            <Coins size={12} className="absolute left-2 top-4 text-amber-600/50" />
-                        </div>
-                        <button
-                            type="submit"
-                            className="bg-amber-600 hover:bg-amber-500 text-black py-3 px-4 rounded transition-colors shadow-[0_0_10px_rgba(245,158,11,0.2)] font-bold"
-                        >
-                            <Plus size={20} />
-                        </button>
-                    </form>
                 </div>
             </div>
         );
@@ -428,7 +528,7 @@ const BudgetView = () => {
                 </div>
 
                 {/* TRANSACTION LOG (Bottom) */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-[220px]">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-48">
                     <div className="px-2 py-2 text-[10px] font-mono text-amber-500/40 uppercase border-b border-white/5 mb-1">Recent Activity Log</div>
                     <div className="space-y-1">
                         {recentSpending.length === 0 ? (
@@ -455,7 +555,7 @@ const BudgetView = () => {
     // --- MAIN RENDER ---
 
     return (
-        <div className="flex flex-col h-full w-full overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-black relative">
+        <div className="flex flex-col h-[80dvh] w-full overflow-hidden relative">
             {/* Background Texture */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-amber-900/10 via-transparent to-transparent pointer-events-none" />
             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
@@ -463,39 +563,7 @@ const BudgetView = () => {
             {/* 1. VAULT HEADER (Fixed) */}
             <VaultHeader />
 
-            {/* 2. TAB NAV (Fixed) */}
-            <div className="shrink-0 flex border-b border-amber-900/30 bg-black/40 backdrop-blur-sm">
-                <button
-                    onClick={() => setActiveTab(TAB_PROVISIONS)}
-                    className={clsx(
-                        "flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-all relative overflow-hidden",
-                        activeTab === TAB_PROVISIONS ? "text-amber-400 bg-amber-950/20" : "text-gray-600 hover:text-amber-200"
-                    )}
-                >
-                    <div className="flex items-center justify-center gap-2">
-                        <ShoppingCart size={14} /> Provisions
-                    </div>
-                    {/* Active Indicator */}
-                    {activeTab === TAB_PROVISIONS && (
-                        <motion.div layoutId="activeTab" className="absolute bottom-0 inset-x-0 h-0.5 bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
-                    )}
-                </button>
-                <div className="w-px bg-amber-900/30 my-2" />
-                <button
-                    onClick={() => setActiveTab(TAB_LEDGER)}
-                    className={clsx(
-                        "flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-all relative overflow-hidden",
-                        activeTab === TAB_LEDGER ? "text-amber-400 bg-amber-950/20" : "text-gray-600 hover:text-amber-200"
-                    )}
-                >
-                    <div className="flex items-center justify-center gap-2">
-                        <CreditCard size={14} /> Ledger
-                    </div>
-                    {activeTab === TAB_LEDGER && (
-                        <motion.div layoutId="activeTab" className="absolute bottom-0 inset-x-0 h-0.5 bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
-                    )}
-                </button>
-            </div>
+
 
             {/* 3. SETTINGS TOGGLE (Float) */}
             <button
@@ -509,17 +577,44 @@ const BudgetView = () => {
 
             {/* 4. MAIN VIEWPORT (Swappable) */}
             <div className="flex-1 overflow-hidden relative">
-                {activeTab === TAB_PROVISIONS ? (
-                    <ProvisionsView
-                        groceryList={groceryList}
-                        totalGroceryEstimated={totalGroceryEstimated}
-                        totalGrocerySpent={totalGrocerySpent}
-                        groceryAllocation={groceryAllocation}
-                    />
-                ) : (
-                    <LedgerView />
-                )}
+                <AnimatePresence mode="wait" initial={false}>
+                    {activeTab === TAB_PROVISIONS ? (
+                        <motion.div
+                            key="provisions"
+                            className="w-full h-full"
+                            initial={{ opacity: 0, x: -50, rotateY: -10 }}
+                            animate={{ opacity: 1, x: 0, rotateY: 0 }}
+                            exit={{ opacity: 0, x: 50, rotateY: 10 }}
+                            transition={{ duration: 0.4, ease: "backOut" }}
+                            style={{ perspective: 1000 }}
+                        >
+                            <ProvisionsView
+                                groceryList={groceryList}
+                                totalGroceryEstimated={totalGroceryEstimated}
+                                totalGrocerySpent={totalGrocerySpent}
+                                groceryAllocation={groceryAllocation}
+                            />
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="ledger"
+                            className="w-full h-full"
+                            initial={{ opacity: 0, x: 50, rotateY: 10 }}
+                            animate={{ opacity: 1, x: 0, rotateY: 0 }}
+                            exit={{ opacity: 0, x: -50, rotateY: -10 }}
+                            transition={{ duration: 0.4, ease: "backOut" }}
+                            style={{ perspective: 1000 }}
+                        >
+                            <LedgerView />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
+
+            {/* 5. COIN SWITCH (Bottom - Floating) */}
+            <CoinSwitch
+                onClick={() => setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS)}
+            />
 
             {/* Modals */}
             {showSettings && <SettingsModal />}

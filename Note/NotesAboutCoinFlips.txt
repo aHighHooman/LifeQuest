@@ -1,0 +1,178 @@
+import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+/**
+ * Single-file demo: Coin-driven menu switch
+ * - Exports default App component
+ * - Coin is an amber/gold disc with two labeled faces: "PROVISIONS" and "LEDGER"
+ * - Clicking the coin spins it 360 + 180 (540°) and toggles the menu content
+ * - The menu content itself does NOT flip — it crossfades/slides smoothly
+ *
+ * Drop this file into a React project with framer-motion + Tailwind (optional) and render <App />.
+ */
+
+// --- Coin component ---
+const Coin = ({ side = 'provisions', onToggle }) => {
+  // spinCounter increments each toggle to produce cumulative 540deg steps
+  const [spinCount, setSpinCount] = useState(0);
+  const rotating = useRef(false);
+
+  // call when coin clicked
+  const handleClick = () => {
+    if (rotating.current) return; // guard; avoid double-click
+    rotating.current = true;
+    setSpinCount(c => c + 1);
+    // call parent to switch tab
+    onToggle();
+    // allow new clicks after animation length
+    setTimeout(() => { rotating.current = false; }, 900);
+  };
+
+  // compute rotation target: each increment is +540deg
+  const targetRotation = spinCount * 180; // 360 + 180 = 540 per toggle
+
+  // Visuals: coin thickness illusion with subtle rim and embossed text
+  return (
+    <div className="flex items-center justify-center p-4">
+      <div className="relative">
+        {/* shadow */}
+        <div className="absolute left-1/2 transform -translate-x-1/2 top-full mt-3" style={{ width: 140, height: 18, borderRadius: 9999, filter: 'blur(10px)', background: 'rgba(2,6,23,0.55)' }} />
+
+        <motion.div
+          onClick={handleClick}
+          animate={{ rotateY: targetRotation }}
+          transition={{ duration: 0.9, ease: [0.22, 0.9, 0.3, 1] }}
+          style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d', width: 140, height: 140, cursor: 'pointer' }}
+          className="rounded-full"
+        >
+          {/* front face */}
+          <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(0deg)' }}>
+            <div className="w-full h-full rounded-full flex items-center justify-center" style={{
+              background: 'radial-gradient(circle at 20% 20%, #ffd57e, #f6b73b 30%, #e09d10 60%, #c37707 100%)',
+              boxShadow: 'inset 0 8px 18px rgba(0,0,0,0.25), 0 10px 30px rgba(0,0,0,0.6)',
+              border: '3px solid rgba(255,230,170,0.12)'
+            }}>
+              <div className="text-center leading-none select-none">
+                <div className="text-xs font-bold text-amber-900/70 tracking-widest">FACE</div>
+                <div className="text-sm font-extrabold uppercase text-black drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">{side === 'provisions' ? 'PROVISIONS' : 'LEDGER'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* back face */}
+          <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+            <div className="w-full h-full rounded-full flex items-center justify-center" style={{
+              background: 'radial-gradient(circle at 80% 80%, #ffd57e, #f6b73b 30%, #e09d10 60%, #c37707 100%)',
+              boxShadow: 'inset 0 8px 18px rgba(0,0,0,0.25), 0 10px 30px rgba(0,0,0,0.6)',
+              border: '3px solid rgba(255,230,170,0.12)'
+            }}>
+              <div className="text-center leading-none select-none">
+                <div className="text-xs font-bold text-amber-900/70 tracking-widest">FACE</div>
+                <div className="text-sm font-extrabold uppercase text-black drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">{side === 'provisions' ? 'LEDGER' : 'PROVISIONS'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* thin rim for depth */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+            <svg width="100%" height="100%" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg" className="rounded-full">
+              <defs>
+                <linearGradient id="rim" x1="0" x2="1">
+                  <stop offset="0" stopColor="#b36d03" />
+                  <stop offset="1" stopColor="#f3c06c" />
+                </linearGradient>
+              </defs>
+              <circle cx="70" cy="70" r="66" fill="none" stroke="url(#rim)" strokeWidth="6" opacity="0.9" />
+            </svg>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+// --- Menu content panels ---
+const ProvisionsPanel = () => (
+  <div className="w-full h-full p-6">
+    <h3 className="text-xl font-bold text-amber-300 mb-2">Provisions</h3>
+    <div className="grid grid-cols-2 gap-3">
+      <div className="p-3 rounded bg-amber-950/20 border border-amber-900/30">Ration Packs</div>
+      <div className="p-3 rounded bg-amber-950/20 border border-amber-900/30">Water Canister</div>
+      <div className="p-3 rounded bg-amber-950/20 border border-amber-900/30">Spare Parts</div>
+      <div className="p-3 rounded bg-amber-950/20 border border-amber-900/30">Medkit</div>
+    </div>
+  </div>
+);
+
+const LedgerPanel = () => (
+  <div className="w-full h-full p-6">
+    <h3 className="text-xl font-bold text-amber-300 mb-2">Ledger</h3>
+    <div className="space-y-2">
+      <div className="p-3 rounded bg-slate-900/30 border border-slate-800">- 120 C • Supply Run</div>
+      <div className="p-3 rounded bg-slate-900/30 border border-slate-800">+ 40 C • Rewards</div>
+      <div className="p-3 rounded bg-slate-900/30 border border-slate-800">- 10 C • Toll</div>
+    </div>
+  </div>
+);
+
+// --- Main App: coin controls the menu displayed ---
+export default function App() {
+  const [active, setActive] = useState('provisions');
+  const [coinSide, setCoinSide] = useState('provisions');
+
+  const handleToggle = () => {
+    // flip coin side label and toggle active menu
+    const next = active === 'provisions' ? 'ledger' : 'provisions';
+    setActive(next);
+    setCoinSide(next);
+  };
+
+  return (
+    <div className="min-h-screen flex items-start justify-center p-8" style={{ background: 'radial-gradient(circle at top left, #071022, #000)' }}>
+      <div className="w-[920px] bg-gradient-to-br from-slate-950 to-black rounded-2xl p-4 shadow-[0_30px_80px_rgba(2,6,23,0.9)]">
+
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <Coin side={coinSide} onToggle={handleToggle} />
+
+            <div className="flex flex-col">
+              <div className="text-xs uppercase tracking-widest text-amber-300 font-bold">Active</div>
+              <div className="text-lg font-extrabold text-amber-100">{active === 'provisions' ? 'Provisions' : 'Ledger'}</div>
+            </div>
+          </div>
+
+          <div className="text-sm text-amber-300/70">Click the coin to flip between menus (540° spin).</div>
+        </div>
+
+        <div className="w-full h-[420px] bg-gradient-to-br from-slate-900/60 to-black rounded-xl overflow-hidden border border-amber-900/10">
+          <AnimatePresence mode="wait">
+            {active === 'provisions' ? (
+              <motion.div
+                key="provisions"
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 12 }}
+                transition={{ duration: 0.32, ease: 'easeInOut' }}
+                className="w-full h-full"
+              >
+                <ProvisionsPanel />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="ledger"
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.32, ease: 'easeInOut' }}
+                className="w-full h-full"
+              >
+                <LedgerPanel />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+      </div>
+    </div>
+  );
+}
