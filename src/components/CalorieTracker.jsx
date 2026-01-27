@@ -176,7 +176,7 @@ const ControlDeck = ({ onAdd, onSetGoal, currentGoal, isOverload }) => {
     };
 
     return (
-        <div className="shrink-0 bg-black/80 backdrop-blur-xl border-t border-rose-900/50 pb-48 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-40 relative">
+        <div className="shrink-0 bg-black/80 backdrop-blur-xl border-t border-rose-900/50 pb-64 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-[100] relative">
 
             {/* Manual Input Drawer */}
             <AnimatePresence>
@@ -266,11 +266,15 @@ const CalorieTracker = () => {
     // Safety check for history existence (context update handle)
     const history = calories.history || [];
 
+    const [showGoalModal, setShowGoalModal] = useState(false);
+
     const handleSetGoal = () => {
-        const newGoal = prompt("Set Daily Calorie Target:", calories.target);
-        if (newGoal && !isNaN(newGoal)) {
-            setCalorieGoal(parseInt(newGoal));
-        }
+        setShowGoalModal(true);
+    };
+
+    const confirmGoal = (val) => {
+        setCalorieGoal(val);
+        setShowGoalModal(false);
     };
 
     return (
@@ -296,6 +300,45 @@ const CalorieTracker = () => {
                 currentGoal={calories.target}
                 isOverload={calories.current > calories.target}
             />
+
+            {showGoalModal && (
+                <GoalSettingModal
+                    current={calories.target}
+                    onConfirm={confirmGoal}
+                    onClose={() => setShowGoalModal(false)}
+                />
+            )}
+        </div>
+    );
+};
+
+const GoalSettingModal = ({ current, onConfirm, onClose }) => {
+    const [val, setVal] = useState(current);
+    return (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+            <div className="bg-slate-900 border border-rose-500/30 rounded-2xl w-full max-w-sm p-6 shadow-[0_0_50px_rgba(244,63,94,0.2)]" onClick={e => e.stopPropagation()}>
+                <h3 className="font-game font-bold text-lg text-rose-500 mb-4 uppercase tracking-wider">Target Configuration</h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-[10px] font-mono text-rose-300/70 uppercase mb-2">Daily Calorie Limit</label>
+                        <input
+                            autoFocus
+                            type="number"
+                            value={val}
+                            onChange={e => setVal(parseInt(e.target.value) || '')}
+                            className="w-full bg-black border border-rose-900/50 rounded-lg px-4 py-3 text-rose-100 font-mono text-xl outline-none focus:border-rose-500 transition-colors"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button onClick={onClose} className="py-3 rounded-lg border border-rose-900/30 text-rose-400 hover:bg-rose-900/20 font-bold uppercase text-xs">
+                            Cancel
+                        </button>
+                        <button onClick={() => onConfirm(val)} className="py-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-black font-bold uppercase text-xs shadow-lg shadow-rose-900/20">
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

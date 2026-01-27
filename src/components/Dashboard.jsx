@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Zap, Coins, Heart, Plus, Check, Crosshair } from 'lucide-react';
 const StatsView = React.lazy(() => import('./StatsView'));
 import FocusSelectionModal from './FocusSelectionModal';
+import DayTimer from './DayTimer';
 import clsx from 'clsx';
 import { getTodayISO } from '../utils/dateUtils';
 
@@ -347,6 +348,9 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                     <Plus size={16} /> Manage
                 </motion.button>
             </div>
+
+            {/* Day Timer - Positioned below Manage Button */}
+            <DayTimer className="absolute top-16 left-0 right-0 z-20" />
 
             {/* Central Hub Container */}
             <div className="flex-1 flex items-center justify-center relative">

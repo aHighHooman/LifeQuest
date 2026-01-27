@@ -28,11 +28,12 @@ const CoinSwitch = ({ onClick }) => {
     const [spinCount, setSpinCount] = useState(0);
     const rotating = useRef(false);
 
-    const handleClick = () => {
+    const handleClick = (e) => {
+        if (e) e.stopPropagation();
         if (rotating.current) return;
         rotating.current = true;
         setSpinCount(prev => prev + 1);
-        onClick();
+        if (onClick) onClick(e);
         setTimeout(() => { rotating.current = false; }, 900);
     };
 
@@ -613,13 +614,17 @@ const BudgetView = () => {
                 </AnimatePresence>
             </div>
 
-            {/* 6. BOTTOM DOCK (Anchored) */}
-            <div className="shrink-0 z-50 relative flex justify-center pb-32 pt-12 bg-gradient-to-t from-black via-slate-950/90 to-transparent -mt-10 pointer-events-none">
-                <div className="pointer-events-auto -translate-y-24">
-                    <CoinSwitch
-                        onClick={() => setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS)}
-                    />
-                </div>
+            {/* 6. BOTTOM DOCK (Background Anchor) */}
+            <div className="shrink-0 z-50 relative flex justify-center pb-32 pt-12 bg-gradient-to-t from-black via-slate-950/90 to-transparent -mt-10 pointer-events-none" />
+
+            {/* 7. COIN SWITCH (Decoupled & Fixed) */}
+            <div className="fixed bottom-52 left-1/2 -translate-x-1/2 z-[100] pointer-events-auto filter drop-shadow-2xl">
+                <CoinSwitch
+                    onClick={(e) => {
+                        if (e) e.stopPropagation();
+                        setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS);
+                    }}
+                />
             </div>
 
             {/* Modals */}
