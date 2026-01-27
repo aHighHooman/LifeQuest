@@ -1,21 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { CheckCircle, Trash2, Plus, Zap, Settings, Calendar, X, RotateCcw, Power } from 'lucide-react';
+import { CheckCircle, Trash2, Plus, Zap, Settings, X, RotateCcw, Power } from 'lucide-react';
 import clsx from 'clsx';
 
 // Constants
 const LOOKAHEAD_DAYS_DEFAULT = 1;
 
-// --- UTILS ---
+// Shared utilities
 import { getDaysUntilDue } from '../utils/gameLogic';
-
-// Local getDaysUntilDue implementation removed in favor of imported utility
-
-
-// ANIMATION PARAMETER: Controls bounciness for Protocols.
-// Matching QuestBoard for consistency.
-const SPRING_CONFIG = { type: "spring", stiffness: 400, damping: 40 };
+import { getTodayISO } from '../utils/dateUtils';
+import { SPRING_CONFIG } from '../constants/animations';
 
 // --- COMPONENTS ---
 
@@ -283,26 +278,36 @@ const HabitTracker = () => {
     // --- DATA ---
     const allHabits = Array.isArray(habits) ? habits : [];
 
-    // Active & Inactive Split
-    const activeHabits = allHabits.filter(h => h.isActive !== false);
-    const inactiveHabits = allHabits.filter(h => h.isActive === false);
+    // Active & Inactive Split (memoized)
+    const activeHabits = useMemo(() =>
+        allHabits.filter(h => h.isActive !== false),
+        [allHabits]
+    );
+    const inactiveHabits = useMemo(() =>
+        allHabits.filter(h => h.isActive === false),
+        [allHabits]
+    );
 
-    // Deck Filter (Helper)
-    const todayStr = new Date().toISOString().split('T')[0];
-    const isCompletedToday = (h) => (h.history && h.history[todayStr] > 0);
+    // Deck Filter (memoized with shared utility)
+    const todayStr = useMemo(() => getTodayISO(), []);
+    const isCompletedToday = useCallback(
+        (h) => (h.history?.[todayStr] || 0) > 0,
+        [todayStr]
+    );
 
-    const deckHabits = activeHabits.filter(h => {
-        if (isCompletedToday(h)) return false;
-        if (dismissedHabits.includes(h.id)) return false; // Hide dismissed
+    const deckHabits = useMemo(() => {
+        return activeHabits.filter(h => {
+            if (isCompletedToday(h)) return false;
+            if (dismissedHabits.includes(h.id)) return false;
 
-        const daysUntil = getDaysUntilDue(h);
-        return daysUntil <= lookaheadDays;
-    }).sort((a, b) => {
-        // Sort by cycle offset (to put cycled at bottom)
-        const cycleA = cycleOffsets[a.id] || 0;
-        const cycleB = cycleOffsets[b.id] || 0;
-        return cycleA - cycleB;
-    });
+            const daysUntil = getDaysUntilDue(h);
+            return daysUntil <= lookaheadDays;
+        }).sort((a, b) => {
+            const cycleA = cycleOffsets[a.id] || 0;
+            const cycleB = cycleOffsets[b.id] || 0;
+            return cycleA - cycleB;
+        });
+    }, [activeHabits, dismissedHabits, lookaheadDays, cycleOffsets, isCompletedToday]);
 
 
     // --- HANDLERS ---
@@ -418,7 +423,7 @@ const HabitTracker = () => {
             </div>
 
             {/* CREATION FORM */}
-            <div className="p-4 rounded-xl mb-8 relative overflow-hidden z-20">
+            <div className="px-4 pt-4 pb-0 rounded-xl mb-2 relative overflow-hidden z-20">
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-col md:flex-row gap-4 items-end">
@@ -544,115 +549,65 @@ const HabitTracker = () => {
                 </form>
             </div>
 
-            {/* RADIAL LISTS - ORBITING NAVIGATION */}
-            <div
-                className="fixed left-1/2 z-50 pointer-events-none w-0 h-0 flex items-center justify-center"
-                style={{ bottom: 'calc(-160px + env(safe-area-inset-bottom, 0px))' }}
-            >
-
-                {/* --- ACTIVE PROTOCOLS (LEFT) --- */}
-                {/* Label: Radially above the icon group (Center angle ~ -32deg) */}
+            {/* 3. PROTOCOLS & DATABASE */}
+            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8">
+                {/* ACTIVE (LEFT) */}
                 <div
-                    className="absolute cursor-pointer pointer-events-auto group"
-                    style={{
-                        transform: `rotate(-27.5deg) translateY(-330px)`,
-                        transformOrigin: 'center'
-                    }}
                     onClick={() => setShowActiveList(true)}
+                    className="transition-all cursor-pointer group flex flex-col relative overflow-hidden opacity-70 hover:opacity-100"
                 >
-                    <div className="flex flex-col items-center text-xs w-[120px] text-center" style={{ transform: 'rotate(0deg)' }}> {/* Keep text upright or tangent? User requested "seem radial". Let's try slight rotation to match curve flow, or just upright relative to the rotated container? Container is rotated -35. Text is now effectively rotated -35. */}
-                        <span className="uppercase font-bold tracking-widest text-purple-400/80 group-hover:text-purple-400 transition-colors text-[10px]">Active</span>
-                        <div className="flex items-center justify-center gap-1">
-                            <span className="bg-slate-800 px-1.5 py-px rounded text-[9px] text-gray-400 group-hover:text-white transition-colors">{activeHabits.length}</span>
-                        </div>
+                    <div className="flex items-center gap-3 mb-2">
+                        {/* MATCH "NEW PROTOCOL" HEADER: text-xs font-bold text-gray-500 uppercase */}
+                        <span className="text-xs font-bold text-purple-600/70 uppercase tracking-widest group-hover:text-purple-400 transition-colors">Active</span>
+                        <span className="text-purple-400/70 text-xs font-mono font-bold">{activeHabits.length}</span>
+                    </div>
+
+                    <div className="flex gap-[-8px] relative h-10 items-center">
+                        {activeHabits.length === 0 && (
+                            <div className="text-purple-900/40 text-xs italic">System idle</div>
+                        )}
+                        {activeHabits.slice(0, 5).map((h, i) => (
+                            <div
+                                key={h.id}
+                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -ml-3 first:ml-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-purple-900', 'text-purple-800', 'text-purple-600', 'text-purple-500', 'text-purple-400'][i] || 'text-purple-400'
+                                    }`}
+                                title={h.title}
+                            >
+                                <Zap size={20} />
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                {/* Icons Arc: 6 Icons, overlapping */}
-                {/* Range: -20 to -45 deg (Center -32.5) */}
-                {activeHabits.slice(0, 6).map((h, i) => {
-                    const angle = -15 - (i * 6);
-
-                    return (
-                        <div
-                            key={h.id}
-                            className="absolute pointer-events-auto transition-transform hover:scale-110 hover:z-50"
-                            style={{
-                                transform: `rotate(${angle}deg) translateY(-285px) rotate(${-angle}deg)`,
-                                zIndex: 40 - i
-                            }}
-                            title={h.title}
-                            onClick={() => setShowActiveList(true)}
-                        >
-                            <div className="w-10 h-10 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center text-purple-400 shadow-lg shadow-purple-900/20">
-                                <Zap size={18} />
-                            </div>
-                        </div>
-                    );
-                })}
-                {activeHabits.length === 0 && (
-                    <div
-                        className="absolute pointer-events-auto opacity-50"
-                        style={{ transform: `rotate(-20deg) translateY(-260px) rotate(20deg)` }}
-                    >
-                        <div className="w-10 h-10 rounded-full border border-slate-800 border-dashed flex items-center justify-center text-slate-700">
-                            <Zap size={16} />
-                        </div>
-                    </div>
-                )}
-
-
-                {/* --- INACTIVE DATABASE (RIGHT) --- */}
-                {/* Label */}
+                {/* INACTIVE (RIGHT) - MIRRORED */}
                 <div
-                    className="absolute cursor-pointer pointer-events-auto group"
-                    style={{
-                        transform: `rotate(27.5deg) translateY(-330px)`,
-                        transformOrigin: 'center'
-                    }}
                     onClick={() => setShowInactiveList(true)}
+                    className="transition-all cursor-pointer group flex flex-col items-end relative overflow-hidden opacity-50 hover:opacity-80"
                 >
-                    <div className="flex flex-col items-center text-xs w-[120px] text-center" style={{ transform: 'rotate(0deg)' }}>
-                        <span className="uppercase font-bold tracking-widest text-slate-500 group-hover:text-slate-200 transition-colors text-[10px]">Database</span>
-                        <div className="flex items-center justify-center gap-1">
-                            <span className="bg-slate-800 px-1.5 py-px rounded text-[9px] text-gray-500 group-hover:text-gray-300 transition-colors">{inactiveHabits.length}</span>
-                        </div>
+                    <div className="flex items-center gap-3 mb-2 flex-row-reverse">
+                        <span className="text-xs font-bold text-slate-500/70 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Database</span>
+                        <span className="text-slate-600 text-xs font-mono font-bold">{inactiveHabits.length}</span>
+                    </div>
+
+                    <div className="flex gap-[-8px] relative h-10 items-center justify-end flex-row-reverse">
+                        {inactiveHabits.length === 0 && (
+                            <div className="text-slate-800 text-xs italic">Empty</div>
+                        )}
+                        {inactiveHabits.slice(0, 5).map((h, i) => (
+                            <div
+                                key={h.id}
+                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -mr-3 first:mr-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-slate-800', 'text-slate-700', 'text-slate-600', 'text-slate-500', 'text-slate-400'][i] || 'text-slate-400'
+                                    }`}
+                                title={h.title}
+                            >
+                                <Power size={20} />
+                            </div>
+                        ))}
                     </div>
                 </div>
-
-                {/* Icons Arc */}
-                {inactiveHabits.slice(0, 6).map((h, i) => {
-                    const angle = 15 + (i * 6);
-
-                    return (
-                        <div
-                            key={h.id}
-                            className="absolute pointer-events-auto transition-transform hover:scale-110 hover:z-50"
-                            style={{
-                                transform: `rotate(${angle}deg) translateY(-285px) rotate(${-angle}deg)`,
-                                zIndex: 40 - i
-                            }}
-                            title={h.title}
-                            onClick={() => setShowInactiveList(true)}
-                        >
-                            <div className="w-10 h-10 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center text-slate-600 shadow-lg">
-                                <Power size={18} />
-                            </div>
-                        </div>
-                    );
-                })}
-                {inactiveHabits.length === 0 && (
-                    <div
-                        className="absolute pointer-events-auto opacity-50"
-                        style={{ transform: `rotate(20deg) translateY(-260px) rotate(-20deg)` }}
-                    >
-                        <div className="w-10 h-10 rounded-full border border-slate-800 border-dashed flex items-center justify-center text-slate-700">
-                            <Power size={16} />
-                        </div>
-                    </div>
-                )}
-
             </div>
+
+
 
 
             {/* MODALS */}

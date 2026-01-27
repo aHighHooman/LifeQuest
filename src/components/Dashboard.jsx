@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Zap, Coins, Heart, Calendar, CheckSquare, Plus, Check, Target, Crosshair } from 'lucide-react';
+import { Shield, Zap, Coins, Heart, Plus, Check, Crosshair } from 'lucide-react';
 const StatsView = React.lazy(() => import('./StatsView'));
 import FocusSelectionModal from './FocusSelectionModal';
 import clsx from 'clsx';
-
-const USE_HEX_VIEW = true;
+import { getTodayISO } from '../utils/dateUtils';
 
 const HexNode = ({ node, onClick, index, position }) => {
     const isCompleted = node.completed;
@@ -258,38 +257,36 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
     const hpPercentage = Math.min((stats.hp / stats.maxHp) * 100, 100);
 
     // Filter "Today's Focus" items
-    const todayQuests = quests.filter(q => q.isToday && !q.completed);
-    const todayHabits = habits.filter(h => h.isToday);
+    const todayQuests = useMemo(() =>
+        quests.filter(q => q.isToday && !q.completed),
+        [quests]
+    );
+    const todayHabits = useMemo(() =>
+        habits.filter(h => h.isToday),
+        [habits]
+    );
 
-    // Check if habit is already completed today
-    const isHabitDoneToday = (habit) => {
-        const today = new Date().toISOString().split('T')[0];
-        return (habit.history[today] || 0) > 0;
-    };
+    // Get today's date for habit completion check
+    const today = useMemo(() => getTodayISO(), []);
 
-    const activeTodayHabits = todayHabits.filter(h => !isHabitDoneToday(h));
+    // Check if habit is already completed today (inline helper)
+    const isHabitDoneToday = (habit) => (habit.history?.[today] || 0) > 0;
 
-    // Combined empty state check
-    const isFocusEmpty = todayQuests.length === 0 && activeTodayHabits.length === 0;
+    // Memoized pending queue for the hex matrix
+    const matrixNodes = useMemo(() => {
+        const allPendingTodayQuests = quests.filter(q => q.isToday && !q.completed);
+        const allPendingTodayHabits = habits.filter(h => {
+            if (!h.isToday) return false;
+            return (h.history?.[today] || 0) <= 0;
+        });
 
-    // --- DATA PREPARATION FOR MATRIX VIEW (QUEUE MODE) ---
-    // User requested: "Only show first 5 or 6 items", "Completing hides and updates with next".
-    // This implies a Queue of PENDING items only.
+        const pendingQueue = [
+            ...allPendingTodayQuests.map(q => ({ ...q, type: 'quest', completed: false })),
+            ...allPendingTodayHabits.map(h => ({ ...h, type: 'habit', completed: false }))
+        ].sort((a, b) => a.title.localeCompare(b.title));
 
-    const allPendingTodayQuests = quests.filter(q => q.isToday && !q.completed);
-    const allPendingTodayHabits = habits.filter(h => h.isToday && !isHabitDoneToday(h));
-
-    const pendingQueue = [
-        ...allPendingTodayQuests.map(q => ({ ...q, type: 'quest', completed: false })),
-        ...allPendingTodayHabits.map(h => ({ ...h, type: 'habit', completed: false }))
-    ].sort((a, b) => {
-        // Sort by priority/difficulty? Or just consistent title/id?
-        // Let's use ID or creation time to keep order stable as items slide in
-        return a.title.localeCompare(b.title);
-    });
-
-    // Show only top 7
-    const matrixNodes = pendingQueue.slice(0, 7);
+        return pendingQueue.slice(0, 7);
+    }, [quests, habits, today]);
 
     // Override isFocusEmpty for the Matrix view if we want to show specific empty state
     // But existing isActiveTodayHabits logic basically does this for the legacy view.
@@ -446,9 +443,7 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
 
                     {/* Actual Hex Grid */}
                     <div className="z-10 scale-90 sm:scale-100">
-                        {USE_HEX_VIEW ? (
-                            <HexMatrix nodes={matrixNodes} onToggleNode={handleNodeClick} onEmptyClick={() => setShowFocusModal(true)} />
-                        ) : null}
+                        <HexMatrix nodes={matrixNodes} onToggleNode={handleNodeClick} onEmptyClick={() => setShowFocusModal(true)} />
                     </div>
 
 

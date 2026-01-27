@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { useBudget } from './BudgetContext';
 import { usePersistentState } from '../utils/persistence';
 import { getDaysUntilDue } from '../utils/gameLogic';
+import { getTodayISO } from '../utils/dateUtils';
 
 
 const GameContext = createContext();
@@ -58,7 +58,7 @@ export const GameProvider = ({ children }) => {
 
     // Calorie Tracking
     const addCalories = (amount) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayISO();
         setCalories(prev => {
             const newCurrent = Math.max(0, prev.current + amount);
             // Simple history tracking: array of { date, amount }
@@ -289,7 +289,7 @@ export const GameProvider = ({ children }) => {
 
 
     const checkHabit = (id, direction = 'positive') => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayISO();
         setHabits(prev => prev.map(h => {
             if (h.id === id) {
                 const newHistory = { ...h.history };
@@ -341,7 +341,7 @@ export const GameProvider = ({ children }) => {
 
     // Auto-populate logic (run on load or day change)
     useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayISO();
         const lastLoginDate = stats.lastLoginDate;
 
         // --- DAILY RESET & AUTO-ADD LOGIC ---
@@ -369,14 +369,14 @@ export const GameProvider = ({ children }) => {
                 if (h.isActive === false) return { ...h, isToday: false };
 
                 // Calculate if due
-                // Import helper logically here (or duplicate for now since we can't import inside useEffect easily without moving file up)
-                // Actually we can import at top of file. 
-                // Using the imported utility:
                 const daysUntil = getDaysUntilDue(h);
                 const isDue = daysUntil <= 0;
 
                 return { ...h, isToday: isDue };
             }));
+
+            // 4. Daily Calorie Reset
+            setCalories(prev => ({ ...prev, current: 0 }));
 
             // Update Last Login Date
             setStats(prev => ({ ...prev, lastLoginDate: today }));

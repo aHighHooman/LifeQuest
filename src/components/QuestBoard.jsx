@@ -1,15 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { CheckCircle, Circle, Trash2, Plus, Sword, Settings, Calendar, DollarSign, X, Edit3, RotateCcw } from 'lucide-react';
+import { CheckCircle, Trash2, Plus, Sword, Settings, Calendar, X, RotateCcw } from 'lucide-react';
 import clsx from 'clsx';
-
-const USE_DECK_VIEW = true;
-
-// ANIMATION PARAMETER: Tune 'stiffness' and 'damping' to control bounciness.
-// Higher stiffness = faster/snappier. Higher damping = less bounce (settles faster).
-// Recommendation for "less bouncy": stiffness: 400, damping: 40.
-const SPRING_CONFIG = { type: "spring", stiffness: 400, damping: 40 };
+import { SPRING_CONFIG } from '../constants/animations';
+import { isWithinDays } from '../utils/dateUtils';
 
 const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious, custom }) => {
     const x = useMotionValue(0);
@@ -367,20 +362,24 @@ const QuestBoard = () => {
         }));
     };
 
-    // Filter Logic
-    const activeQuests = quests
-        .filter(q => !q.completed && !q.discarded)
-        .sort((a, b) => (skippedOffsets[a.id] || 0) - (skippedOffsets[b.id] || 0));
+    // Filter Logic (memoized)
+    const activeQuests = useMemo(() =>
+        quests
+            .filter(q => !q.completed && !q.discarded)
+            .sort((a, b) => (skippedOffsets[a.id] || 0) - (skippedOffsets[b.id] || 0)),
+        [quests, skippedOffsets]
+    );
 
-    const completedQuests = quests.filter(q => q.completed);
+    const completedQuests = useMemo(() =>
+        quests.filter(q => q.completed),
+        [quests]
+    );
 
-    // Victory Log: Last 3 Days
-    const recentVictories = completedQuests.filter(q => {
-        if (!q.completedAt) return false;
-        const diffTime = Math.abs(new Date() - new Date(q.completedAt));
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays <= 3;
-    });
+    // Victory Log: Last 3 Days (using shared utility)
+    const recentVictories = useMemo(() =>
+        completedQuests.filter(q => isWithinDays(q.completedAt, 3)),
+        [completedQuests]
+    );
 
     const discardedQuests = quests.filter(q => q.discarded);
 
@@ -412,7 +411,7 @@ const QuestBoard = () => {
             </div>
 
             {/* 2. QUEST CREATION (Moved Below) */}
-            <div className="bg-emerald-900/10 p-4 rounded-xl border border-emerald-500/20 mb-8 relative overflow-hidden z-20">
+            <div className="bg-emerald-900/10 p-4 rounded-xl border border-emerald-500/20 mb-2 relative overflow-hidden z-20">
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-col md:flex-row gap-4 items-end">
                         <div className="flex-1 w-full relative">
@@ -582,110 +581,64 @@ const QuestBoard = () => {
                 </form>
             </div>
 
-            {/* RADIAL LISTS - ORBITING NAVIGATION */}
-            <div
-                className="fixed left-1/2 z-50 pointer-events-none w-0 h-0 flex items-center justify-center"
-                style={{ bottom: 'calc(-160px + env(safe-area-inset-bottom, 0px))' }}
-            >
-
-                {/* --- VICTORY LOG (LEFT) --- */}
+            {/* 3. LOGS & HISTORY (Moved from Radial) */}
+            {/* 3. LOGS & HISTORY (Moved from Radial) */}
+            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8">
+                {/* VICTORY LOG (LEFT) */}
                 <div
-                    className="absolute cursor-pointer pointer-events-auto group"
-                    style={{
-                        transform: `rotate(-27.5deg) translateY(-330px)`,
-                        transformOrigin: 'center'
-                    }}
                     onClick={() => setShowVictoryLog(true)}
+                    className="transition-all cursor-pointer group flex flex-col relative overflow-hidden opacity-70 hover:opacity-100"
                 >
-                    <div className="flex flex-col items-center text-xs w-[120px] text-center" style={{ transform: 'rotate(0deg)' }}>
-                        <span className="uppercase font-bold tracking-widest text-emerald-400/80 group-hover:text-emerald-400 transition-colors text-[10px]">Victory Log</span>
-                        <div className="flex items-center justify-center gap-1">
-                            <span className="bg-slate-800 px-1.5 py-px rounded text-[9px] text-gray-400 group-hover:text-white transition-colors">{recentVictories.length}</span>
-                        </div>
+                    <div className="flex items-center gap-3 mb-2">
+                        <span className="text-xs font-bold text-emerald-600/70 uppercase tracking-widest group-hover:text-emerald-400 transition-colors">Victory Log</span>
+                        <span className="text-emerald-400/70 text-xs font-mono font-bold">{recentVictories.length}</span>
+                    </div>
+
+                    <div className="flex gap-[-8px] relative h-10 items-center">
+                        {recentVictories.length === 0 && (
+                            <div className="text-emerald-900/40 text-xs italic">No clear records</div>
+                        )}
+                        {recentVictories.slice(0, 5).map((q, i) => (
+                            <div
+                                key={q.id}
+                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -ml-3 first:ml-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-emerald-900', 'text-emerald-800', 'text-emerald-600', 'text-emerald-500', 'text-emerald-400'][i] || 'text-emerald-400'
+                                    }`}
+                                title={q.title}
+                            >
+                                <CheckCircle size={20} />
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                {/* Icons Arc: Victory */}
-                {recentVictories.slice(0, 6).map((q, i) => {
-                    const angle = -15 - (i * 6);
-
-                    return (
-                        <div
-                            key={q.id}
-                            className="absolute pointer-events-auto transition-transform hover:scale-110 hover:z-50"
-                            style={{
-                                transform: `rotate(${angle}deg) translateY(-285px) rotate(${-angle}deg)`,
-                                zIndex: 40 - i
-                            }}
-                            title={q.title}
-                            onClick={() => setShowVictoryLog(true)}
-                        >
-                            <div className="w-10 h-10 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-900/20">
-                                <CheckCircle size={18} />
-                            </div>
-                        </div>
-                    );
-                })}
-                {recentVictories.length === 0 && (
-                    <div
-                        className="absolute pointer-events-auto opacity-50"
-                        style={{ transform: `rotate(-20deg) translateY(-260px) rotate(20deg)` }}
-                    >
-                        <div className="w-10 h-10 rounded-full border border-slate-800 border-dashed flex items-center justify-center text-slate-700">
-                            <CheckCircle size={16} />
-                        </div>
-                    </div>
-                )}
-
-
-                {/* --- DISCARDED LOG (RIGHT) --- */}
+                {/* DISCARDED LOG (RIGHT) */}
                 <div
-                    className="absolute cursor-pointer pointer-events-auto group"
-                    style={{
-                        transform: `rotate(27.5deg) translateY(-330px)`,
-                        transformOrigin: 'center'
-                    }}
                     onClick={() => setShowDiscardedLog(true)}
+                    className="transition-all cursor-pointer group flex flex-col items-end relative overflow-hidden opacity-50 hover:opacity-80"
                 >
-                    <div className="flex flex-col items-center text-xs w-[120px] text-center" style={{ transform: 'rotate(0deg)' }}>
-                        <span className="uppercase font-bold tracking-widest text-slate-500 group-hover:text-rose-400 transition-colors text-[10px]">Discarded</span>
-                        <div className="flex items-center justify-center gap-1">
-                            <span className="bg-slate-800 px-1.5 py-px rounded text-[9px] text-gray-500 group-hover:text-gray-300 transition-colors">{discardedQuests.length}</span>
-                        </div>
+                    <div className="flex items-center gap-3 mb-2 flex-row-reverse">
+                        <span className="text-xs font-bold text-red-600/70 uppercase tracking-widest group-hover:text-red-400 transition-colors">Discarded</span>
+                        <span className="text-red-400/60 text-xs font-mono font-bold">{discardedQuests.length}</span>
+                    </div>
+
+                    <div className="flex gap-[-8px] relative h-10 items-center justify-end flex-row-reverse">
+                        {discardedQuests.length === 0 && (
+                            <div className="text-red-900/30 text-xs italic">Bin empty</div>
+                        )}
+                        {discardedQuests.slice(0, 5).map((q, i) => (
+                            <div
+                                key={q.id}
+                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -mr-3 first:mr-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-red-950', 'text-red-900', 'text-red-700', 'text-red-500', 'text-red-400'][i] || 'text-red-400'
+                                    }`}
+                                title={q.title}
+                            >
+                                <Trash2 size={20} />
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                {/* Icons Arc: Discarded */}
-                {discardedQuests.slice(0, 6).map((q, i) => {
-                    const angle = 15 + (i * 6);
 
-                    return (
-                        <div
-                            key={q.id}
-                            className="absolute pointer-events-auto transition-transform hover:scale-110 hover:z-50"
-                            style={{
-                                transform: `rotate(${angle}deg) translateY(-285px) rotate(${-angle}deg)`,
-                                zIndex: 40 - i
-                            }}
-                            title={q.title}
-                            onClick={() => setShowDiscardedLog(true)}
-                        >
-                            <div className="w-10 h-10 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center text-rose-500 shadow-lg">
-                                <Trash2 size={18} />
-                            </div>
-                        </div>
-                    );
-                })}
-                {discardedQuests.length === 0 && (
-                    <div
-                        className="absolute pointer-events-auto opacity-50"
-                        style={{ transform: `rotate(20deg) translateY(-260px) rotate(-20deg)` }}
-                    >
-                        <div className="w-10 h-10 rounded-full border border-slate-800 border-dashed flex items-center justify-center text-slate-700">
-                            <Trash2 size={16} />
-                        </div>
-                    </div>
-                )}
 
             </div>
 

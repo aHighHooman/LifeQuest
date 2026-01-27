@@ -37,7 +37,7 @@ const CoinSwitch = ({ onClick }) => {
     };
 
     return (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 overflow-visible pointer-events-none">
+        <div className="relative z-50 overflow-visible">
             <button
                 onClick={handleClick}
                 style={{ pointerEvents: 'auto', perspective: '1000px' }}
@@ -404,7 +404,7 @@ const BudgetView = () => {
                 </div>
 
                 {/* SCROLLABLE LIST AREA */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 pb-48">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 pb-48 touch-pan-y overscroll-contain">
                     {groceryList.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-48 text-amber-900/40 border-2 border-dashed border-amber-900/20 rounded-xl m-4">
                             <ShoppingCart size={32} className="mb-2 opacity-50" />
@@ -528,7 +528,7 @@ const BudgetView = () => {
                 </div>
 
                 {/* TRANSACTION LOG (Bottom) */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-48">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-48 touch-pan-y overscroll-contain">
                     <div className="px-2 py-2 text-[10px] font-mono text-amber-500/40 uppercase border-b border-white/5 mb-1">Recent Activity Log</div>
                     <div className="space-y-1">
                         {recentSpending.length === 0 ? (
@@ -555,10 +555,12 @@ const BudgetView = () => {
     // --- MAIN RENDER ---
 
     return (
-        <div className="flex flex-col h-[80dvh] w-full overflow-hidden relative">
-            {/* Background Texture */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-amber-900/10 via-transparent to-transparent pointer-events-none" />
-            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
+        <div className="fixed inset-0 w-full h-full overflow-hidden bg-slate-950 flex flex-col relative">
+            {/* Ambient Background & Grid */}
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-amber-900/10 via-transparent to-transparent z-0" />
+                <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent z-0" />
+            </div>
 
             {/* 1. VAULT HEADER (Fixed) */}
             <VaultHeader />
@@ -611,10 +613,14 @@ const BudgetView = () => {
                 </AnimatePresence>
             </div>
 
-            {/* 5. COIN SWITCH (Bottom - Floating) */}
-            <CoinSwitch
-                onClick={() => setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS)}
-            />
+            {/* 6. BOTTOM DOCK (Anchored) */}
+            <div className="shrink-0 z-50 relative flex justify-center pb-32 pt-12 bg-gradient-to-t from-black via-slate-950/90 to-transparent -mt-10 pointer-events-none">
+                <div className="pointer-events-auto -translate-y-24">
+                    <CoinSwitch
+                        onClick={() => setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS)}
+                    />
+                </div>
+            </div>
 
             {/* Modals */}
             {showSettings && <SettingsModal />}

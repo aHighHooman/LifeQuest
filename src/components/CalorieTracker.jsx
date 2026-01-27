@@ -1,148 +1,301 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
-import { Flame, Plus, Target, CheckSquare, Clock, ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Flame, Zap, Plus, X, Activity, Droplets, AlertTriangle, ChevronUp, History } from 'lucide-react';
+import clsx from 'clsx';
+import { SPRING_CONFIG } from '../constants/animations';
 
-const CalorieTracker = () => {
-    const { calories, addCalories, setCalorieGoal } = useGame();
-    const [inputAmount, setInputAmount] = useState('');
-    const [goalInput, setGoalInput] = useState(calories.target);
-    const [isEditingGoal, setIsEditingGoal] = useState(false);
+const ReactorCore = ({ current, target }) => {
+    const percentage = Math.min((current / target) * 100, 100);
+    const isOverload = current > target;
+    const remaining = target - current;
 
-    const remaining = calories.target - calories.current;
-    const percent = Math.min((calories.current / calories.target) * 100, 100);
+    // Bubbles for the liquid effect
+    const bubbles = Array.from({ length: 8 }).map((_, i) => ({
+        id: i,
+        size: Math.random() * 10 + 5,
+        x: Math.random() * 80 + 10,
+        duration: Math.random() * 2 + 3,
+        delay: Math.random() * 2
+    }));
 
-    const handleAdd = (e) => {
+    return (
+        <div className="relative w-full h-full flex items-center justify-center p-8">
+            {/* Main Reactor Chamber */}
+            <div className="relative w-[280px] h-[280px] sm:w-[320px] sm:h-[320px]">
+
+                {/* Outer Ring / Containment Field */}
+                <div className="absolute inset-0 rounded-full border-[8px] border-slate-800 shadow-[0_0_50px_rgba(0,0,0,0.5)] bg-black/60 backdrop-blur-sm z-10 flex items-center justify-center">
+                    {/* Tech Markings */}
+                    <svg className="absolute inset-0 w-full h-full animate-spin-slow opacity-30 pointer-events-none" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="48" fill="none" stroke="#be123c" strokeWidth="0.5" strokeDasharray="4 2" />
+                        <circle cx="50" cy="50" r="40" fill="none" stroke="#be123c" strokeWidth="0.2" strokeDasharray="10 10" />
+                    </svg>
+                </div>
+
+                {/* Liquid Container (Masked) */}
+                <div className="absolute inset-4 rounded-full overflow-hidden z-0 bg-slate-900 border border-rose-900/30">
+
+                    {/* Background Grid */}
+                    <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(244,63,94,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(244,63,94,0.1)_1px,transparent_1px)] bg-[size:20px_20px]" />
+
+                    {/* The Liquid */}
+                    <motion.div
+                        className={clsx(
+                            "absolute bottom-0 left-0 right-0 w-full transition-colors duration-700",
+                            isOverload ? "bg-gradient-to-t from-red-900 via-red-600 to-orange-500" : "bg-gradient-to-t from-rose-900 via-rose-600 to-rose-400"
+                        )}
+                        initial={{ height: '0%' }}
+                        animate={{ height: `${percentage}%` }}
+                        transition={{ type: "spring", stiffness: 50, damping: 20 }}
+                        style={{ filter: 'url(#goo)' }} // Optional goo effect if we had the filter defs, straightforward for now
+                    >
+                        {/* Interactive Surface Wave */}
+                        <div className="absolute top-0 left-0 right-0 h-4 bg-white/20 blur-sm transform -translate-y-1/2" />
+
+                        {/* Rising Bubbles */}
+                        {bubbles.map(b => (
+                            <motion.div
+                                key={b.id}
+                                className="absolute bg-rose-200/20 rounded-full blur-[1px]"
+                                style={{ width: b.size, height: b.size, left: `${b.x}%` }}
+                                animate={{ y: [-20, -300], opacity: [0, 1, 0] }}
+                                transition={{
+                                    repeat: Infinity,
+                                    duration: b.duration,
+                                    delay: b.delay,
+                                    ease: "linear"
+                                }}
+                            />
+                        ))}
+                    </motion.div>
+                </div>
+
+                {/* Central HUD Overlay */}
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
+                    <div className="text-center drop-shadow-md">
+                        <motion.div
+                            key={current}
+                            initial={{ scale: 1.2, opacity: 0.5 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="text-5xl font-black font-mono text-white tracking-tighter"
+                        >
+                            {current}
+                        </motion.div>
+                        <div className="text-[10px] font-bold text-rose-200 uppercase tracking-[0.3em] opacity-80 mt-1">
+                            kCal Input
+                        </div>
+                    </div>
+
+                    {/* Status Indicator */}
+                    <div className={clsx(
+                        "mt-4 px-3 py-1 rounded-full border backdrop-blur-md flex items-center gap-2 transition-colors",
+                        isOverload ? "bg-red-950/80 border-red-500/50 text-red-500" : "bg-black/40 border-rose-500/30 text-rose-400"
+                    )}>
+                        {isOverload ? <AlertTriangle size={12} /> : <Activity size={12} />}
+                        <span className="text-[10px] font-mono font-bold uppercase">
+                            {isOverload ? "CRITICAL LOAD" : "SYSTEM STABLE"}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Glass Glare */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-30" />
+            </div>
+        </div>
+    );
+};
+
+const SystemLog = ({ history }) => {
+    const scrollRef = useRef(null);
+
+    // Auto-scroll to bottom on new entry
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [history]);
+
+    return (
+        <div className="flex-1 min-h-0 bg-black/40 border-t border-b border-rose-900/30 backdrop-blur-sm relative flex flex-col">
+            <div className="px-4 py-2 bg-rose-950/20 text-[9px] font-game text-rose-500/60 uppercase tracking-widest flex items-center justify-between shrink-0">
+                <span className="flex items-center gap-2"><History size={10} /> Reaction Logs</span>
+                <span>{new Date().toISOString().split('T')[0]}</span>
+            </div>
+
+            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-0 scroll-smooth">
+                {history.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-rose-900/40 opacity-50 space-y-2">
+                        <Activity size={24} />
+                        <span className="text-[10px] font-mono uppercase">Core Idle</span>
+                    </div>
+                ) : (
+                    <div className="flex flex-col-reverse p-4 gap-2"> {/* Reverse layout for log feel (newest bottom if we scroll? actually console logs usually append) */}
+                        {[...history].reverse().map((entry, idx) => (
+                            <motion.div
+                                key={idx}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center justify-between text-xs font-mono border-l-2 border-slate-800 pl-3 py-1 hover:border-rose-500 transition-colors group"
+                            >
+                                <span className="text-slate-500 group-hover:text-slate-400 transition-colors">
+                                    {new Date(entry.date).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-rose-500 group-hover:text-rose-400 font-bold transition-colors">
+                                        Fuel Inject
+                                    </span>
+                                    <span className="bg-rose-900/30 text-rose-300 px-1.5 rounded">
+                                        +{entry.amount}
+                                    </span>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Overlay Gradient for fade out */}
+            <div className="absolute top-0 inset-x-0 h-4 bg-gradient-to-b from-black/20 to-transparent pointer-events-none" />
+        </div>
+    );
+};
+
+const ControlDeck = ({ onAdd, onSetGoal, currentGoal, isOverload }) => {
+    const [inputValue, setInputValue] = useState('');
+    const [isManual, setIsManual] = useState(false);
+
+    const handleSubmit = (e) => {
         e.preventDefault();
-        const val = parseInt(inputAmount);
-        if (val) {
-            addCalories(val);
-            setInputAmount('');
+        const val = parseInt(inputValue);
+        if (val > 0) {
+            onAdd(val);
+            setInputValue('');
+            setIsManual(false);
         }
     };
 
-    const handleUpdateGoal = () => {
-        setCalorieGoal(parseInt(goalInput));
-        setIsEditingGoal(false);
-    };
+    return (
+        <div className="shrink-0 bg-black/80 backdrop-blur-xl border-t border-rose-900/50 pb-48 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-40 relative">
 
-    // Assuming calories.history exists or we can mock it from useGame if not yet implemented there.
-    // If not in context yet, we should probably add it, but for UI task we can assume it's there or added.
-    // The user request said "Add history tracking... similar to how the miscellaneous spending section works".
-    // I need to ensure GameContext actually has history for calories.
+            {/* Manual Input Drawer */}
+            <AnimatePresence>
+                {isManual && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+                        animate={{ height: 'auto', opacity: 1, marginBottom: 16 }}
+                        exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <form onSubmit={handleSubmit} className="flex gap-2">
+                            <input
+                                autoFocus
+                                type="number"
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                placeholder="ENTER QUANTITY"
+                                className="flex-1 min-w-0 bg-black border border-rose-900/50 rounded-lg px-4 py-3 text-rose-100 font-mono text-lg placeholder-rose-900/30 outline-none focus:border-rose-500 transition-colors"
+                            />
+                            <button
+                                type="submit"
+                                className="bg-rose-600 hover:bg-rose-500 text-black px-6 rounded-lg font-bold font-game uppercase tracking-wide transition-colors"
+                            >
+                                Inject
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsManual(false)}
+                                className="bg-slate-900 border border-slate-700 text-slate-400 px-4 rounded-lg hover:text-white transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </form>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Main Controls */}
+            {!isManual && (
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between text-[10px] text-rose-500/60 font-mono uppercase px-1">
+                        <span>Injector Status: READY</span>
+                        <div className="flex items-center gap-2">
+                            <span>Target: {currentGoal}</span>
+                            <button onClick={onSetGoal} className="hover:text-rose-400 underline decoration-dashed underline-offset-2">
+                                EDIT
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-3 h-16">
+                        {[100, 250, 500].map(amt => (
+                            <motion.button
+                                key={amt}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => onAdd(amt)}
+                                className="relative overflow-hidden bg-rose-950/40 border border-rose-500/30 rounded-lg flex flex-col items-center justify-center hover:bg-rose-900/60 hover:border-rose-500 transition-all group active:shadow-[0_0_20px_rgba(244,63,94,0.4)]"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-t from-rose-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <span className="font-black font-mono text-lg text-rose-100 group-hover:text-white relative z-10 flex items-center">
+                                    <Plus size={12} className="mr-0.5" />{amt}
+                                </span>
+                                <span className="text-[8px] font-bold text-rose-500 uppercase tracking-widest relative z-10">
+                                    Cell
+                                </span>
+                            </motion.button>
+                        ))}
+
+                        <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setIsManual(true)}
+                            className="bg-slate-900 border border-slate-700/50 rounded-lg flex flex-col items-center justify-center text-slate-400 hover:text-rose-400 hover:border-rose-500/30 transition-colors"
+                        >
+                            <Zap size={20} />
+                            <span className="text-[8px] font-bold mt-1 uppercase">Manual</span>
+                        </motion.button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const CalorieTracker = () => {
+    const { calories, addCalories, setCalorieGoal } = useGame();
+
+    // Safety check for history existence (context update handle)
     const history = calories.history || [];
 
+    const handleSetGoal = () => {
+        const newGoal = prompt("Set Daily Calorie Target:", calories.target);
+        if (newGoal && !isNaN(newGoal)) {
+            setCalorieGoal(parseInt(newGoal));
+        }
+    };
+
     return (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
-
-            {/* Header / Summary Card */}
-            <div className="bg-rose-900/10 rounded-3xl border border-rose-500/20 shadow-2xl overflow-hidden relative">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent opacity-50"></div>
-                <div className="p-6 flex flex-col items-center justify-center relative">
-
-                    <h2 className="text-xl font-game text-white flex items-center gap-2 mb-6">
-                        <Flame className="text-game-danger" />
-                        Metabolic Monitor
-                    </h2>
-
-                    <div className="w-48 h-48 rounded-full border-8 border-rose-900/20 flex items-center justify-center relative">
-                        <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
-                            <circle
-                                cx="50" cy="50" r="46"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="8"
-                                className={`${remaining < 0 ? 'text-red-500' : 'text-game-danger'} transition-all duration-1000 ease-out`}
-                                strokeDasharray="289" // 2 * pi * 46
-                                strokeDashoffset={289 - (289 * percent) / 100}
-                                strokeLinecap="round"
-                            />
-                        </svg>
-                        <div className="text-center z-10">
-                            <div className="text-4xl font-black text-white">{calories.current}</div>
-                            <div className="text-xs text-gray-400 uppercase tracking-widest">Consumed</div>
-                        </div>
-                    </div>
-
-                    <div className="mt-6 flex items-center gap-2 text-sm text-gray-400">
-                        <span>Target:</span>
-                        {isEditingGoal ? (
-                            <div className="flex items-center gap-1">
-                                <input
-                                    type="number"
-                                    value={goalInput}
-                                    onChange={(e) => setGoalInput(e.target.value)}
-                                    className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-center"
-                                />
-                                <button onClick={handleUpdateGoal} className="text-game-accent"><CheckSquare size={16} /></button>
-                            </div>
-                        ) : (
-                            <span className="font-mono text-white flex items-center gap-2">
-                                {calories.target}
-                                <button onClick={() => setIsEditingGoal(true)} className="text-gray-600 hover:text-white"><Target size={14} /></button>
-                            </span>
-                        )}
-                    </div>
-
-                    <div className={`mt-2 font-bold ${remaining < 0 ? 'text-red-500' : 'text-emerald-400'}`}>
-                        {remaining < 0 ? `${Math.abs(remaining)} Over Limit` : `${remaining} Remaining`}
-                    </div>
-                </div>
+        <div className="fixed inset-0 w-full h-full overflow-hidden bg-black text-rose-50 flex flex-col">
+            {/* Ambient Background & Grid */}
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-rose-900/20 via-slate-950/80 to-black z-0" />
+                <div className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:50px_50px] z-0" />
             </div>
 
-            {/* Input Section */}
-            <div className="bg-rose-900/10 rounded-3xl border border-rose-500/20 shadow-2xl p-4">
-                <form onSubmit={handleAdd} className="flex gap-2 mb-4">
-                    <input
-                        type="number"
-                        placeholder="Add calories..."
-                        value={inputAmount}
-                        onChange={(e) => setInputAmount(e.target.value)}
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-game-danger focus:outline-none transition-colors"
-                    />
-                    <button
-                        type="submit"
-                        className="bg-game-danger hover:bg-red-600 text-white rounded-xl px-5 transition-colors shadow-lg shadow-red-500/20"
-                    >
-                        <Plus size={24} />
-                    </button>
-                </form>
-
-                {/* Quick Adds */}
-                <div className="grid grid-cols-3 gap-2">
-                    {[100, 250, 500].map(amt => (
-                        <button
-                            key={amt}
-                            onClick={() => addCalories(amt)}
-                            className="bg-rose-900/20 hover:bg-rose-800/40 text-rose-300 hover:text-white py-3 rounded-xl text-xs font-bold transition-colors border border-rose-500/20 hover:border-rose-500/50"
-                        >
-                            +{amt} kcal
-                        </button>
-                    ))}
-                </div>
+            {/* 1. TOP: Reactor Core Visualizer */}
+            <div className="flex-1 min-h-[40%] flex items-center justify-center z-10 relative">
+                <ReactorCore current={calories.current} target={calories.target} />
             </div>
 
-            {/* History Section */}
-            <div className="bg-rose-900/10 rounded-3xl border border-rose-500/20 shadow-2xl p-4">
-                <h3 className="text-sm font-game text-white flex items-center gap-2 mb-4 uppercase tracking-wider opacity-80 pl-2">
-                    <Clock size={16} className="text-game-muted" /> Recent Intake
-                </h3>
+            {/* 2. MIDDLE: System Log (Flexible Height) */}
+            <SystemLog history={history} />
 
-                <div className="space-y-2">
-                    {history.length === 0 ? (
-                        <div className="text-center py-8 text-slate-600 border-2 border-dashed border-slate-800 rounded-2xl">
-                            <p className="text-xs">No records today.</p>
-                        </div>
-                    ) : (
-                        history.slice().reverse().map((entry, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-slate-700/30">
-                                <span className="text-gray-400 text-xs">{new Date(entry.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                <span className="text-game-danger font-mono font-bold">+{entry.amount} kcal</span>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
+            {/* 3. BOTTOM: Control Dock (Fixed) */}
+            <ControlDeck
+                onAdd={addCalories}
+                onSetGoal={handleSetGoal}
+                currentGoal={calories.target}
+                isOverload={calories.current > calories.target}
+            />
         </div>
     );
 };

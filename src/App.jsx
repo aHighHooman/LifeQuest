@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Settings } from 'lucide-react';
 import { GameProvider, useGame } from './context/GameContext';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
+import { motion } from 'framer-motion';
 
 const Dashboard = React.lazy(() => import('./components/Dashboard'));
 const QuestBoard = React.lazy(() => import('./components/QuestBoard'));
@@ -32,8 +31,6 @@ function AppContent({ currentTab, setCurrentTab }) {
     );
   }
 
-  // Widget mode logic removed
-
   return (
     <div className="h-[100dvh] bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col">
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
@@ -41,25 +38,6 @@ function AppContent({ currentTab, setCurrentTab }) {
       <React.Suspense fallback={<div className="min-h-screen bg-game-bg" />}>
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
           <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))]">
-            {currentTab === 'dashboard' && (
-              // <header className="mb-2 flex items-center justify-between px-6">
-              //   <div>
-              //     <motion.button
-              //       whileTap={{ scale: 0.9 }}
-              //       onClick={() => setIsSettingsOpen(true)}
-              //       className="p-2 text-slate-400 hover:text-game-accent transition-colors"
-              //     >
-              //       <Settings size={28} />
-              //     </motion.button>
-              //   </div>
-              //   <div className="text-right">
-              //     {/* <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs">System Online</p> */}
-              //     {/* <p className="text-10px text-slate-600 font-mono">{new Date().toLocaleDateString()}</p> */}
-              //   </div>
-              // </header>
-              null
-            )}
-
             <motion.main
               className="min-h-[600px] relative z-10"
               initial={{ opacity: 0, y: 20 }}
