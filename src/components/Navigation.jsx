@@ -186,8 +186,8 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
             {/* Main Content Content (Injected) */}
             <div className={clsx(
                 "flex-1 w-full min-h-0 relative z-10 select-text overscroll-none",
-                currentTab !== 'budget' && "pb-64",
-                currentTab === 'dashboard' || currentTab === 'budget' ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
+                (currentTab !== 'budget' && currentTab !== 'protocols') && "pb-64",
+                (currentTab === 'dashboard' || currentTab === 'budget' || currentTab === 'protocols') ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
             )}>
                 {children}
             </div>

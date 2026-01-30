@@ -291,7 +291,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                         animate={{ y: 0 }}
                         exit={{ y: "-100%" }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="fixed top-0 left-0 right-0 z-50 bg-slate-900 border-b-2 border-purple-500 shadow-2xl p-6 rounded-b-3xl"
+                        className="fixed top-0 left-0 right-0 z-50 bg-slate-900 border-b-2 border-purple-500 shadow-2xl px-6 pb-6 pt-[calc(1.5rem+env(safe-area-inset-top))] rounded-b-3xl"
                         drag="y"
                         dragConstraints={{ top: 0, bottom: 0 }}
                         onDragEnd={(e, { offset, velocity }) => {
@@ -637,6 +637,17 @@ const HabitTracker = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Gesture Zone for empty space */}
+            <motion.div
+                className="flex-1 w-full"
+                style={{ touchAction: 'none' }}
+                onPanEnd={(e, info) => {
+                    if (info.offset.y > 80 && !isCreationOpen) {
+                        setIsCreationOpen(true);
+                    }
+                }}
+            />
 
             {/* Creation Panel */}
             <ProtocolCreationPanel
