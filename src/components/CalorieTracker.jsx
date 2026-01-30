@@ -123,7 +123,7 @@ const SystemLog = ({ history }) => {
                 <span>{new Date().toISOString().split('T')[0]}</span>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-0 scroll-smooth">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-0 scroll-smooth overscroll-none">
                 {history.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-rose-900/40 opacity-50 space-y-2">
                         <Activity size={24} />
@@ -286,7 +286,7 @@ const CalorieTracker = () => {
             </div>
 
             {/* 1. TOP: Reactor Core Visualizer */}
-            <div className="flex-1 min-h-[40%] flex items-center justify-center z-10 relative">
+            <div className="flex-1 min-h-[40%] flex items-center justify-center z-10 relative" style={{ touchAction: 'none' }}>
                 <ReactorCore current={calories.current} target={calories.target} />
             </div>
 

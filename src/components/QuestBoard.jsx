@@ -385,7 +385,7 @@ const QuestBoard = () => {
 
     return (
         <div className="pb-4 md:pb-0 relative flex flex-col w-full">
-            <div className="flex justify-between items-center mb-5 px-6">
+            <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
                 <div>
                     <h2 className="text-3xl font-game font-bold text-emerald-400 tracking-widest uppercase text-glow">
                         Active Quests

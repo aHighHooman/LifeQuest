@@ -395,7 +395,7 @@ const HabitTracker = () => {
             {/* HEADER */}
 
 
-            <div className="flex justify-between items-center mb-5 px-6">
+            <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
                 <div>
                     <h2 className="text-3xl font-game font-bold text-purple-400 tracking-widest uppercase text-glow">
                         Protocols
