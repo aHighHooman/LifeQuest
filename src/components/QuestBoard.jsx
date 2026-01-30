@@ -583,7 +583,7 @@ const QuestBoard = () => {
 
             {/* 3. LOGS & HISTORY (Moved from Radial) */}
             {/* 3. LOGS & HISTORY (Moved from Radial) */}
-            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8" data-no-swipe="true">
+            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8">
                 {/* VICTORY LOG (LEFT) */}
                 <div
                     onClick={() => setShowVictoryLog(true)}

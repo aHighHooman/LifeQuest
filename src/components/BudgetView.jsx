@@ -405,7 +405,7 @@ const BudgetView = () => {
                 </div>
 
                 {/* SCROLLABLE LIST AREA */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 pb-48 touch-pan-y overscroll-none" data-no-swipe="true">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 pb-48 touch-pan-y overscroll-none">
                     {groceryList.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-48 text-amber-900/40 border-2 border-dashed border-amber-900/20 rounded-xl m-4">
                             <ShoppingCart size={32} className="mb-2 opacity-50" />
@@ -529,7 +529,7 @@ const BudgetView = () => {
                 </div>
 
                 {/* TRANSACTION LOG (Bottom) */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-48 touch-pan-y overscroll-none" data-no-swipe="true">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-48 touch-pan-y overscroll-none">
                     <div className="px-2 py-2 text-[10px] font-mono text-amber-500/40 uppercase border-b border-white/5 mb-1">Recent Activity Log</div>
                     <div className="space-y-1">
                         {recentSpending.length === 0 ? (

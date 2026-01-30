@@ -550,7 +550,7 @@ const HabitTracker = () => {
             </div>
 
             {/* 3. PROTOCOLS & DATABASE */}
-            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8" data-no-swipe="true">
+            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8">
                 {/* ACTIVE (LEFT) */}
                 <div
                     onClick={() => setShowActiveList(true)}
