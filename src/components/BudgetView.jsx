@@ -164,7 +164,7 @@ const BudgetView = () => {
 
 
     const VaultHeader = () => (
-        <div className="shrink-0 grid grid-cols-3 gap-2 p-2 bg-black/40 border-b border-amber-900/50 backdrop-blur-md z-20" style={{ touchAction: 'none' }}>
+        <div className="shrink-0 grid grid-cols-3 gap-2 p-2 pt-12 bg-black/40 border-b border-amber-900/50 backdrop-blur-md z-20" style={{ touchAction: 'none' }}>
             <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
                 <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Budget</span>
