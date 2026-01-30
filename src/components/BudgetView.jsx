@@ -488,7 +488,7 @@ const BudgetView = () => {
             .sort((a, b) => new Date(b.date) - new Date(a.date));
 
         return (
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
+            <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
                 {/* TRANSFER TERMINAL (Top) */}
                 <div className="shrink-0 p-4 border-b border-amber-900/30 bg-black/20">
                     <div className="mb-3 flex items-center gap-2 text-amber-500/70">
@@ -556,7 +556,7 @@ const BudgetView = () => {
     // --- MAIN RENDER ---
 
     return (
-        <div className="fixed inset-0 w-full h-full overflow-hidden bg-slate-950 flex flex-col relative">
+        <div className="fixed inset-0 w-full h-full overflow-hidden bg-slate-950 flex flex-col">
             {/* Ambient Background & Grid */}
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-amber-900/10 via-transparent to-transparent z-0" />

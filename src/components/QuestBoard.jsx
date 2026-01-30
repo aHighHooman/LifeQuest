@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-mo
 import { CheckCircle, Trash2, Plus, Sword, Settings, Calendar, X, RotateCcw } from 'lucide-react';
 import clsx from 'clsx';
 import { SPRING_CONFIG } from '../constants/animations';
-import { isWithinDays } from '../utils/dateUtils';
+import { isWithinDays, getTodayISO, toLocalISOString } from '../utils/dateUtils';
 
 const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious, custom }) => {
     const x = useMotionValue(0);
@@ -524,7 +524,7 @@ const QuestBoard = () => {
                                             <div className="flex justify-between w-full px-1">
                                                 <button
                                                     type="button"
-                                                    onClick={() => setDueDate(new Date().toISOString().split('T')[0])}
+                                                    onClick={() => setDueDate(getTodayISO())}
                                                     className="text-[10px] uppercase font-bold text-emerald-600 hover:text-emerald-400 transition-colors"
                                                 >
                                                     Today
@@ -534,7 +534,7 @@ const QuestBoard = () => {
                                                     onClick={() => {
                                                         const d = new Date();
                                                         d.setDate(d.getDate() + 1);
-                                                        setDueDate(d.toISOString().split('T')[0]);
+                                                        setDueDate(toLocalISOString(d));
                                                     }}
                                                     className="text-[10px] uppercase font-bold text-emerald-600 hover:text-emerald-400 transition-colors"
                                                 >

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Flame, Zap, Plus, X, Activity, Droplets, AlertTriangle, ChevronUp, History } from 'lucide-react';
 import clsx from 'clsx';
 import { SPRING_CONFIG } from '../constants/animations';
+import { getTodayISO } from '../utils/dateUtils';
 
 const ReactorCore = ({ current, target }) => {
     const percentage = Math.min((current / target) * 100, 100);
@@ -120,7 +121,7 @@ const SystemLog = ({ history }) => {
         <div className="flex-1 min-h-0 bg-black/40 border-t border-b border-rose-900/30 backdrop-blur-sm relative flex flex-col">
             <div className="px-4 py-2 bg-rose-950/20 text-[9px] font-game text-rose-500/60 uppercase tracking-widest flex items-center justify-between shrink-0">
                 <span className="flex items-center gap-2"><History size={10} /> Reaction Logs</span>
-                <span>{new Date().toISOString().split('T')[0]}</span>
+                <span>{getTodayISO()}</span>
             </div>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-0 scroll-smooth overscroll-none">
