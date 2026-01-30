@@ -254,21 +254,179 @@ const ProtocolListModal = ({ title, items, onClose, type, onAction, actionLabel,
     );
 };
 
-const HabitTracker = () => {
-    const { habits, addHabit, checkHabit, deleteHabit, toggleHabitActivation } = useGame();
-
-    // Form States
+const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLookaheadDays }) => {
     const [title, setTitle] = useState('');
     const [frequency, setFrequency] = useState('daily');
     const [intervalParam, setIntervalParam] = useState(2);
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
-    // Filter Config
-    const [lookaheadDays, setLookaheadDays] = useState(LOOKAHEAD_DAYS_DEFAULT);
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+
+        let param = 1;
+        if (frequency === 'interval') param = intervalParam;
+
+        onAdd(title, frequency, param);
+
+        // Reset
+        setTitle('');
+        setFrequency('daily');
+        onClose();
+    };
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <>
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+                        onClick={onClose}
+                    />
+                    <motion.div
+                        initial={{ y: "-100%" }}
+                        animate={{ y: 0 }}
+                        exit={{ y: "-100%" }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className="fixed top-0 left-0 right-0 z-50 bg-slate-900 border-b-2 border-purple-500 shadow-2xl p-6 rounded-b-3xl"
+                        drag="y"
+                        dragConstraints={{ top: 0, bottom: 0 }}
+                        onDragEnd={(e, { offset, velocity }) => {
+                            if (offset.y < -50 || velocity.y < -500) {
+                                onClose();
+                            }
+                        }}
+                    >
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-game font-bold text-white flex items-center gap-2">
+                                <Plus size={20} className="text-purple-400" />
+                                New Protocol
+                            </h2>
+                            <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs font-bold text-gray-500 uppercase">Protocol Name</label>
+                                <input
+                                    type="text"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="E.g. Neural Link Calibration..."
+                                    autoFocus
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 focus:shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all font-game"
+                                />
+                            </div>
+
+                            <div className="p-4 bg-slate-950/50 rounded-xl border border-white/5 space-y-4">
+                                <div className="flex items-center justify-between" onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}>
+                                    <span className="text-xs font-bold text-gray-500 uppercase">Configuration</span>
+                                    <button type="button" className="text-purple-400 text-xs font-bold">
+                                        {isAdvancedOpen ? 'HIDE' : 'SHOW'}
+                                    </button>
+                                </div>
+
+                                {isAdvancedOpen && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        className="space-y-4 pt-2"
+                                    >
+                                        {/* Frequency Selection */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs text-slate-500">Frequency</label>
+                                            <div className="flex gap-2">
+                                                {[
+                                                    { label: 'Daily', val: 1, freq: 'daily' },
+                                                    { label: 'Weekly', val: 7, freq: 'weekly' },
+                                                    { label: 'Interval', val: intervalParam, freq: 'interval' }
+                                                ].map((btn) => (
+                                                    <button
+                                                        key={btn.label}
+                                                        type="button"
+                                                        onClick={() => setFrequency(btn.freq)}
+                                                        className={clsx(
+                                                            "flex-1 py-2 rounded-lg text-xs font-bold transition-all border",
+                                                            (frequency === btn.freq)
+                                                                ? "bg-purple-600 text-white border-purple-500"
+                                                                : "bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-600"
+                                                        )}
+                                                    >
+                                                        {btn.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {frequency === 'interval' && (
+                                                <div className="flex items-center gap-2 mt-2 bg-slate-900 p-2 rounded-lg border border-slate-700">
+                                                    <RotateCcw size={14} className="text-purple-500" />
+                                                    <span className="text-xs text-slate-400">Every</span>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        value={intervalParam}
+                                                        onChange={(e) => setIntervalParam(Math.max(1, parseInt(e.target.value) || 1))}
+                                                        className="w-12 bg-transparent text-center font-bold text-white border-b border-purple-500 focus:outline-none"
+                                                    />
+                                                    <span className="text-xs text-slate-400">Days</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Horizon Control - Moved here */}
+                                        <div className="pt-4 border-t border-white/5 space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-xs text-slate-500">Event Horizon (Lookahead)</label>
+                                                <span className="text-xs font-mono text-purple-400">{lookaheadDays} Days</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-lg border border-slate-700">
+                                                <Zap size={14} className="text-purple-500" />
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="30"
+                                                    value={lookaheadDays}
+                                                    onChange={(e) => setLookaheadDays(parseInt(e.target.value))}
+                                                    className="flex-1 accent-purple-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-purple-900/20 flex items-center justify-center gap-2 mt-2"
+                            >
+                                <Plus size={20} /> Initialize Protocol
+                            </button>
+
+                            <div className="flex justify-center mt-2">
+                                <span className="text-[10px] text-slate-500 uppercase tracking-widest">Swipe Up to Cancel</span>
+                            </div>
+                        </form>
+                    </motion.div>
+                </>
+            )}
+        </AnimatePresence>
+    );
+};
+
+const HabitTracker = () => {
+    const { habits, addHabit, checkHabit, deleteHabit, toggleHabitActivation } = useGame();
 
     // Modal States
     const [showActiveList, setShowActiveList] = useState(false);
     const [showInactiveList, setShowInactiveList] = useState(false);
+    const [isCreationOpen, setIsCreationOpen] = useState(false);
+
+    // Filter Config
+    const [lookaheadDays, setLookaheadDays] = useState(LOOKAHEAD_DAYS_DEFAULT);
 
     // Deck Logic
     const [cycleOffsets, setCycleOffsets] = useState({});
@@ -311,20 +469,8 @@ const HabitTracker = () => {
 
 
     // --- HANDLERS ---
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (!title.trim()) return;
 
-        let param = 1;
-        if (frequency === 'interval') param = intervalParam;
-
-        addHabit(title, frequency, param);
-
-        // Reset
-        setTitle('');
-        setFrequency('daily');
-        setIsAdvancedOpen(false);
-    };
+    // Defer handleAddHabit to Panel via prop
 
     const handleComplete = (id) => {
         setSlideDirection(1); // Right
@@ -391,16 +537,28 @@ const HabitTracker = () => {
     };
 
     return (
-        <div className="pb-4 md:pb-0 relative flex flex-col w-full">
+        <motion.div
+            className="pb-4 md:pb-0 relative flex flex-col w-full min-h-[500px]"
+            onPanEnd={(e, info) => {
+                // Global swipe down to open creation
+                // Ignore if touching a card (card has data-no-swipe)
+                if (e.target.closest('[data-no-swipe="true"]')) return;
+
+                if (info.offset.y > 80 && !isCreationOpen && window.scrollY < 50) {
+                    setIsCreationOpen(true);
+                }
+            }}
+        >
             {/* HEADER */}
-
-
             <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
                 <div>
                     <h2 className="text-3xl font-game font-bold text-purple-400 tracking-widest uppercase text-glow">
                         Protocols
                     </h2>
-                    <p className="text-sm text-purple-400/60">System routines.</p>
+                    <p className="text-sm text-purple-400/60 flex items-center gap-2">
+                        System routines.
+                        <span className="text-[10px] opacity-50 border border-purple-500/30 rounded px-1">SWIPE DOWN TO ADD</span>
+                    </p>
                 </div>
 
                 <span className="text-purple-400 px-4 py-1 rounded-full text-xs font-bold">
@@ -422,135 +580,8 @@ const HabitTracker = () => {
                 />
             </div>
 
-            {/* CREATION FORM */}
-            <div className="px-4 pt-4 pb-0 rounded-xl mb-2 relative overflow-hidden z-20">
-
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                        <div className="flex-1 w-full relative">
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">New Protocol</label>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    placeholder="Enter protocol name..."
-                                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500/50 focus:shadow-[0_0_10px_rgba(168,85,247,0.3)] transition-all"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
-                                    className={clsx(
-                                        "p-2 rounded-lg transition-all shrink-0",
-                                        isAdvancedOpen ? "text-purple-400" : "text-gray-400 hover:text-white"
-                                    )}
-
-                                    title="Advanced Settings"
-                                >
-                                    <Settings size={20} />
-                                </button>
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="w-full md:w-auto bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg transition-colors flex items-center justify-center font-bold gap-2 shadow-lg shadow-purple-900/20 h-[42px]"
-                        >
-                            <Plus size={20} /> <span className="md:hidden">Add Protocol</span>
-                        </button>
-                    </div>
-
-                    <AnimatePresence>
-                        {isAdvancedOpen && (
-                            <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="pt-4 overflow-hidden border-t border-purple-500/20 mt-2 space-y-4"
-                            >
-                                <div className="flex flex-col gap-3">
-                                    {/* ROW 1: Inputs & Controls (Side-by-Side on Mobile) */}
-                                    <div className="flex gap-3">
-                                        {/* Frequency Input - Compact */}
-                                        <div className="flex-1 flex items-center gap-2 bg-slate-950 border border-purple-500/30 rounded-lg px-2 py-1.5 hover:border-purple-500/60 transition-colors group h-10">
-                                            <RotateCcw size={16} className="text-purple-500/50 group-hover:text-purple-400 shrink-0" />
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max="365"
-                                                value={frequency === 'interval' ? intervalParam : (frequency === 'daily' ? 1 : (frequency === 'weekly' ? 7 : 30))}
-                                                onChange={(e) => {
-                                                    const val = parseInt(e.target.value) || 1;
-                                                    setFrequency('interval');
-                                                    setIntervalParam(val);
-                                                }}
-                                                className="bg-transparent border-none text-sm text-purple-100 focus:outline-none w-full font-mono text-center"
-                                            />
-                                            <span className="text-[10px] text-gray-500 font-mono shrink-0">Days</span>
-                                        </div>
-
-                                        {/* Horizon Control - Compact */}
-                                        <div className="flex-1 flex items-center justify-between bg-slate-950 border border-purple-500/30 rounded-lg px-2 py-1.5 h-10">
-                                            <div className="flex items-center gap-2">
-                                                <Zap size={16} className="text-purple-500/50 shrink-0" />
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setLookaheadDays(Math.max(0, lookaheadDays - 1))}
-                                                    className="w-6 h-6 flex items-center justify-center bg-slate-900 text-purple-400 rounded hover:bg-purple-500/20 transition-colors font-mono font-bold text-xs"
-                                                >
-                                                    -
-                                                </button>
-                                                <span className="text-sm font-mono text-white w-4 text-center">{lookaheadDays}</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setLookaheadDays(Math.min(30, lookaheadDays + 1))}
-                                                    className="w-6 h-6 flex items-center justify-center bg-slate-900 text-purple-400 rounded hover:bg-purple-500/20 transition-colors font-mono font-bold text-xs"
-                                                >
-                                                    +
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* ROW 2: Frequency Buttons */}
-                                    <div className="flex justify-between w-full gap-2">
-                                        {[
-                                            { label: 'Daily', val: 1, freq: 'daily' },
-                                            { label: 'Weekly', val: 7, freq: 'weekly' },
-                                            { label: 'Monthly', val: 30, freq: 'monthly' }
-                                        ].map((btn) => (
-                                            <button
-                                                key={btn.label}
-                                                type="button"
-                                                onClick={() => {
-                                                    setFrequency(btn.freq);
-                                                    setIntervalParam(btn.val);
-                                                }}
-                                                className={clsx(
-                                                    "flex-1 py-1.5 rounded text-[10px] uppercase font-bold transition-colors border",
-                                                    (frequency === btn.freq)
-                                                        ? "bg-purple-500/20 border-purple-500 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.2)]"
-                                                        : "bg-slate-900/50 border-slate-700/50 text-purple-600/70 hover:text-purple-400 hover:border-purple-500/30"
-                                                )}
-                                            >
-                                                {btn.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="flex justify-end pr-1">
-                                        <span className="text-[9px] text-gray-600 italic">Horizon: +{lookaheadDays}d</span>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </form>
-            </div>
-
-            {/* 3. PROTOCOLS & DATABASE */}
-            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8">
+            {/* 3. PROTOCOLS & DATABASE - Moved up due to Grid flow */}
+            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8 mt-4">
                 {/* ACTIVE (LEFT) */}
                 <div
                     onClick={() => setShowActiveList(true)}
@@ -607,6 +638,15 @@ const HabitTracker = () => {
                 </div>
             </div>
 
+            {/* Creation Panel */}
+            <ProtocolCreationPanel
+                isOpen={isCreationOpen}
+                onClose={() => setIsCreationOpen(false)}
+                onAdd={addHabit}
+                lookaheadDays={lookaheadDays}
+                setLookaheadDays={setLookaheadDays}
+            />
+
 
 
 
@@ -637,7 +677,7 @@ const HabitTracker = () => {
                     />
                 )}
             </AnimatePresence>
-        </div>
+        </motion.div>
     );
 };
 
