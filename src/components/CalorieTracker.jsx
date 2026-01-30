@@ -123,7 +123,7 @@ const SystemLog = ({ history }) => {
                 <span>{new Date().toISOString().split('T')[0]}</span>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-0 scroll-smooth overscroll-none">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-0 scroll-smooth overscroll-none" data-no-swipe="true">
                 {history.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-rose-900/40 opacity-50 space-y-2">
                         <Activity size={24} />
