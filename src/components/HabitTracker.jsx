@@ -538,7 +538,7 @@ const HabitTracker = () => {
 
     return (
         <motion.div
-            className="pb-4 md:pb-0 relative flex flex-col w-full min-h-[500px]"
+            className="pb-4 md:pb-0 relative flex flex-col w-full flex-1"
             onPanEnd={(e, info) => {
                 // Global swipe down to open creation
                 // Ignore if touching a card (card has data-no-swipe)

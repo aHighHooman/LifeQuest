@@ -37,9 +37,9 @@ function AppContent({ currentTab, setCurrentTab }) {
 
       <React.Suspense fallback={<div className="min-h-screen bg-game-bg" />}>
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
-          <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))]">
+          <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(2.5rem+env(safe-area-inset-top))] flex flex-col min-h-full">
             <motion.main
-              className="min-h-[600px] relative z-10"
+              className="flex-1 flex flex-col relative z-10"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
