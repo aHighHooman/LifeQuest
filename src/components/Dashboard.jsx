@@ -331,7 +331,15 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
     const xpBarStart = 160 - ((xpPercentage / 100) * 140);
 
     return (
-        <div className="flex flex-col h-full min-h-[600px] relative">
+        <motion.div
+            className="flex flex-col h-full relative touch-none"
+            onPanEnd={(e, info) => {
+                // Swipe Down (positive Y) to open Stats
+                if (info.offset.y > 100) {
+                    setShowStats(true);
+                }
+            }}
+        >
             <React.Suspense fallback={null}>
                 <StatsView isOpen={showStats} onClose={() => setShowStats(false)} />
             </React.Suspense>
@@ -350,15 +358,19 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
             </div>
 
             {/* Day Timer - Positioned below Manage Button */}
-            <DayTimer className="absolute top-16 left-0 right-0 z-20" />
+            {/* TUNING PARAMETER: Top Spacing for Timer (prevent overlap with Manage button) */}
+            <DayTimer className="absolute top-20 left-0 right-0 z-20" />
 
-            {/* Central Hub Container */}
-            <div className="flex-1 flex items-center justify-center relative">
+            {/* TUNING PARAMETER: Top Offset (Move content down) 
+                Adjust pt-[x] to move the entire structure down from the top.
+                e.g. pt-[20vh] (higher), pt-[30vh] (lower).
+            */}
+            <div className="flex-1 flex flex-col items-center justify-start relative h-full pt-[30vh]">
 
-                {/* ADJUST THIS VALUE to raise/lower the entire HUD (positive = down, negative = up) */}
+                {/* Main HUD Group */}
                 <div
-                    className="relative w-[380px] h-[380px] flex items-center justify-center"
-                    style={{ transform: 'translateY(100px)' }}
+                    className="relative w-[380px] h-[380px] flex items-center justify-center shrink-0"
+                // transform removed to rely on flex layout
                 >
 
                     {/* SVG Layer for Arcs */}
@@ -427,10 +439,13 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                             </div>
 
                             {/* System Online Text - Positioned Relative to Grid Center (Hugging Gold Hex) */}
-                            {/* Gold Hex is at y: 256. Height ~160 (half 80). Bottom ~336. We put text at 360 to be safe. */}
+                            {/* TUNING PARAMETER: Text Offset 
+                                Controls gap between Hex Grid and Text.
+                                Increase 380px to push text lower/away. Decrease to pull higher/closer. 
+                            */}
                             <div
                                 onClick={onOpenSettings}
-                                className="absolute left-0 top-0 flex flex-col items-center justify-center z-10 cursor-pointer pointer-events-auto w-40"
+                                className="absolute left-1/2 top-0 flex flex-col items-center justify-center z-10 cursor-pointer pointer-events-auto w-40"
                                 style={{ transform: 'translate(-50%, 360px)' }}
                             >
                                 <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs opacity-70 w-full text-center">
@@ -453,9 +468,12 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
 
 
                 </div>
+
+                {/* Bottom Spacer (Optional) */}
+                <div className="h-10 shrink-0 w-full" />
             </div>
 
-        </div>
+        </motion.div>
     );
 };
 

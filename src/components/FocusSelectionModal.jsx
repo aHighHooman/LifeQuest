@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X, CheckCircle, Circle, Shield, Swords, Crosshair } from 'lucide-react';
 import { useGame } from '../context/GameContext';
 
 const FocusSelectionModal = ({ isOpen, onClose }) => {
     const { quests, habits, toggleToday } = useGame();
     const [activeTab, setActiveTab] = useState('quests'); // 'quests' | 'protocols'
+    const dragControls = useDragControls();
 
     if (!isOpen) return null;
 
-    const availableQuests = quests.filter(q => !q.completed);
+    const availableQuests = quests.filter(q => !q.completed && !q.discarded);
     const availableHabits = habits; // All habits are always available
 
     const toggleItem = (id, type) => {
@@ -36,6 +37,8 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                         exit={{ y: "-100%" }}
                         transition={{ type: "spring", damping: 25, stiffness: 200 }}
                         drag="y"
+                        dragListener={false}
+                        dragControls={dragControls}
                         dragConstraints={{ top: -600, bottom: 0 }}
                         dragElastic={0.1}
                         onDragEnd={(e, info) => {
@@ -157,7 +160,10 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
 
                         {/* Footer Button */}
                         {/* Drag Handle (Footer) - Blindfold Pull-Up Indicator */}
-                        <div className="w-full flex justify-center pb-6 pt-4 bg-slate-900 border-t border-slate-800/50 cursor-grab active:cursor-grabbing z-20 shrink-0">
+                        <div
+                            onPointerDown={(e) => dragControls.start(e)}
+                            className="w-full flex justify-center pb-6 pt-4 bg-slate-900 border-t border-slate-800/50 cursor-grab active:cursor-grabbing z-20 shrink-0 touch-none"
+                        >
                             <div className="w-16 h-1.5 bg-slate-600/50 rounded-full" />
                         </div>
                     </motion.div>

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { useGame } from '../context/GameContext';
-import { motion } from 'framer-motion';
+import { motion, useDragControls } from 'framer-motion';
 import { X, TrendingUp, Activity, Coins, Calendar, PieChart } from 'lucide-react';
 import {
     LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -11,6 +12,7 @@ import {
 const StatsView = ({ isOpen, onClose }) => {
     const { quests, habits, coinHistory, calories } = useGame();
     const [activeTab, setActiveTab] = useState('overview');
+    const dragControls = useDragControls();
 
     // --- DATA PROCESSING ---
 
@@ -122,27 +124,30 @@ const StatsView = ({ isOpen, onClose }) => {
 
     // Drag to Close
     const onPanEnd = (event, info) => {
-        if (info.offset.y > 100) {
+        // Swipe UP (negative Y) to close
+        if (info.offset.y < -100) {
             onClose();
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+    return ReactDOM.createPortal(
+        <div
+            className="fixed inset-0 z-[100] flex items-start justify-center p-0 bg-black/90 backdrop-blur-md"
+            data-no-swipe="true"
+        >
             <motion.div
-                initial={{ y: "100%" }}
+                initial={{ y: "-100%" }}
                 animate={{ y: 0 }}
-                exit={{ y: "100%" }}
+                exit={{ y: "-100%" }}
+                transition={{ type: "spring", damping: 30, stiffness: 200 }}
                 drag="y"
-                dragConstraints={{ top: 0, bottom: 0 }}
-                dragElastic={{ top: 0, bottom: 0.2 }}
+                dragListener={false}
+                dragControls={dragControls}
+                dragConstraints={{ top: -800, bottom: 0 }}
+                dragElastic={{ top: 0.2, bottom: 0 }}
                 onDragEnd={onPanEnd}
-                className="bg-slate-950 border border-slate-800 w-full max-w-5xl h-[100dvh] md:h-[90vh] md:rounded-3xl overflow-hidden flex flex-col shadow-2xl relative"
+                className="bg-slate-950 border-b border-slate-800 w-full max-w-5xl h-[100dvh] md:h-[90vh] md:rounded-b-3xl overflow-hidden flex flex-col shadow-2xl relative"
             >
-                {/* Drag Handle */}
-                <div className="w-full flex justify-center py-2 absolute top-0 left-0 hover:bg-white/5 cursor-grab active:cursor-grabbing z-20">
-                    <div className="w-12 h-1.5 bg-slate-700 rounded-full" />
-                </div>
 
                 {/* Header */}
                 <div className="p-4 md:p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 shrink-0">
@@ -280,8 +285,17 @@ const StatsView = ({ isOpen, onClose }) => {
                         </div>
                     )}
                 </div>
+
+                {/* Bottom Drag Handle (Pull Up to Close) */}
+                <div
+                    className="w-full flex justify-center py-4 bg-slate-900/50 border-t border-slate-800 cursor-grab active:cursor-grabbing z-20 shrink-0 touch-none"
+                    onPointerDown={(e) => dragControls.start(e)}
+                >
+                    <div className="w-16 h-1.5 bg-slate-600/50 rounded-full" />
+                </div>
             </motion.div>
-        </div >
+        </div>,
+        document.body
     );
 };
 
