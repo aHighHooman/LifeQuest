@@ -162,9 +162,9 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                         {/* Drag Handle (Footer) - Blindfold Pull-Up Indicator */}
                         <div
                             onPointerDown={(e) => dragControls.start(e)}
-                            className="w-full flex justify-center pb-6 pt-4 bg-slate-900 border-t border-slate-800/50 cursor-grab active:cursor-grabbing z-20 shrink-0 touch-none"
+                            className="w-full flex justify-center py-8 pb-10 active:pb-10 bg-slate-900 border-t border-slate-800/50 cursor-grab active:cursor-grabbing z-20 shrink-0 touch-none"
                         >
-                            <div className="w-16 h-1.5 bg-slate-600/50 rounded-full" />
+                            <div className="w-20 h-1.5 bg-slate-600/50 rounded-full" />
                         </div>
                     </motion.div>
                 </div>

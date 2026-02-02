@@ -288,10 +288,10 @@ const StatsView = ({ isOpen, onClose }) => {
 
                 {/* Bottom Drag Handle (Pull Up to Close) */}
                 <div
-                    className="w-full flex justify-center py-4 bg-slate-900/50 border-t border-slate-800 cursor-grab active:cursor-grabbing z-20 shrink-0 touch-none"
+                    className="w-full flex justify-center py-8 pb-10 active:pb-10 bg-slate-900/50 border-t border-slate-800 cursor-grab active:cursor-grabbing z-20 shrink-0 touch-none"
                     onPointerDown={(e) => dragControls.start(e)}
                 >
-                    <div className="w-16 h-1.5 bg-slate-600/50 rounded-full" />
+                    <div className="w-20 h-1.5 bg-slate-600/50 rounded-full" />
                 </div>
             </motion.div>
         </div>,

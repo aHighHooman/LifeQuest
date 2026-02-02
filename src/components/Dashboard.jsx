@@ -365,7 +365,7 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                 Adjust pt-[x] to move the entire structure down from the top.
                 e.g. pt-[20vh] (higher), pt-[30vh] (lower).
             */}
-            <div className="flex-1 flex flex-col items-center justify-start relative h-full pt-[30vh]">
+            <div className="flex-1 flex flex-col items-center justify-start relative h-full pt-[26vh]">
 
                 {/* Main HUD Group */}
                 <div
