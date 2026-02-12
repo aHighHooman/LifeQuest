@@ -32,7 +32,7 @@ function AppContent({ currentTab, setCurrentTab }) {
   }
 
   return (
-    <div className="h-[100dvh] bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col">
+    <div className="h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col">
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       <React.Suspense fallback={<div className="min-h-screen bg-game-bg" />}>
