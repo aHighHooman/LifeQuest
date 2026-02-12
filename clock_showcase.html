@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clock Design Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f172a;
+    color: #f1f5f9;
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 30px 20px;
+  }
+  h1 {
+    text-align: center;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 30px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .card {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 32px 20px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+  }
+  .card-label {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #475569;
+    font-weight: 600;
+  }
+  .card-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+
+  /* ============================================ */
+  /*  DESIGN 1: ORBITAL RING                     */
+  /* ============================================ */
+  .d1-wrapper {
+    position: relative;
+    width: 130px;
+    height: 130px;
+  }
+  .d1-glow {
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(168,85,247,0.12) 0%, transparent 70%);
+  }
+  .d1-svg { position: relative; z-index: 2; }
+  .d1-text-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+  }
+  .d1-time {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    color: #d8b4fe;
+    letter-spacing: 1px;
+    line-height: 1;
+  }
+  .d1-colon { opacity: 0.5; }
+  .d1-seconds {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #9333ea;
+    margin-top: 2px;
+    letter-spacing: 2px;
+  }
+
+  /* ============================================ */
+  /*  DESIGN 2: SPLIT-FLAP / FLIP CLOCK          */
+  /* ============================================ */
+  .d2-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .d2-digit-group {
+    display: flex;
+    gap: 3px;
+  }
+  .d2-digit {
+    width: 36px;
+    height: 50px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 49.9%, #0f172a 50%, #1a1a2e 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 30px;
+    color: #c4b5fd;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .d2-digit::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    top: 50%;
+    height: 1px;
+    background: rgba(0,0,0,0.6);
+  }
+  .d2-colon {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 28px;
+    color: #7c3aed;
+    margin: 0 2px;
+    animation: d2-blink 1s ease-in-out infinite;
+  }
+  .d2-seconds-group .d2-digit {
+    width: 28px;
+    height: 38px;
+    font-size: 22px;
+    color: #8b5cf6;
+    background: linear-gradient(180deg, #151525 0%, #12192e 49.9%, #0d1322 50%, #151525 100%);
+  }
+  .d2-dot {
+    font-size: 24px;
+    color: #6d28d9;
+    margin: 0 1px;
+    align-self: flex-end;
+    margin-bottom: 4px;
+  }
+  @keyframes d2-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* ============================================ */
+  /*  DESIGN 3: SCANNING LINE / TERMINAL         */
+  /* ============================================ */
+  .d3-wrapper {
+    position: relative;
+    padding: 16px 24px;
+    border: 1px solid rgba(168,85,247,0.15);
+    border-radius: 4px;
+    background: rgba(15,23,42,0.8);
+    overflow: hidden;
+    min-width: 200px;
+  }
+  .d3-scanline {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(168,85,247,0.4), transparent);
+    animation: d3-scan 3s ease-in-out infinite;
+  }
+  @keyframes d3-scan {
+    0% { top: 0; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+  .d3-top-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #6d28d9;
+    margin-bottom: 8px;
+  }
+  .d3-time-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+  }
+  .d3-big {
+    font-size: 38px;
+    color: #e9d5ff;
+    line-height: 1;
+    letter-spacing: 2px;
+  }
+  .d3-colon {
+    font-size: 30px;
+    color: #7c3aed;
+    margin: 0 2px;
+    animation: d2-blink 1.5s ease-in-out infinite;
+  }
+  .d3-sec {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    color: #9333ea;
+    margin-left: 8px;
+    align-self: flex-end;
+    margin-bottom: 3px;
+  }
+  .d3-bar-track {
+    width: 100%;
+    height: 3px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 2px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .d3-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #9333ea, #c084fc);
+    border-radius: 2px;
+    transition: width 1s linear;
+    box-shadow: 0 0 8px rgba(147,51,234,0.4);
+  }
+  .d3-corners {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .d3-corners::before, .d3-corners::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-color: rgba(168,85,247,0.4);
+    border-style: solid;
+  }
+  .d3-corners::before {
+    top: -1px; left: -1px;
+    border-width: 2px 0 0 2px;
+  }
+  .d3-corners::after {
+    bottom: -1px; right: -1px;
+    border-width: 0 2px 2px 0;
+  }
+
+  /* ============================================ */
+  /*  DESIGN 4: CONCENTRIC RINGS                 */
+  /* ============================================ */
+  .d4-wrapper {
+    position: relative;
+    width: 140px;
+    height: 140px;
+  }
+  .d4-text-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+  }
+  .d4-hours {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    color: #e9d5ff;
+    line-height: 1;
+  }
+  .d4-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: #7c3aed;
+    margin-top: 2px;
+  }
+
+  /* ============================================ */
+  /*  DESIGN 5: MINIMAL ARC + TYPOGRAPHY          */
+  /* ============================================ */
+  .d5-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .d5-time-row {
+    display: flex;
+    align-items: baseline;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    position: relative;
+  }
+  .d5-hours {
+    font-size: 48px;
+    color: #e9d5ff;
+    line-height: 1;
+    letter-spacing: 2px;
+  }
+  .d5-colon {
+    font-size: 36px;
+    color: #7c3aed;
+    margin: 0 1px;
+    animation: d2-blink 2s ease-in-out infinite;
+    position: relative;
+    top: -3px;
+  }
+  .d5-minutes {
+    font-size: 48px;
+    color: #e9d5ff;
+    line-height: 1;
+    letter-spacing: 2px;
+  }
+  .d5-sec-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #9333ea;
+    background: rgba(147,51,234,0.1);
+    border: 1px solid rgba(147,51,234,0.2);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    align-self: center;
+  }
+  .d5-arc-container {
+    position: relative;
+    width: 180px;
+    height: 12px;
+  }
+  .d5-labels {
+    display: flex;
+    justify-content: space-between;
+    width: 180px;
+  }
+  .d5-label-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #475569;
+  }
+  .d5-label-val {
+    color: #94a3b8;
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Pick Your Clock — 5 Designs</h1>
+
+<div class="grid">
+
+  <!-- DESIGN 1: Orbital Ring -->
+  <div class="card">
+    <span class="card-label">#1</span>
+    <div class="d1-wrapper">
+      <div class="d1-glow"></div>
+      <svg class="d1-svg" width="130" height="130" viewBox="0 0 130 130" id="d1-svg"></svg>
+      <div class="d1-text-overlay">
+        <div class="d1-time" id="d1-time"></div>
+        <div class="d1-seconds" id="d1-seconds"></div>
+      </div>
+    </div>
+    <span class="card-name">Orbital Ring</span>
+  </div>
+
+  <!-- DESIGN 2: Flip Clock -->
+  <div class="card">
+    <span class="card-label">#2</span>
+    <div class="d2-wrapper" id="d2-wrapper"></div>
+    <span class="card-name">Split Flap</span>
+  </div>
+
+  <!-- DESIGN 3: Terminal / Scanline -->
+  <div class="card">
+    <span class="card-label">#3</span>
+    <div class="d3-wrapper">
+      <div class="d3-scanline"></div>
+      <div class="d3-corners"></div>
+      <div class="d3-top-label">Day Cycle Remaining</div>
+      <div class="d3-time-row">
+        <span class="d3-big" id="d3-h"></span>
+        <span class="d3-colon">:</span>
+        <span class="d3-big" id="d3-m"></span>
+        <span class="d3-sec" id="d3-s"></span>
+      </div>
+      <div class="d3-bar-track">
+        <div class="d3-bar-fill" id="d3-bar"></div>
+      </div>
+    </div>
+    <span class="card-name">Terminal Readout</span>
+  </div>
+
+  <!-- DESIGN 4: Concentric Rings -->
+  <div class="card">
+    <span class="card-label">#4</span>
+    <div class="d4-wrapper">
+      <svg width="140" height="140" viewBox="0 0 140 140" id="d4-svg"></svg>
+      <div class="d4-text-overlay">
+        <div class="d4-hours" id="d4-text"></div>
+        <div class="d4-label">remaining</div>
+      </div>
+    </div>
+    <span class="card-name">Triple Ring</span>
+  </div>
+
+  <!-- DESIGN 5: Bold Type + Arc -->
+  <div class="card">
+    <span class="card-label">#5</span>
+    <div class="d5-wrapper">
+      <div class="d5-time-row">
+        <span class="d5-hours" id="d5-h"></span>
+        <span class="d5-colon">:</span>
+        <span class="d5-minutes" id="d5-m"></span>
+        <span class="d5-sec-badge" id="d5-s"></span>
+      </div>
+      <div class="d5-arc-container">
+        <svg width="180" height="12" viewBox="0 0 180 12" id="d5-arc"></svg>
+      </div>
+      <div class="d5-labels">
+        <span class="d5-label-item">hrs <span class="d5-label-val" id="d5-lh"></span></span>
+        <span class="d5-label-item">min <span class="d5-label-val" id="d5-lm"></span></span>
+        <span class="d5-label-item">sec <span class="d5-label-val" id="d5-ls"></span></span>
+      </div>
+    </div>
+    <span class="card-name">Bold Typographic</span>
+  </div>
+
+</div>
+
+<script>
+function getTimeLeft() {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const diff = tomorrow - now;
+  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+  const minutes = Math.floor((diff / (1000 * 60)) % 60);
+  const seconds = Math.floor((diff / 1000) % 60);
+  const totalDayMs = 24 * 60 * 60 * 1000;
+  const remaining = diff / totalDayMs;
+  return { hours, minutes, seconds, remaining, diff };
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+// ====== DESIGN 1: Orbital Ring ======
+function renderD1(t) {
+  const svg = document.getElementById('d1-svg');
+  const center = 65, r = 54, sw = 3;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - t.remaining);
+  
+  // Tick marks
+  let ticks = '';
+  for (let i = 0; i < 12; i++) {
+    const a = (i * 30 - 90) * Math.PI / 180;
+    const ir = r - 4, or = r + 2;
+    const major = i % 3 === 0;
+    ticks += `<line x1="${center + ir*Math.cos(a)}" y1="${center + ir*Math.sin(a)}" 
+              x2="${center + or*Math.cos(a)}" y2="${center + or*Math.sin(a)}" 
+              stroke="#a855f7" stroke-width="${major?1.5:0.5}" opacity="${major?0.5:0.15}"/>`;
+  }
+  
+  // Seconds hand
+  const sa = (t.seconds / 60 * 360 - 90) * Math.PI / 180;
+  const hl = r - 16;
+  
+  svg.innerHTML = `
+    <circle cx="${center}" cy="${center}" r="${r}" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="${sw}"/>
+    <circle cx="${center}" cy="${center}" r="${r}" fill="none" stroke="#a855f7" stroke-width="${sw}" 
+            stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" 
+            transform="rotate(-90 ${center} ${center})" style="filter:drop-shadow(0 0 4px #a855f7);transition:stroke-dashoffset 1s linear"/>
+    ${ticks}
+    <line x1="${center}" y1="${center}" x2="${center + hl*Math.cos(sa)}" y2="${center + hl*Math.sin(sa)}" 
+          stroke="#a855f7" stroke-width="1" opacity="0.35" stroke-linecap="round"/>
+    <circle cx="${center}" cy="${center}" r="2" fill="#a855f7" opacity="0.5"/>
+  `;
+  
+  document.getElementById('d1-time').innerHTML = `${pad(t.hours)}<span class="d1-colon">:</span>${pad(t.minutes)}`;
+  document.getElementById('d1-seconds').textContent = pad(t.seconds) + 's';
+}
+
+// ====== DESIGN 2: Split Flap ======
+function renderD2(t) {
+  const wrapper = document.getElementById('d2-wrapper');
+  const h = pad(t.hours), m = pad(t.minutes), s = pad(t.seconds);
+  wrapper.innerHTML = `
+    <div class="d2-digit-group">
+      <div class="d2-digit">${h[0]}</div>
+      <div class="d2-digit">${h[1]}</div>
+    </div>
+    <span class="d2-colon">:</span>
+    <div class="d2-digit-group">
+      <div class="d2-digit">${m[0]}</div>
+      <div class="d2-digit">${m[1]}</div>
+    </div>
+    <span class="d2-dot">.</span>
+    <div class="d2-digit-group d2-seconds-group">
+      <div class="d2-digit">${s[0]}</div>
+      <div class="d2-digit">${s[1]}</div>
+    </div>
+  `;
+}
+
+// ====== DESIGN 3: Terminal Readout ======
+function renderD3(t) {
+  document.getElementById('d3-h').textContent = pad(t.hours);
+  document.getElementById('d3-m').textContent = pad(t.minutes);
+  document.getElementById('d3-s').textContent = pad(t.seconds);
+  document.getElementById('d3-bar').style.width = (t.remaining * 100) + '%';
+}
+
+// ====== DESIGN 4: Concentric Rings ======
+function renderD4(t) {
+  const svg = document.getElementById('d4-svg');
+  const center = 70;
+  const rings = [
+    { r: 60, value: t.hours / 24, color: '#c084fc', width: 4, label: 'H' },
+    { r: 50, value: t.minutes / 60, color: '#a855f7', width: 3, label: 'M' },
+    { r: 40, value: t.seconds / 60, color: '#7c3aed', width: 2.5, label: 'S' },
+  ];
+  
+  let html = '';
+  rings.forEach(ring => {
+    const circ = 2 * Math.PI * ring.r;
+    const offset = circ * (1 - ring.value);
+    html += `
+      <circle cx="${center}" cy="${center}" r="${ring.r}" fill="none" 
+              stroke="rgba(255,255,255,0.03)" stroke-width="${ring.width}"/>
+      <circle cx="${center}" cy="${center}" r="${ring.r}" fill="none" 
+              stroke="${ring.color}" stroke-width="${ring.width}" stroke-linecap="round"
+              stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
+              transform="rotate(-90 ${center} ${center})"
+              style="filter:drop-shadow(0 0 3px ${ring.color});transition:stroke-dashoffset 1s linear"/>
+    `;
+    // End dot
+    const a = (ring.value * 360 - 90) * Math.PI / 180;
+    html += `<circle cx="${center + ring.r*Math.cos(a)}" cy="${center + ring.r*Math.sin(a)}" 
+              r="2.5" fill="${ring.color}" opacity="0.8"
+              style="transition:all 1s linear"/>`;
+  });
+  
+  svg.innerHTML = html;
+  document.getElementById('d4-text').textContent = `${pad(t.hours)}:${pad(t.minutes)}`;
+}
+
+// ====== DESIGN 5: Bold Typographic ======
+function renderD5(t) {
+  document.getElementById('d5-h').textContent = pad(t.hours);
+  document.getElementById('d5-m').textContent = pad(t.minutes);
+  document.getElementById('d5-s').textContent = pad(t.seconds);
+  document.getElementById('d5-lh').textContent = t.hours;
+  document.getElementById('d5-lm').textContent = t.minutes;
+  document.getElementById('d5-ls').textContent = t.seconds;
+  
+  // Progress arc
+  const svg = document.getElementById('d5-arc');
+  const w = 180, fillW = t.remaining * w;
+  svg.innerHTML = `
+    <rect x="0" y="4" width="${w}" height="4" rx="2" fill="rgba(255,255,255,0.04)"/>
+    <rect x="0" y="4" width="${fillW}" height="4" rx="2" fill="url(#d5g)" style="transition:width 1s linear;filter:drop-shadow(0 0 4px rgba(147,51,234,0.4))"/>
+    <defs>
+      <linearGradient id="d5g" x1="0" y1="0" x2="${w}" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#c084fc"/>
+        <stop offset="100%" stop-color="#7c3aed"/>
+      </linearGradient>
+    </defs>
+  `;
+}
+
+function tick() {
+  const t = getTimeLeft();
+  renderD1(t);
+  renderD2(t);
+  renderD3(t);
+  renderD4(t);
+  renderD5(t);
+}
+
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
