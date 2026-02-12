@@ -6,18 +6,8 @@
 
 @layer base {
 
-  html {
-    height: 100%;
-    overflow: hidden;
-    background: #000;
-  }
-
   body {
-    @apply text-game-text font-sans;
-    height: 100%;
-    overflow: hidden;
-    overscroll-behavior: none;
-    background: #000;
+    @apply bg-game-bg text-game-text font-sans overflow-x-hidden;
   }
 
   #root {
