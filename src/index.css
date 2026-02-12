@@ -7,18 +7,17 @@
 @layer base {
 
   html {
-    position: fixed;
-    inset: 0;
+    height: 100%;
     overflow: hidden;
+    background: #000;
   }
 
   body {
-    @apply bg-game-bg text-game-text font-sans;
-    position: fixed;
-    inset: 0;
+    @apply text-game-text font-sans;
+    height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
-    -webkit-overflow-scrolling: touch;
+    background: #000;
   }
 
   #root {
