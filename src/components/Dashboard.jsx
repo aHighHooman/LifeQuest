@@ -102,7 +102,10 @@ const HexNode = ({ node, onClick, index, position }) => {
                 marginLeft: '-72px',
                 marginTop: '-80px'
             }}
-            onClick={() => onClick(node)}
+            onClick={(e) => {
+                e.stopPropagation();
+                onClick(node);
+            }}
         >
             {/* Hover Glow Effect */}
             <div
@@ -346,20 +349,11 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
 
             <FocusSelectionModal isOpen={showFocusModal} onClose={() => setShowFocusModal(false)} />
 
-            {/* Top Manage Button */}
-            <div className="absolute top-0 left-0 right-0 flex justify-center z-30 pt-4">
-                <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowFocusModal(true)}
-                    className="text-game-accent text-sm font-bold px-4 py-2 rounded-full flex items-center gap-2 transition-colors hover:bg-slate-800/30"
-                >
-                    <Plus size={16} /> Manage
-                </motion.button>
-            </div>
+
 
             {/* Day Timer - Positioned below Manage Button */}
             {/* TUNING PARAMETER: Top Spacing for Timer (prevent overlap with Manage button) */}
-            <DayTimer className="absolute top-20 left-0 right-0 z-20" />
+            <DayTimer className="absolute top-14 left-0 right-0 z-20" />
 
             {/* TUNING PARAMETER: Top Offset (Move content down) 
                 Adjust pt-[x] to move the entire structure down from the top.
@@ -369,7 +363,8 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
 
                 {/* Main HUD Group */}
                 <div
-                    className="relative w-[380px] h-[380px] flex items-center justify-center shrink-0"
+                    onClick={() => setShowFocusModal(true)}
+                    className="relative w-[380px] h-[380px] flex items-center justify-center shrink-0 cursor-pointer"
                 // transform removed to rely on flex layout
                 >
 
@@ -427,14 +422,14 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                                 <HexNode
                                     node={{ id: 'stat-lvl', type: 'level', title: 'LVL ' + stats.level, completed: false }}
                                     position={{ x: 0, y: -256 }}
-                                    onClick={() => setShowStats(true)}
+                                    onClick={(node) => setShowStats(true)}
                                 />
                             </div>
                             <div className="pointer-events-auto">
                                 <HexNode
                                     node={{ id: 'stat-gold', type: 'gold', title: stats.gold + '', completed: false }}
                                     position={{ x: 0, y: 256 }}
-                                    onClick={() => onTabChange('budget')}
+                                    onClick={(node) => onTabChange('budget')}
                                 />
                             </div>
 
@@ -444,7 +439,10 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                                 Increase 380px to push text lower/away. Decrease to pull higher/closer. 
                             */}
                             <div
-                                onClick={onOpenSettings}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenSettings();
+                                }}
                                 className="absolute left-1/2 top-0 flex flex-col items-center justify-center z-10 cursor-pointer pointer-events-auto w-40"
                                 style={{ transform: 'translate(-50%, 360px)' }}
                             >

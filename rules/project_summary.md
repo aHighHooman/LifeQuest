@@ -40,3 +40,14 @@ The main source code directory.
 1.  **Tab System**: The app uses a simple local state (`currentTab`) in `App.jsx` to switch between views (`dashboard`, `quests`, `protocols`, `budget`, `calories`) instead of a full client-side router like `react-router`.
 2.  **Gamification**: Logic is centralized in `GameContext`. Actions in `QuestBoard` or `HabitTracker` dispatch updates to this context to award XP/Coins.
 3.  **Styling**: The app relies heavily on Tailwind utility classes.
+
+## Detailed Documentation
+For more in-depth technical details, refer to the documentation in the [rules/documentation](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/index.md) folder:
+- [Architecture Overview](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/architecture.md)
+- [Component Documentation](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/components.md)
+- [Context & State Management](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/context.md)
+- [Utility Functions](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/utils.md)
+- [Quest & Habit System](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/quest_habit_system.md)
+- [Performance Optimizations](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/performance_optimizations.md)
+- [Structural Flaws](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/structural_flaws.md)
+- [Logic Robustness](file:///c:/Users/Umair/OneDrive/Desktop/Work/Random_Projects/LifeQuest/rules/documentation/logic_robustness.md)
