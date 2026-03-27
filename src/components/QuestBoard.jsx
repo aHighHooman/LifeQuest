@@ -381,7 +381,10 @@ const QuestBoard = () => {
         [completedQuests]
     );
 
-    const discardedQuests = quests.filter(q => q.discarded);
+    const discardedQuests = useMemo(() =>
+        quests.filter(q => q.discarded && isWithinDays(q.discardedAt, 7)),
+        [quests]
+    );
 
     return (
         <div className="pb-4 md:pb-0 relative flex flex-col w-full">

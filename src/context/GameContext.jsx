@@ -1,9 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useBudget } from './BudgetContext';
 import { usePersistentState } from '../utils/persistence';
 import { getDaysUntilDue } from '../utils/gameLogic';
-import { getTodayISO } from '../utils/dateUtils';
-
+import { getTodayISO, isWithinDays } from '../utils/dateUtils';
 
 const GameContext = createContext();
 
@@ -37,7 +36,6 @@ const INITIAL_COIN_HISTORY = [];
 export const GameProvider = ({ children }) => {
     const { addRewardFromGold, removeRewardFromGold } = useBudget();
 
-    // Using usePersistentState for automatic localStorage handling and backup on corruption
     const [stats, setStats] = usePersistentState('lq_stats', INITIAL_STATS);
     const [quests, setQuests] = usePersistentState('lq_quests', INITIAL_TASKS);
     const [habits, setHabits] = usePersistentState('lq_habits', INITIAL_HABITS);
@@ -45,37 +43,27 @@ export const GameProvider = ({ children }) => {
     const [calories, setCalories] = usePersistentState('lq_calories', INITIAL_CALORIES);
     const [coinHistory, setCoinHistory] = usePersistentState('lq_coin_history', INITIAL_COIN_HISTORY);
 
-    // --- ACTIONS ---
-
-    // Direct Stats Modification (for Debug/Settings Menu)
-    const updateStats = (newStats) => {
+    const updateStats = useCallback((newStats) => {
         setStats(prev => ({ ...prev, ...newStats }));
-    };
+    }, [setStats]);
 
-    const updateSettings = (newSettings) => {
+    const updateSettings = useCallback((newSettings) => {
         setSettings(prev => ({ ...prev, ...newSettings }));
-    };
+    }, [setSettings]);
 
-    // Calorie Tracking
-    const addCalories = (amount) => {
-        const today = getTodayISO();
+    const addCalories = useCallback((amount) => {
         setCalories(prev => {
             const newCurrent = Math.max(0, prev.current + amount);
-            // Simple history tracking: array of { date, amount }
-            const newEntry = { date: new Date().toISOString(), amount: amount };
+            const newEntry = { date: new Date().toISOString(), amount };
             return { ...prev, current: newCurrent, history: [...prev.history, newEntry] };
         });
-    };
+    }, [setCalories]);
 
-    const setCalorieGoal = (amount) => {
+    const setCalorieGoal = useCallback((amount) => {
         setCalories(prev => ({ ...prev, target: amount }));
-    };
+    }, [setCalories]);
 
-    // Misc Coin Spending
-    const spendCoins = (amount, description) => {
-        // ALLOW NEGATIVE: Removed check
-        // if (stats.gold < amount) return false;
-
+    const spendCoins = useCallback((amount, description) => {
         setStats(prev => ({ ...prev, gold: prev.gold - amount }));
         setCoinHistory(prev => [...prev, {
             id: Date.now().toString(),
@@ -85,9 +73,9 @@ export const GameProvider = ({ children }) => {
             type: 'spent'
         }]);
         return true;
-    };
+    }, [setCoinHistory, setStats]);
 
-    const addXp = (amount) => {
+    const addXp = useCallback((amount) => {
         const numAmount = Number(amount);
         setStats(prev => {
             let newXp = Number(prev.xp || 0) + numAmount;
@@ -96,29 +84,27 @@ export const GameProvider = ({ children }) => {
             let newHp = prev.hp;
             let newMaxHp = prev.maxHp;
 
-            // Level Up Logic
             while (newXp >= newMaxXp) {
                 newLevel += 1;
                 newXp -= newMaxXp;
                 newMaxXp = Math.floor(newMaxXp * 1.2);
-                newHp = newMaxHp; // Heal on level up
+                newHp = newMaxHp;
             }
 
-            // Level Down Logic (Handle Negative XP)
             while (newXp < 0 && newLevel > 1) {
                 newLevel -= 1;
-                // Reverse growth formula: Math.floor(prev * 1.2) -> Math.ceil(current / 1.2)
                 newMaxXp = Math.ceil(newMaxXp / 1.2);
                 newXp += newMaxXp;
             }
 
             return { ...prev, xp: newXp, level: newLevel, maxXp: newMaxXp, hp: newHp };
         });
-    };
+    }, [setStats]);
 
-    const addGold = (amount, source = 'reward') => {
+    const addGold = useCallback((amount, source = 'reward') => {
         const numAmount = Number(amount);
         setStats(prev => ({ ...prev, gold: Number(prev.gold || 0) + numAmount }));
+
         if (numAmount !== 0) {
             setCoinHistory(prev => [...prev, {
                 id: Date.now().toString(),
@@ -128,18 +114,16 @@ export const GameProvider = ({ children }) => {
                 type: numAmount > 0 ? 'earned' : 'spent'
             }]);
         }
-    };
+    }, [setCoinHistory, setStats]);
 
-    const takeDamage = (amount) => {
-        setStats(prev => {
-            const newHp = Math.max(0, prev.hp - amount);
-            return { ...prev, hp: newHp };
-        });
-    };
+    const takeDamage = useCallback((amount) => {
+        setStats(prev => ({
+            ...prev,
+            hp: Math.max(0, prev.hp - amount)
+        }));
+    }, [setStats]);
 
-    // --- QUESTS ---
-    const addQuest = (title, difficulty = 'easy', dueDate = null, customReward = null, missionBrief = '') => {
-        // Use settings for rewards if not custom
+    const addQuest = useCallback((title, difficulty = 'easy', dueDate = null, customReward = null, missionBrief = '') => {
         const defaultRewards = {
             easy: { xp: 10, gold: settings.questRewards.easy },
             medium: { xp: 25, gold: settings.questRewards.medium },
@@ -155,19 +139,19 @@ export const GameProvider = ({ children }) => {
             missionBrief,
             completed: false,
             discarded: false,
-            // If customReward is passed, use it. Otherwise use defaults. Flag it.
             reward: customReward || defaultRewards[difficulty] || defaultRewards.easy,
             isCustomReward: !!customReward,
             createdAt: new Date().toISOString(),
         };
+
         setQuests(prev => [newQuest, ...prev]);
-    };
+    }, [setQuests, settings.questRewards]);
 
-    const updateQuest = (id, updates) => {
+    const updateQuest = useCallback((id, updates) => {
         setQuests(prev => prev.map(q => q.id === id ? { ...q, ...updates } : q));
-    };
+    }, [setQuests]);
 
-    const completeQuest = (id) => {
+    const completeQuest = useCallback((id) => {
         const quest = quests.find(q => q.id === id);
         if (!quest || quest.completed) return;
 
@@ -175,7 +159,6 @@ export const GameProvider = ({ children }) => {
         const xpAmount = Number(quest.reward.xp || 0);
         let goldAmount = Number(quest.reward.gold || 0);
 
-        // If not custom, force use of settings
         if (!quest.isCustomReward) {
             const settingVal = settings.questRewards[diff];
             if (settingVal !== undefined) {
@@ -183,7 +166,6 @@ export const GameProvider = ({ children }) => {
             }
         }
 
-        // Side Effects (Run only once)
         addXp(xpAmount);
         addGold(goldAmount, 'Quest');
         addRewardFromGold(goldAmount);
@@ -194,26 +176,24 @@ export const GameProvider = ({ children }) => {
                     ...q,
                     completed: true,
                     completedAt: new Date().toISOString(),
-                    completedReward: { xp: xpAmount, gold: goldAmount } // Snapshot used for undo stability
+                    completedReward: { xp: xpAmount, gold: goldAmount }
                 };
             }
             return q;
         }));
-    };
+    }, [addGold, addRewardFromGold, addXp, quests, setQuests, settings.questRewards]);
 
-    const undoCompleteQuest = (id) => {
+    const undoCompleteQuest = useCallback((id) => {
         const quest = quests.find(q => q.id === id);
         if (!quest || !quest.completed) return;
 
         let xpAmount = 0;
         let goldAmount = 0;
 
-        // Strategy 1: Use Snapshot (Best for accuracy)
         if (quest.completedReward) {
             xpAmount = Number(quest.completedReward.xp || 0);
             goldAmount = Number(quest.completedReward.gold || 0);
         } else {
-            // Strategy 2: Reconstruct logic (Fallback for legacy data)
             const diff = quest.difficulty || 'easy';
             xpAmount = Number(quest.reward.xp || 0);
             goldAmount = Number(quest.reward.gold || 0);
@@ -230,25 +210,28 @@ export const GameProvider = ({ children }) => {
         addGold(-goldAmount, 'Quest Undo');
         removeRewardFromGold(goldAmount);
 
-        // Update Quest State - clear snapshot
-        setQuests(prev => prev.map(q => q.id === id ? { ...q, completed: false, completedAt: null, completedReward: null } : q));
-    };
+        setQuests(prev => prev.map(q => (
+            q.id === id ? { ...q, completed: false, completedAt: null, completedReward: null } : q
+        )));
+    }, [addGold, addXp, quests, removeRewardFromGold, setQuests, settings.questRewards]);
 
-    const deleteQuest = (id) => {
-        // Soft delete (discard)
-        setQuests(prev => prev.map(q => q.id === id ? { ...q, discarded: true, discardedAt: new Date().toISOString() } : q));
-    };
+    const deleteQuest = useCallback((id) => {
+        setQuests(prev => prev.map(q => (
+            q.id === id ? { ...q, discarded: true, discardedAt: new Date().toISOString() } : q
+        )));
+    }, [setQuests]);
 
-    const restoreQuest = (id) => {
-        setQuests(prev => prev.map(q => q.id === id ? { ...q, discarded: false, discardedAt: null } : q));
-    };
+    const restoreQuest = useCallback((id) => {
+        setQuests(prev => prev.map(q => (
+            q.id === id ? { ...q, discarded: false, discardedAt: null } : q
+        )));
+    }, [setQuests]);
 
-    const permanentDeleteQuest = (id) => {
+    const permanentDeleteQuest = useCallback((id) => {
         setQuests(prev => prev.filter(q => q.id !== id));
-    };
+    }, [setQuests]);
 
-    // --- HABITS ---
-    const addHabit = (title, frequency = 'daily', frequencyParam = 1) => {
+    const addHabit = useCallback((title, frequency = 'daily', frequencyParam = 1) => {
         const newHabit = {
             id: Date.now().toString(),
             title,
@@ -256,150 +239,129 @@ export const GameProvider = ({ children }) => {
             frequencyParam,
             streak: 0,
             history: {},
-            isActive: false, // Default to inactive until first success or manual activation
+            isActive: false,
             createdAt: new Date().toISOString(),
         };
+
         setHabits(prev => [newHabit, ...prev]);
+    }, [setHabits]);
 
-
-    };
-
-    const toggleHabitActivation = (id, isActive) => {
+    const toggleHabitActivation = useCallback((id, isActive) => {
         setHabits(prev => prev.map(h => {
-            if (h.id === id) {
-                // Reactive Update: If activating, check if due and add to dashboard
-                let isToday = h.isToday;
-                if (isActive) {
-                    const daysUntil = getDaysUntilDue(h);
-                    if (daysUntil <= 0) {
-                        isToday = true;
-                    }
-                } else {
-                    // Optionally remove from dashboard if deactivated?
-                    // User said "move to database", implying it leaves the active view.
-                    // It makes sense to set isToday = false if deactivated.
-                    isToday = false;
+            if (h.id !== id) return h;
+
+            let isToday = h.isToday;
+            if (isActive) {
+                const daysUntil = getDaysUntilDue(h);
+                if (daysUntil <= 0) {
+                    isToday = true;
                 }
-
-                return { ...h, isActive, isToday };
+            } else {
+                isToday = false;
             }
-            return h;
+
+            return { ...h, isActive, isToday };
         }));
-    };
+    }, [setHabits]);
 
-
-    const checkHabit = (id, direction = 'positive') => {
+    const checkHabit = useCallback((id, direction = 'positive') => {
         const today = getTodayISO();
         setHabits(prev => prev.map(h => {
-            if (h.id === id) {
-                const newHistory = { ...h.history };
-                const count = newHistory[today] || 0;
+            if (h.id !== id) return h;
 
-                if (direction === 'positive') {
-                    addXp(5);
-                    addGold(settings.protocolReward, 'Protocol');
-                    addRewardFromGold(settings.protocolReward);
+            const newHistory = { ...h.history };
+            const count = newHistory[today] || 0;
 
-                    // Auto-activate on first success
-                    return {
-                        ...h,
-                        streak: h.streak + 1,
-                        history: { ...newHistory, [today]: count + 1 },
-                        isActive: true
-                    };
-                } else {
-                    takeDamage(5);
-                    return { ...h, streak: 0, history: { ...newHistory, [today]: count - 1 } };
-                }
+            if (direction === 'positive') {
+                addXp(5);
+                addGold(settings.protocolReward, 'Protocol');
+                addRewardFromGold(settings.protocolReward);
+
+                return {
+                    ...h,
+                    streak: h.streak + 1,
+                    history: { ...newHistory, [today]: count + 1 },
+                    isActive: true
+                };
             }
-            return h;
+
+            takeDamage(5);
+            return { ...h, streak: 0, history: { ...newHistory, [today]: count - 1 } };
         }));
-    };
+    }, [addGold, addRewardFromGold, addXp, setHabits, settings.protocolReward, takeDamage]);
 
-    const deleteHabit = (id) => {
+    const deleteHabit = useCallback((id) => {
         setHabits(prev => prev.filter(h => h.id !== id));
-    };
+    }, [setHabits]);
 
-    // --- TODAY'S FOCUS MANAGEMENT ---
-    const toggleToday = (id, type) => {
+    const toggleToday = useCallback((id, type) => {
         if (type === 'quest') {
-            setQuests(prev => prev.map(q => {
-                if (q.id === id) {
-                    return { ...q, isToday: !q.isToday };
-                }
-                return q;
-            }));
-        } else if (type === 'habit') {
-            setHabits(prev => prev.map(h => {
-                if (h.id === id) {
-                    return { ...h, isToday: !h.isToday };
-                }
-                return h;
-            }));
+            setQuests(prev => prev.map(q => q.id === id ? { ...q, isToday: !q.isToday } : q));
+            return;
         }
-    };
 
-    // Auto-populate logic (run on load or day change)
+        if (type === 'habit') {
+            setHabits(prev => prev.map(h => h.id === id ? { ...h, isToday: !h.isToday } : h));
+        }
+    }, [setHabits, setQuests]);
+
     useEffect(() => {
         const today = getTodayISO();
         const lastLoginDate = stats.lastLoginDate;
 
-        // --- DAILY RESET & AUTO-ADD LOGIC ---
         if (lastLoginDate !== today) {
-            console.log("New Day Detected! Performing Daily Reset...");
+            setQuests(prev => prev.map(q => ({
+                ...q,
+                isToday: q.dueDate === today && !q.completed
+            })));
 
-            // 1. Reset 'isToday' for all
-            // 2. Auto-Add Quests due today
-            setQuests(prev => prev.map(q => {
-                let shouldBeToday = false;
-                // If it was already today, but day changed, we reset it (unless it's due today, then we read it)
-                // Actually, logic: RESET everything. Then ADD what is due.
-
-                // Check if due today
-                if (q.dueDate === today && !q.completed) {
-                    shouldBeToday = true;
-                }
-
-                return { ...q, isToday: shouldBeToday };
-            }));
-
-            // 3. Auto-Add Protocols due today
             setHabits(prev => prev.map(h => {
-                // If inactive, ignore
                 if (h.isActive === false) return { ...h, isToday: false };
 
-                // Calculate if due
-                const daysUntil = getDaysUntilDue(h);
-                const isDue = daysUntil <= 0;
-
+                const isDue = getDaysUntilDue(h) <= 0;
                 return { ...h, isToday: isDue };
             }));
 
-            // 4. Daily Calorie Reset
             setCalories(prev => ({ ...prev, current: 0 }));
-
-            // Update Last Login Date
             setStats(prev => ({ ...prev, lastLoginDate: today }));
         }
 
-        // MIGRATION: Ensure all existing habits have isActive: true
-        setHabits(prev => prev.map(h => {
-            if (h.isActive === undefined) {
-                return { ...h, isActive: true };
-            }
-            return h;
-        }));
+        const hasLegacyHabit = habits.some(h => h.isActive === undefined);
+        if (hasLegacyHabit) {
+            setHabits(prev => prev.map(h => (
+                h.isActive === undefined ? { ...h, isActive: true } : h
+            )));
+        }
+    }, [habits, setCalories, setHabits, setQuests, setStats, stats.lastLoginDate]);
 
-    }, []); // Run once on mount (dependency array empty so it runs on load)
+    useEffect(() => {
+        const hasExpiredDiscardedQuests = quests.some(
+            quest => quest.discarded && quest.discardedAt && !isWithinDays(quest.discardedAt, 7)
+        );
+
+        if (!hasExpiredDiscardedQuests) return;
+
+        setQuests(prev => prev.filter(
+            quest => !(quest.discarded && quest.discardedAt && !isWithinDays(quest.discardedAt, 7))
+        ));
+    }, [quests, setQuests]);
+
+    const contextValue = useMemo(() => ({
+        stats, quests, habits, settings, calories, coinHistory,
+        addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
+        addHabit, checkHabit, deleteHabit, toggleHabitActivation,
+        updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins,
+        toggleToday
+    }), [
+        stats, quests, habits, settings, calories, coinHistory,
+        addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
+        addHabit, checkHabit, deleteHabit, toggleHabitActivation,
+        updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins,
+        toggleToday
+    ]);
 
     return (
-        <GameContext.Provider value={{
-            stats, quests, habits, settings, calories, coinHistory,
-            addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
-            addHabit, checkHabit, deleteHabit, toggleHabitActivation,
-            updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins,
-            toggleToday
-        }}>
+        <GameContext.Provider value={contextValue}>
             {children}
         </GameContext.Provider>
     );

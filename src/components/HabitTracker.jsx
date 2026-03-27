@@ -538,7 +538,7 @@ const HabitTracker = () => {
 
     return (
         <motion.div
-            className="pb-4 md:pb-0 relative flex flex-col w-full flex-1"
+            className="pb-4 md:pb-0 relative flex flex-col w-full flex-1 h-full touch-none"
             onPanEnd={(e, info) => {
                 // Global swipe down to open creation
                 // Ignore if touching a card (card has data-no-swipe)
@@ -550,7 +550,7 @@ const HabitTracker = () => {
             }}
         >
             {/* HEADER */}
-            <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
+            <div className="flex justify-between items-center mb-5 px-6">
                 <div>
                     <h2 className="text-3xl font-game font-bold text-purple-400 tracking-widest uppercase text-glow">
                         Protocols
@@ -638,16 +638,7 @@ const HabitTracker = () => {
                 </div>
             </div>
 
-            {/* Gesture Zone for empty space */}
-            <motion.div
-                className="flex-1 w-full"
-                style={{ touchAction: 'none' }}
-                onPanEnd={(e, info) => {
-                    if (info.offset.y > 80 && !isCreationOpen) {
-                        setIsCreationOpen(true);
-                    }
-                }}
-            />
+            <div className="flex-1 w-full" />
 
             {/* Creation Panel */}
             <ProtocolCreationPanel

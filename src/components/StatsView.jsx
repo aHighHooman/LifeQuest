@@ -9,6 +9,22 @@ import {
     PieChart as RePieChart, Pie, Cell
 } from 'recharts';
 
+const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-slate-900 border border-slate-700 p-2 rounded shadow-xl text-xs">
+                <p className="text-gray-400 mb-1">{label}</p>
+                {payload.map((entry, index) => (
+                    <p key={index} style={{ color: entry.color }}>
+                        {entry.name}: {entry.value}
+                    </p>
+                ))}
+            </div>
+        );
+    }
+    return null;
+};
+
 const StatsView = ({ isOpen, onClose }) => {
     const { quests, habits, coinHistory, calories } = useGame();
     const [activeTab, setActiveTab] = useState('overview');
@@ -102,23 +118,6 @@ const StatsView = ({ isOpen, onClose }) => {
         });
     }, [habits]);
 
-
-    // --- RENDER HELPERS ---
-    const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-            return (
-                <div className="bg-slate-900 border border-slate-700 p-2 rounded shadow-xl text-xs">
-                    <p className="text-gray-400 mb-1">{label}</p>
-                    {payload.map((entry, index) => (
-                        <p key={index} style={{ color: entry.color }}>
-                            {entry.name}: {entry.value}
-                        </p>
-                    ))}
-                </div>
-            );
-        }
-        return null;
-    };
 
     if (!isOpen) return null;
 

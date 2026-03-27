@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { Profiler, useCallback, useEffect, useRef, useState } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
 import { motion } from 'framer-motion';
+import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
 
 const Dashboard = React.lazy(() => import('./components/Dashboard'));
 const QuestBoard = React.lazy(() => import('./components/QuestBoard'));
@@ -19,9 +20,21 @@ const LoadingSpinner = () => (
   </div>
 );
 
-function AppContent({ currentTab, setCurrentTab }) {
+function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
   const context = useGame();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    endTrackedSpan('app-bootstrap', { initialTab: currentTab });
+  }, [currentTab]);
+
+  useEffect(() => {
+    const pendingTabSwitch = pendingTabSwitchRef.current;
+    if (!pendingTabSwitch) return;
+
+    endTrackedSpan('tab-switch', { currentTab });
+    pendingTabSwitchRef.current = null;
+  }, [currentTab, pendingTabSwitchRef]);
 
   if (!context) {
     return (
@@ -45,11 +58,13 @@ function AppContent({ currentTab, setCurrentTab }) {
               transition={{ duration: 0.5 }}
             >
               <React.Suspense fallback={<LoadingSpinner />}>
-                {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} onOpenSettings={() => setIsSettingsOpen(true)} />}
-                {currentTab === 'quests' && <QuestBoard />}
-                {currentTab === 'protocols' && <HabitTracker />}
-                {currentTab === 'budget' && <BudgetView />}
-                {currentTab === 'calories' && <CalorieTracker />}
+                <Profiler id={`screen:${currentTab}`} onRender={onProfileRender}>
+                  {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} onOpenSettings={() => setIsSettingsOpen(true)} />}
+                  {currentTab === 'quests' && <QuestBoard />}
+                  {currentTab === 'protocols' && <HabitTracker />}
+                  {currentTab === 'budget' && <BudgetView />}
+                  {currentTab === 'calories' && <CalorieTracker />}
+                </Profiler>
               </React.Suspense>
             </motion.main>
           </div>
@@ -63,16 +78,27 @@ function AppContent({ currentTab, setCurrentTab }) {
 
 function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const pendingTabSwitchRef = useRef(null);
 
   useEffect(() => {
     // Check for version updates and ensure persistence validity on app launch
     checkVersionAndEnsurePersistence();
   }, []);
 
+  const handleTabChange = useCallback((nextTab) => {
+    setCurrentTab(prevTab => {
+      if (prevTab === nextTab) return prevTab;
+
+      pendingTabSwitchRef.current = nextTab;
+      beginTrackedSpan('tab-switch', { from: prevTab, to: nextTab });
+      return nextTab;
+    });
+  }, []);
+
   return (
     <BudgetProvider>
       <GameProvider>
-        <AppContent currentTab={currentTab} setCurrentTab={setCurrentTab} />
+        <AppContent currentTab={currentTab} setCurrentTab={handleTabChange} pendingTabSwitchRef={pendingTabSwitchRef} />
       </GameProvider>
     </BudgetProvider>
   );

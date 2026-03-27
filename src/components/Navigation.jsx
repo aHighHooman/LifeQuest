@@ -1,7 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LayoutDashboard, Scroll, Zap, Coins, ChevronUp, Heart } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
+
+const OUTER_TABS = [
+    { id: 'quests', label: 'Quests', icon: Scroll, color: 'text-emerald-400' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-game-accent' },
+    { id: 'protocols', label: 'Protocols', icon: Zap, color: 'text-purple-400' },
+];
+
+const INNER_TABS = [
+    { id: 'budget', label: 'Budget', icon: Coins, color: 'text-game-gold' },
+    { id: 'calories', label: 'Health', icon: Heart, color: 'text-red-400' },
+];
+
+const OUTER_ANGLES = [-45, 0, 45];
+const INNER_ANGLES = [-25, 25];
+
+const animateToTab = (targetTabId, innerRotationMV, outerRotationMV) => {
+    const springConfig = { stiffness: 160, damping: 20 };
+
+    const targetOuterIndex = OUTER_TABS.findIndex(t => t.id === targetTabId);
+    const targetValidOuterIndex = targetOuterIndex !== -1 ? targetOuterIndex : 1;
+    const targetOuterRotation = -OUTER_ANGLES[targetValidOuterIndex];
+
+    const targetInnerIndex = INNER_TABS.findIndex(t => t.id === targetTabId);
+    const targetValidInnerIndex = targetInnerIndex !== -1 ? targetInnerIndex : 0;
+    const targetInnerRotation = -INNER_ANGLES[targetValidInnerIndex];
+
+    animate(innerRotationMV, targetInnerRotation, springConfig);
+    animate(outerRotationMV, targetOuterRotation, springConfig);
+};
 
 const Navigation = ({ currentTab, onTabChange, children }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -12,38 +41,19 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
     // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
     const dragOffset = useMotionValue(0);
 
-    const outerTabs = [
-        { id: 'quests', label: 'Quests', icon: Scroll, color: 'text-emerald-400' },
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-game-accent' },
-        { id: 'protocols', label: 'Protocols', icon: Zap, color: 'text-purple-400' },
-    ];
-
-    const innerTabs = [
-        { id: 'budget', label: 'Budget', icon: Coins, color: 'text-game-gold' },
-        { id: 'calories', label: 'Health', icon: Heart, color: 'text-red-400' },
-    ];
-
     // Determine active indices
-    const outerIndex = outerTabs.findIndex(t => t.id === currentTab);
-    const innerIndex = innerTabs.findIndex(t => t.id === currentTab);
-
-    // Auto-expand if on inner tab
-    useEffect(() => {
-        if (innerIndex !== -1) {
-            setIsExpanded(true);
-        }
-    }, [currentTab, innerIndex]);
+    const outerIndex = OUTER_TABS.findIndex(t => t.id === currentTab);
+    const innerIndex = INNER_TABS.findIndex(t => t.id === currentTab);
+    const expanded = isExpanded || innerIndex !== -1;
 
 
     // -- Rotation Logic --
 
-    const outerAngles = [-45, 0, 45];
     const validOuterIndex = outerIndex !== -1 ? outerIndex : 1;
-    const baseOuterRotation = -outerAngles[validOuterIndex];
+    const baseOuterRotation = -OUTER_ANGLES[validOuterIndex];
 
-    const innerAngles = [-25, 25];
     const validInnerIndex = innerIndex !== -1 ? innerIndex : 0;
-    const baseInnerRotation = -innerAngles[validInnerIndex];
+    const baseInnerRotation = -INNER_ANGLES[validInnerIndex];
 
     // ANIMATION FIX: Imperative Control
     // We use raw MotionValues and drive them with `animate()` to ensure robust handoffs and no drift.
@@ -52,37 +62,20 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
     const innerRotationMV = useMotionValue(baseInnerRotation);
     const outerRotationMV = useMotionValue(baseOuterRotation);
 
-    // 2. Helper to animate to a specific tab's target state
-    const animateToTab = (targetTabId) => {
-        const springConfig = { stiffness: 160, damping: 20 };
-
-        // Calculate targets for the new tab
-        const targetOuterIndex = outerTabs.findIndex(t => t.id === targetTabId);
-        const targetValidOuterIndex = targetOuterIndex !== -1 ? targetOuterIndex : 1;
-        const targetOuterRotation = -outerAngles[targetValidOuterIndex];
-
-        const targetInnerIndex = innerTabs.findIndex(t => t.id === targetTabId);
-        const targetValidInnerIndex = targetInnerIndex !== -1 ? targetInnerIndex : 0;
-        const targetInnerRotation = -innerAngles[targetValidInnerIndex];
-
-        animate(innerRotationMV, targetInnerRotation, springConfig);
-        animate(outerRotationMV, targetOuterRotation, springConfig);
-    };
-
     // 3. Sync with external State changes (e.g. user clicked a tab elsewhere)
     useEffect(() => {
-        animateToTab(currentTab);
-    }, [currentTab]); // Functionally dependent on currentTab only
+        animateToTab(currentTab, innerRotationMV, outerRotationMV);
+    }, [currentTab, innerRotationMV, outerRotationMV]);
 
     // Combine Spring (State) + Drag (User Input)
     const innerRotationTransform = useTransform(
         [innerRotationMV, dragOffset],
-        ([base, drag]) => base + (isExpanded ? drag : 0)
+        ([base, drag]) => base + (expanded ? drag : 0)
     );
 
     const outerRotationTransform = useTransform(
         [outerRotationMV, dragOffset],
-        ([base, drag]) => base + (!isExpanded ? drag : 0)
+        ([base, drag]) => base + (!expanded ? drag : 0)
     );
 
     // Counter-rotation for icons so they stay upright DURING the animation
@@ -103,7 +96,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
 
         // HANDOFF: Snap MV to current visual state then reset drag
         const currentDrag = dragOffset.get();
-        if (isExpanded) {
+        if (expanded) {
             innerRotationMV.set(innerRotationMV.get() + currentDrag);
         } else {
             outerRotationMV.set(outerRotationMV.get() + currentDrag);
@@ -112,39 +105,39 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
 
         // Predict Next Tab
         let nextTab = currentTab;
-        let nextIsExpanded = isExpanded;
+        let nextIsExpanded = expanded;
 
         // Note: With touchAction='pan-y' on the wrapper, we mainly receive Horizontal pans.
         // Vertical pans are largely consumed by browser scrolling, EXCEPT on the bottom gesture layer.
 
         if (absY > absX && absY > 30) {
             // Vertical Swipe (Mostly triggered from Bottom Layer)
-            if (y < 0 && !isExpanded) {
+            if (y < 0 && !expanded) {
                 // Swipe Up -> Expand
                 // RESTRICTION: Only allow expanding from Dashboard
                 if (currentTab === 'dashboard') {
                     nextIsExpanded = true;
-                    if (innerIndex === -1) nextTab = innerTabs[0].id; // Default to first inner
+                    if (innerIndex === -1) nextTab = INNER_TABS[0].id; // Default to first inner
                 }
             }
-            if (y > 0 && isExpanded) {
+            if (y > 0 && expanded) {
                 // Swipe Down -> Collapse
                 nextIsExpanded = false;
                 nextTab = 'dashboard';
             }
         } else if (absX > threshold) {
             // Horizontal Swipe (Works globally)
-            if (isExpanded) {
+            if (expanded) {
                 if (x > 0 && validInnerIndex > 0) {
-                    nextTab = innerTabs[validInnerIndex - 1].id;
-                } else if (x < 0 && validInnerIndex < innerTabs.length - 1) {
-                    nextTab = innerTabs[validInnerIndex + 1].id;
+                    nextTab = INNER_TABS[validInnerIndex - 1].id;
+                } else if (x < 0 && validInnerIndex < INNER_TABS.length - 1) {
+                    nextTab = INNER_TABS[validInnerIndex + 1].id;
                 }
             } else {
                 if (x > 0 && validOuterIndex > 0) {
-                    nextTab = outerTabs[validOuterIndex - 1].id;
-                } else if (x < 0 && validOuterIndex < outerTabs.length - 1) {
-                    nextTab = outerTabs[validOuterIndex + 1].id;
+                    nextTab = OUTER_TABS[validOuterIndex - 1].id;
+                } else if (x < 0 && validOuterIndex < OUTER_TABS.length - 1) {
+                    nextTab = OUTER_TABS[validOuterIndex + 1].id;
                 }
             }
         }
@@ -154,7 +147,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
 
         // Optimize: Trigger animation IMMEDIATELY to predicted tab
         // This prevents drift even if onTabChange is slow or if tab doesn't change (snaps back)
-        animateToTab(nextTab);
+        animateToTab(nextTab, innerRotationMV, outerRotationMV);
 
         if (nextTab !== currentTab) {
             onTabChange(nextTab);
@@ -186,7 +179,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
             {/* Main Content Content (Injected) */}
             <div className={clsx(
                 "flex-1 w-full min-h-0 relative z-10 select-text overscroll-none",
-                (currentTab !== 'budget' && currentTab !== 'protocols' && currentTab !== 'dashboard') && "pb-64",
+                currentTab === 'calories' && "pb-64",
                 (currentTab === 'dashboard' || currentTab === 'budget' || currentTab === 'protocols') ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
             )}>
                 {children}
@@ -220,9 +213,9 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                     <motion.div
                         initial={{ y: 0, scale: 0.9, opacity: 0 }}
                         animate={{
-                            y: isExpanded ? -70 : 0,
-                            scale: isExpanded ? 1 : 0.9,
-                            opacity: isExpanded ? 1 : 0,
+                            y: expanded ? -70 : 0,
+                            scale: expanded ? 1 : 0.9,
+                            opacity: expanded ? 1 : 0,
                             // rotate: handled in style by transform
                         }}
                         style={{
@@ -236,10 +229,10 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                     >
                         {/* Visual Arc for Inner */}
 
-                        {innerTabs.map((tab, index) => {
+                        {INNER_TABS.map((tab, index) => {
                             const Icon = tab.icon;
                             const radius = 120;
-                            const angle = innerAngles[index];
+                            const angle = INNER_ANGLES[index];
                             const radian = (angle - 90) * (Math.PI / 180);
                             const isActive = currentTab === tab.id;
 
@@ -279,7 +272,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                     <motion.div
                         initial={{ y: 0 }}
                         animate={{
-                            y: isExpanded ? -80 : 0,
+                            y: expanded ? -80 : 0,
                             // rotate: handled in style by transform
                         }}
                         style={{
@@ -294,10 +287,10 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                     >
                         <div className="absolute top-4 w-[480px] h-[480px] rounded-full pointer-events-none" />
 
-                        {outerTabs.map((tab, index) => {
+                        {OUTER_TABS.map((tab, index) => {
                             const Icon = tab.icon;
                             const radius = 220;
-                            const angle = outerAngles[index];
+                            const angle = OUTER_ANGLES[index];
                             const radian = (angle - 90) * (Math.PI / 180);
                             const isActive = currentTab === tab.id;
 
@@ -340,7 +333,7 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                     </motion.div>
 
                     {/* Chevron Hint */}
-                    {!isExpanded && (
+                    {!expanded && (
                         <motion.div
                             animate={{ y: [0, -5, 0] }}
                             transition={{ duration: 2, repeat: Infinity }}

@@ -26,15 +26,20 @@ const TAB_LEDGER = 'ledger';
 
 const CoinSwitch = ({ onClick }) => {
     const [spinCount, setSpinCount] = useState(0);
+    const [shadowScale, setShadowScale] = useState(1);
     const rotating = useRef(false);
 
     const handleClick = (e) => {
         if (e) e.stopPropagation();
         if (rotating.current) return;
         rotating.current = true;
+        setShadowScale(0.8);
         setSpinCount(prev => prev + 1);
         if (onClick) onClick(e);
-        setTimeout(() => { rotating.current = false; }, 900);
+        setTimeout(() => {
+            rotating.current = false;
+            setShadowScale(1);
+        }, 900);
     };
 
     return (
@@ -114,7 +119,7 @@ const CoinSwitch = ({ onClick }) => {
 
                 {/* Shadow underneath */}
                 <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-20 h-5 bg-black/60 blur-xl rounded-[100%] pointer-events-none transition-transform duration-1000"
-                    style={{ transform: `translateX(-50%) scale(${rotating.current ? 0.8 : 1})` }}
+                    style={{ transform: `translateX(-50%) scale(${shadowScale})` }}
                 />
             </button>
         </div>

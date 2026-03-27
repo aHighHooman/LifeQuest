@@ -6,19 +6,18 @@ import clsx from 'clsx';
 import { SPRING_CONFIG } from '../constants/animations';
 import { getTodayISO } from '../utils/dateUtils';
 
+const createBubbles = () => Array.from({ length: 8 }).map((_, i) => ({
+    id: i,
+    size: Math.random() * 10 + 5,
+    x: Math.random() * 80 + 10,
+    duration: Math.random() * 2 + 3,
+    delay: Math.random() * 2
+}));
+
 const ReactorCore = ({ current, target }) => {
     const percentage = Math.min((current / target) * 100, 100);
     const isOverload = current > target;
-    const remaining = target - current;
-
-    // Bubbles for the liquid effect
-    const bubbles = Array.from({ length: 8 }).map((_, i) => ({
-        id: i,
-        size: Math.random() * 10 + 5,
-        x: Math.random() * 80 + 10,
-        duration: Math.random() * 2 + 3,
-        delay: Math.random() * 2
-    }));
+    const [bubbles] = useState(createBubbles);
 
     return (
         <div className="relative w-full h-full flex items-center justify-center p-8">

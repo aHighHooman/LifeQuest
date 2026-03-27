@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { usePersistentState } from '../utils/persistence';
 
 const BudgetContext = createContext();
@@ -17,21 +17,21 @@ export const BudgetProvider = ({ children }) => {
     const [groceryPeriod, setGroceryPeriod] = usePersistentState('lq_grocery_period', 'weekly');
     const [goldToUsdRatio, setGoldToUsdRatio] = usePersistentState('lq_gold_ratio', 10);
 
-    const addRewardFromGold = (goldAmount) => {
+    const addRewardFromGold = useCallback((goldAmount) => {
         const usdValue = goldAmount / goldToUsdRatio;
         setEarnedRewards(prev => prev + usdValue);
-    };
+    }, [goldToUsdRatio, setEarnedRewards]);
 
-    const removeRewardFromGold = (goldAmount) => {
+    const removeRewardFromGold = useCallback((goldAmount) => {
         const usdValue = Number(goldAmount) / goldToUsdRatio;
         setEarnedRewards(prev => prev - usdValue);
-    };
+    }, [goldToUsdRatio, setEarnedRewards]);
 
-    const updatePrice = (name, price) => {
+    const updatePrice = useCallback((name, price) => {
         setPriceDatabase(prev => ({ ...prev, [name]: parseFloat(price) }));
-    };
+    }, [setPriceDatabase]);
 
-    const addGroceryItem = (name, quantity = 1) => {
+    const addGroceryItem = useCallback((name, quantity = 1) => {
         const price = priceDatabase[name] || 0;
         const newItem = {
             id: Date.now().toString(),
@@ -41,47 +41,61 @@ export const BudgetProvider = ({ children }) => {
             completed: false
         };
         setGroceryList(prev => [...prev, newItem]);
-    };
+    }, [priceDatabase, setGroceryList]);
 
-    const toggleGroceryItem = (id) => {
+    const toggleGroceryItem = useCallback((id) => {
         setGroceryList(prev => prev.map(item =>
             item.id === id ? { ...item, completed: !item.completed } : item
         ));
-    };
+    }, [setGroceryList]);
 
-    const removeGroceryItem = (id) => {
+    const removeGroceryItem = useCallback((id) => {
         setGroceryList(prev => prev.filter(item => item.id !== id));
-    };
+    }, [setGroceryList]);
 
-    const resetGroceryList = () => {
+    const resetGroceryList = useCallback(() => {
         setGroceryList(prev => prev.map(item => ({ ...item, completed: false })));
-    };
+    }, [setGroceryList]);
 
-    const clearGroceryList = () => {
+    const clearGroceryList = useCallback(() => {
         setGroceryList([]);
-    };
+    }, [setGroceryList]);
 
-    const totalGrocerySpent = groceryList
+    const totalGrocerySpent = useMemo(() => groceryList
         .filter(item => item.completed)
-        .reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        .reduce((sum, item) => sum + (item.price * item.quantity), 0), [groceryList]);
 
-    const totalGroceryEstimated = groceryList
-        .reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const totalGroceryEstimated = useMemo(() => groceryList
+        .reduce((sum, item) => sum + (item.price * item.quantity), 0), [groceryList]);
+
+    const contextValue = useMemo(() => ({
+        totalMonthlyBudget, setTotalMonthlyBudget,
+        groceryAllocation, setGroceryAllocation,
+        earnedRewards, setEarnedRewards,
+        groceryList, setGroceryList,
+        priceDatabase, updatePrice,
+        groceryPeriod, setGroceryPeriod,
+        goldToUsdRatio, setGoldToUsdRatio,
+        addRewardFromGold, removeRewardFromGold,
+        addGroceryItem, toggleGroceryItem, removeGroceryItem,
+        resetGroceryList, clearGroceryList,
+        totalGrocerySpent, totalGroceryEstimated
+    }), [
+        totalMonthlyBudget, setTotalMonthlyBudget,
+        groceryAllocation, setGroceryAllocation,
+        earnedRewards, setEarnedRewards,
+        groceryList, setGroceryList,
+        priceDatabase, updatePrice,
+        groceryPeriod, setGroceryPeriod,
+        goldToUsdRatio, setGoldToUsdRatio,
+        addRewardFromGold, removeRewardFromGold,
+        addGroceryItem, toggleGroceryItem, removeGroceryItem,
+        resetGroceryList, clearGroceryList,
+        totalGrocerySpent, totalGroceryEstimated
+    ]);
 
     return (
-        <BudgetContext.Provider value={{
-            totalMonthlyBudget, setTotalMonthlyBudget,
-            groceryAllocation, setGroceryAllocation,
-            earnedRewards, setEarnedRewards,
-            groceryList, setGroceryList,
-            priceDatabase, updatePrice,
-            groceryPeriod, setGroceryPeriod,
-            goldToUsdRatio, setGoldToUsdRatio,
-            addRewardFromGold, removeRewardFromGold,
-            addGroceryItem, toggleGroceryItem, removeGroceryItem,
-            resetGroceryList, clearGroceryList,
-            totalGrocerySpent, totalGroceryEstimated
-        }}>
+        <BudgetContext.Provider value={contextValue}>
             {children}
         </BudgetContext.Provider>
     );

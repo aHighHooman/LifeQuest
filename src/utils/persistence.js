@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 export const APP_VERSION = '1.1.0'; // Incrementing for this update
 export const VERSION_KEY = 'lq_version';
