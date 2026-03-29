@@ -461,10 +461,38 @@ const QuestBoard = () => {
                                     {/* Difficulty Selector */}
                                     <div className="grid grid-cols-4 gap-2">
                                         {[
-                                            { id: 'easy', label: 'Cmn', color: 'emerald', fullLabel: 'Common' },
-                                            { id: 'medium', label: 'Rare', color: 'blue', fullLabel: 'Rare' },
-                                            { id: 'hard', label: 'Epic', color: 'purple', fullLabel: 'Epic' },
-                                            { id: 'legendary', label: 'Leg', color: 'yellow', fullLabel: 'Legendary' }
+                                            {
+                                                id: 'easy',
+                                                label: 'Cmn',
+                                                fullLabel: 'Common',
+                                                activeClassName: 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_10px_rgba(16,185,129,0.12)]',
+                                                overlayClassName: 'bg-emerald-400/10',
+                                                textClassName: 'text-emerald-400'
+                                            },
+                                            {
+                                                id: 'medium',
+                                                label: 'Rare',
+                                                fullLabel: 'Rare',
+                                                activeClassName: 'border-blue-500 bg-blue-500/10 shadow-[0_0_10px_rgba(59,130,246,0.12)]',
+                                                overlayClassName: 'bg-blue-400/10',
+                                                textClassName: 'text-blue-400'
+                                            },
+                                            {
+                                                id: 'hard',
+                                                label: 'Epic',
+                                                fullLabel: 'Epic',
+                                                activeClassName: 'border-purple-500 bg-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.12)]',
+                                                overlayClassName: 'bg-purple-400/10',
+                                                textClassName: 'text-purple-400'
+                                            },
+                                            {
+                                                id: 'legendary',
+                                                label: 'Leg',
+                                                fullLabel: 'Legendary',
+                                                activeClassName: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_10px_rgba(234,179,8,0.12)]',
+                                                overlayClassName: 'bg-yellow-400/10',
+                                                textClassName: 'text-yellow-400'
+                                            }
                                         ].map((level) => {
                                             const isActive = difficulty === level.id;
                                             return (
@@ -475,20 +503,19 @@ const QuestBoard = () => {
                                                     className={clsx(
                                                         "flex flex-col items-center justify-center py-2 rounded-lg border transition-all relative overflow-hidden",
                                                         isActive
-                                                            ? `border-${level.color}-500 shadow-[0_0_10px_rgba(0,0,0,0.3)]`
+                                                            ? level.activeClassName
                                                             : "bg-slate-900/50 border-slate-700 opacity-60 hover:opacity-100 hover:border-slate-500"
                                                     )}
-                                                    style={{ backgroundColor: isActive ? `rgba(var(--color-${level.color}-500), 0.2)` : '' }}
+                                                    title={level.fullLabel}
                                                 >
                                                     {isActive && (
-                                                        <motion.div
-                                                            layoutId="active-difficulty"
-                                                            className={clsx("absolute inset-0 z-0 opacity-20", `bg-${level.color}-400`)}
+                                                        <div
+                                                            className={clsx("absolute inset-0 z-0", level.overlayClassName)}
                                                         />
                                                     )}
                                                     <span className={clsx(
                                                         "relative z-10 text-[10px] font-black uppercase tracking-widest",
-                                                        isActive ? `text-${level.color}-400` : "text-gray-500"
+                                                        isActive ? level.textClassName : "text-gray-500"
                                                     )}>
                                                         {level.label}
                                                     </span>

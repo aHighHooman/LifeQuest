@@ -10,6 +10,16 @@ export const toLocalISOString = (date = new Date()) => {
 };
 
 /**
+ * Normalize a Date or timestamp-like value to a local YYYY-MM-DD key.
+ * Useful when persisted values are stored as full UTC ISO strings.
+ * @param {Date|string|number} value
+ */
+export const toLocalDateKey = (value = new Date()) => {
+    const date = value instanceof Date ? value : new Date(value);
+    return toLocalISOString(date);
+};
+
+/**
  * Get today's date in ISO format (YYYY-MM-DD) based on LOCAL time.
  * Used for history keys and date comparisons throughout the app.
  */

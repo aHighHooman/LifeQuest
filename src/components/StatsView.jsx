@@ -1,296 +1,761 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { useGame } from '../context/GameContext';
 import { motion, useDragControls } from 'framer-motion';
-import { X, TrendingUp, Activity, Coins, Calendar, PieChart } from 'lucide-react';
 import {
-    LineChart, Line, AreaChart, Area, BarChart, Bar,
-    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    PieChart as RePieChart, Pie, Cell
+    Activity,
+    Calendar,
+    Coins,
+    Flame,
+    GripHorizontal,
+    Heart,
+    Target,
+    TrendingUp,
+    WalletCards,
+} from 'lucide-react';
+import {
+    Area,
+    AreaChart,
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Line,
+    LineChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis
 } from 'recharts';
+import { useGame } from '../context/GameContext';
+import { toLocalDateKey } from '../utils/dateUtils';
 
-const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="bg-slate-900 border border-slate-700 p-2 rounded shadow-xl text-xs">
-                <p className="text-gray-400 mb-1">{label}</p>
-                {payload.map((entry, index) => (
-                    <p key={index} style={{ color: entry.color }}>
-                        {entry.name}: {entry.value}
-                    </p>
+const TAB_CONFIG = {
+    overview: {
+        label: 'Overview',
+        icon: Activity,
+        range: 'Last 7 days',
+        accent: 'text-sky-300'
+    },
+    finance: {
+        label: 'Finance',
+        icon: WalletCards,
+        range: 'Last 14 days',
+        accent: 'text-yellow-300'
+    },
+    health: {
+        label: 'Health',
+        icon: Heart,
+        range: 'Last 7 days',
+        accent: 'text-rose-300'
+    }
+};
+
+const TONE_STYLES = {
+    blue: {
+        card: 'border-sky-400/25 bg-slate-950/78',
+        line: 'bg-sky-400/80',
+        glow: 'from-sky-500/30 via-sky-400/10 to-transparent',
+        icon: 'bg-black/60 text-sky-300 border border-sky-400/30',
+        value: 'text-sky-100',
+        helper: 'text-sky-200/70'
+    },
+    emerald: {
+        card: 'border-emerald-400/25 bg-slate-950/78',
+        line: 'bg-emerald-400/80',
+        glow: 'from-emerald-500/28 via-emerald-400/10 to-transparent',
+        icon: 'bg-black/60 text-emerald-300 border border-emerald-400/30',
+        value: 'text-emerald-100',
+        helper: 'text-emerald-200/70'
+    },
+    amber: {
+        card: 'border-amber-400/25 bg-slate-950/78',
+        line: 'bg-amber-400/80',
+        glow: 'from-amber-500/28 via-amber-400/10 to-transparent',
+        icon: 'bg-black/60 text-amber-300 border border-amber-400/30',
+        value: 'text-amber-100',
+        helper: 'text-amber-200/70'
+    },
+    rose: {
+        card: 'border-rose-400/25 bg-slate-950/78',
+        line: 'bg-rose-400/80',
+        glow: 'from-rose-500/28 via-rose-400/10 to-transparent',
+        icon: 'bg-black/60 text-rose-300 border border-rose-400/30',
+        value: 'text-rose-100',
+        helper: 'text-rose-200/70'
+    },
+    violet: {
+        card: 'border-violet-400/25 bg-slate-950/78',
+        line: 'bg-violet-400/80',
+        glow: 'from-violet-500/28 via-violet-400/10 to-transparent',
+        icon: 'bg-black/60 text-violet-300 border border-violet-400/30',
+        value: 'text-violet-100',
+        helper: 'text-violet-200/70'
+    }
+};
+
+const fromDateKey = (dateKey) => {
+    const [year, month, day] = dateKey.split('-').map(Number);
+    return new Date(year, month - 1, day);
+};
+
+const getLastNDays = (days) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return Array.from({ length: days }, (_, index) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() - (days - index - 1));
+        return toLocalDateKey(date);
+    });
+};
+
+const formatAxisDate = (dateKey) =>
+    new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric'
+    }).format(fromDateKey(dateKey));
+
+const formatSignedValue = (value) => `${value > 0 ? '+' : ''}${value}`;
+
+const truncateLabel = (label, maxLength = 14) =>
+    label.length > maxLength ? `${label.slice(0, maxLength - 1)}...` : label;
+
+const EmptyChartState = ({ title, body }) => (
+    <div className="flex h-full min-h-[180px] items-center justify-center rounded-[1.5rem] border border-dashed border-slate-700/90 bg-black/35 px-6 text-center shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)]">
+        <div>
+            <p className="font-game text-sm font-semibold uppercase tracking-[0.28em] text-slate-400">{title}</p>
+            <p className="mt-2 text-sm text-slate-500">{body}</p>
+        </div>
+    </div>
+);
+
+const SummaryCard = ({ icon: Icon, label, value, helper, tone = 'blue' }) => {
+    const toneStyles = TONE_STYLES[tone] || TONE_STYLES.blue;
+
+    return (
+        <div className={`relative overflow-hidden rounded-[1.5rem] border p-4 text-left shadow-[0_18px_40px_rgba(0,0,0,0.34)] ${toneStyles.card}`}>
+            <div className={`pointer-events-none absolute inset-x-4 top-0 h-px ${toneStyles.line}`} />
+            <div className={`pointer-events-none absolute -right-8 top-0 h-24 w-24 bg-gradient-to-bl blur-2xl ${toneStyles.glow}`} />
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="font-game text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
+                    <p className={`mt-2 font-game text-[1.7rem] font-semibold uppercase tracking-[0.06em] ${toneStyles.value}`}>{value}</p>
+                </div>
+                <div className={`rounded-full p-2.5 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] ${toneStyles.icon}`}>
+                    <Icon size={18} strokeWidth={2.2} />
+                </div>
+            </div>
+            <p className={`mt-3 text-xs leading-relaxed ${toneStyles.helper}`}>{helper}</p>
+        </div>
+    );
+};
+
+const SectionCard = ({ title, eyebrow, icon: Icon, children }) => (
+    <section className="relative overflow-hidden rounded-[1.7rem] border border-slate-700/90 bg-slate-950/78 p-4 shadow-[0_24px_50px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/70 to-transparent" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.05] [background-image:linear-gradient(rgba(148,163,184,0.9)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.9)_1px,transparent_1px)] [background-size:24px_24px]" />
+        <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+                {eyebrow && (
+                    <p className="font-game text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-500">{eyebrow}</p>
+                )}
+                <h3 className="mt-1 flex items-center gap-2 font-game text-base font-semibold uppercase tracking-[0.08em] text-slate-100">
+                    {Icon && <Icon size={17} className="text-sky-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.35)]" />}
+                    {title}
+                </h3>
+            </div>
+        </div>
+        <div className="relative z-10">{children}</div>
+    </section>
+);
+
+const ChartTooltip = ({ active, payload, label, formatLabel = (value) => value }) => {
+    if (!active || !payload?.length) return null;
+
+    return (
+        <div className="rounded-xl border border-slate-700/90 bg-slate-950/95 px-3 py-2 shadow-2xl backdrop-blur">
+            <p className="text-xs font-medium text-slate-300">{formatLabel(label)}</p>
+            <div className="mt-2 space-y-1">
+                {payload.map((entry) => (
+                    <div key={entry.name} className="flex items-center justify-between gap-4 text-xs">
+                        <span style={{ color: entry.color }}>{entry.name}</span>
+                        <span className="font-semibold text-slate-100">{entry.value}</span>
+                    </div>
                 ))}
             </div>
-        );
-    }
-    return null;
+        </div>
+    );
 };
 
 const StatsView = ({ isOpen, onClose }) => {
-    const { quests, habits, coinHistory, calories } = useGame();
+    const { stats, quests, habits, coinHistory, calories } = useGame();
     const [activeTab, setActiveTab] = useState('overview');
     const dragControls = useDragControls();
+    const scrollRef = useRef(null);
+    const swipeStateRef = useRef({ startY: 0, startX: 0, startAtTop: false });
 
-    // --- DATA PROCESSING ---
+    const last7Days = useMemo(() => getLastNDays(7), []);
+    const last14Days = useMemo(() => getLastNDays(14), []);
 
-    // 1. Quests Completed Over Time
     const questData = useMemo(() => {
-        const completed = quests.filter(q => q.completed && q.completedAt);
         const grouped = {};
-        completed.forEach(q => {
-            const date = q.completedAt.split('T')[0];
-            grouped[date] = (grouped[date] || 0) + 1;
-        });
 
-        // Sort and map
-        return Object.keys(grouped).sort().map(date => ({
+        quests
+            .filter((quest) => quest.completed && quest.completedAt)
+            .forEach((quest) => {
+                const dateKey = toLocalDateKey(quest.completedAt);
+                grouped[dateKey] = (grouped[dateKey] || 0) + 1;
+            });
+
+        return last7Days.map((date) => ({
             date,
-            count: grouped[date]
-        })).slice(-7); // Last 7 active days
-    }, [quests]);
+            count: grouped[date] || 0
+        }));
+    }, [last7Days, quests]);
 
-    // 2. Coin Balance History
     const coinData = useMemo(() => {
-        // We need to reconstruct balance history. 
-        // This is tricky without initial balance reference, but we can show "Changepoints"
-        // Let's just show net change per day for now, or cumulative if we assume start at 0 (inaccurate but okay for visual)
-        let runningTotal = 0;
-        const sortedHistory = [...coinHistory].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-        // Aggregate by day
-        const byDay = {};
-        sortedHistory.forEach(tx => {
-            const date = tx.date.split('T')[0];
-            const change = tx.type === 'earned' ? tx.amount : -tx.amount;
-            byDay[date] = (byDay[date] || 0) + change;
-        });
-
-        // Cumulative
-        const result = [];
-        let cumulative = 0;
-        Object.keys(byDay).sort().forEach(date => {
-            cumulative += byDay[date];
-            result.push({ date, balance: cumulative, change: byDay[date] });
-        });
-
-        return result.slice(-14);
-    }, [coinHistory]);
-
-    // 3. Calorie History
-    const calorieData = useMemo(() => {
-        // Group by day
         const grouped = {};
-        calories.history.forEach(entry => {
-            const date = entry.date.split('T')[0];
-            grouped[date] = (grouped[date] || 0) + entry.amount;
+
+        coinHistory.forEach((entry) => {
+            const dateKey = toLocalDateKey(entry.date);
+            const delta = entry.type === 'earned' ? entry.amount : -entry.amount;
+            grouped[dateKey] = (grouped[dateKey] || 0) + delta;
         });
 
-        return Object.keys(grouped).sort().map(date => ({
-            date,
-            calories: grouped[date],
-            target: calories.target
-        })).slice(-7);
-    }, [calories]);
+        const firstVisibleDate = last14Days[0];
+        const historicalBalance = Object.keys(grouped)
+            .filter((date) => date < firstVisibleDate)
+            .sort()
+            .reduce((total, date) => total + grouped[date], 0);
 
-    // 4. Spending Categories (Misc vs Rewards?)
-    // currently we only have misc spending descriptions.
-    const spendingData = useMemo(() => {
-        const spent = coinHistory.filter(tx => tx.type === 'spent');
-        const grouped = {};
-        spent.forEach(tx => {
-            // Group by description roughly? Or just show time series.
-            // Let's do a Pie chart of "Sources" vs "Sinks"
-            // For now, let's just count total spent.
-        });
-        return spent;
-    }, [coinHistory]);
+        let runningBalance = historicalBalance;
 
-    // 5. Protocol Hit Rate
-    const protocolData = useMemo(() => {
-        // Calculate completion rate per habit
-        return habits.map(h => {
-            const checkCount = Object.values(h.history).reduce((a, b) => a + b, 0);
-            // Rough estimate of "days active" since creation? 
-            // Simplification: Just show raw hits for now as a Bar Chart
+        return last14Days.map((date) => {
+            const change = grouped[date] || 0;
+            runningBalance += change;
             return {
-                name: h.title,
-                hits: checkCount
+                date,
+                balance: runningBalance,
+                change
             };
         });
+    }, [coinHistory, last14Days]);
+
+    const calorieData = useMemo(() => {
+        const grouped = {};
+
+        (calories.history || []).forEach((entry) => {
+            const dateKey = toLocalDateKey(entry.date);
+            grouped[dateKey] = (grouped[dateKey] || 0) + entry.amount;
+        });
+
+        return last7Days.map((date) => ({
+            date,
+            calories: grouped[date] || 0,
+            target: calories.target || 0
+        }));
+    }, [calories, last7Days]);
+
+    const protocolData = useMemo(() => {
+        return habits
+            .map((habit) => ({
+                name: truncateLabel(habit.title || 'Protocol'),
+                hits: Object.values(habit.history || {}).reduce((sum, count) => sum + Number(count || 0), 0)
+            }))
+            .sort((a, b) => b.hits - a.hits)
+            .slice(0, 5);
     }, [habits]);
 
+    const summaryCards = useMemo(() => {
+        const completedThisWeek = questData.reduce((sum, item) => sum + item.count, 0);
+        const activeHabitCount = habits.filter((habit) => habit.isActive).length;
+        const protocolHitsLast7 = habits.reduce(
+            (sum, habit) =>
+                sum + last7Days.reduce((dayTotal, day) => dayTotal + Number(habit.history?.[day] || 0), 0),
+            0
+        );
+        const currentBalance = Number(stats.gold || 0);
+        const earned14 = coinData.reduce((sum, item) => sum + Math.max(item.change, 0), 0);
+        const spent14 = coinData.reduce((sum, item) => sum + Math.abs(Math.min(item.change, 0)), 0);
+        const avgCalories = calorieData.length
+            ? Math.round(calorieData.reduce((sum, item) => sum + item.calories, 0) / calorieData.length)
+            : 0;
+        const daysOnTarget = calorieData.filter(
+            (item) => item.calories > 0 && Math.abs(item.calories - item.target) <= 150
+        ).length;
+
+        if (activeTab === 'finance') {
+            return [
+                {
+                    icon: Coins,
+                    label: 'Current Balance',
+                    value: `${currentBalance}`,
+                    helper: `${coinHistory.length} ledger event${coinHistory.length === 1 ? '' : 's'} recorded`,
+                    tone: 'amber'
+                },
+                {
+                    icon: TrendingUp,
+                    label: 'Earned 14D',
+                    value: `+${earned14}`,
+                    helper: spent14 ? `${spent14} spent in the same window` : 'No spend in the same window',
+                    tone: 'emerald'
+                },
+                {
+                    icon: WalletCards,
+                    label: 'Net 14D',
+                    value: formatSignedValue(earned14 - spent14),
+                    helper: 'A tighter read than the large chart alone',
+                    tone: earned14 - spent14 >= 0 ? 'blue' : 'rose'
+                }
+            ];
+        }
+
+        if (activeTab === 'health') {
+            return [
+                {
+                    icon: Flame,
+                    label: 'Today',
+                    value: `${calories.current || 0}`,
+                    helper: `Target ${calories.target || 0} calories`,
+                    tone: 'rose'
+                },
+                {
+                    icon: Target,
+                    label: 'Weekly Average',
+                    value: `${avgCalories}`,
+                    helper: 'Average intake across the last 7 days',
+                    tone: 'blue'
+                },
+                {
+                    icon: Heart,
+                    label: 'On Target',
+                    value: `${daysOnTarget}/7`,
+                    helper: 'Days landing within 150 calories of goal',
+                    tone: 'emerald'
+                }
+            ];
+        }
+
+        return [
+            {
+                icon: Calendar,
+                label: 'Quests Cleared',
+                value: `${completedThisWeek}`,
+                helper: 'Total completions across the last 7 days',
+                tone: 'emerald'
+            },
+            {
+                icon: Activity,
+                label: 'Protocol Hits',
+                value: `${protocolHitsLast7}`,
+                helper: `${activeHabitCount} active protocol${activeHabitCount === 1 ? '' : 's'}`,
+                tone: 'violet'
+            },
+            {
+                icon: Coins,
+                label: 'Current Gold',
+                value: `${currentBalance}`,
+                helper: `${stats.level || 1} level system with ${coinHistory.length} logged transactions`,
+                tone: 'amber'
+            }
+        ];
+    }, [
+        activeTab,
+        calorieData,
+        calories.current,
+        calories.target,
+        coinData,
+        coinHistory.length,
+        habits,
+        last7Days,
+        questData,
+        stats.gold,
+        stats.level
+    ]);
 
     if (!isOpen) return null;
 
-    // Drag to Close
-    const onPanEnd = (event, info) => {
-        // Swipe UP (negative Y) to close
-        if (info.offset.y < -100) {
+    const handleDragEnd = (_, info) => {
+        if (info.offset.y < -80) {
             onClose();
         }
     };
 
+    const handleSheetTouchStart = (event) => {
+        const touch = event.touches?.[0];
+        if (!touch) return;
+
+        swipeStateRef.current = {
+            startY: touch.clientY,
+            startX: touch.clientX,
+            startAtTop: (scrollRef.current?.scrollTop || 0) <= 0
+        };
+    };
+
+    const handleSheetTouchEnd = (event) => {
+        const touch = event.changedTouches?.[0];
+        if (!touch) return;
+
+        const { startY, startX, startAtTop } = swipeStateRef.current;
+        const deltaY = touch.clientY - startY;
+        const deltaX = touch.clientX - startX;
+        const isAtTopNow = (scrollRef.current?.scrollTop || 0) <= 0;
+
+        if (startAtTop && isAtTopNow && deltaY < -85 && Math.abs(deltaX) < 70) {
+            onClose();
+        }
+    };
+
+    const renderOverview = () => (
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {summaryCards.map((card) => (
+                    <SummaryCard key={card.label} {...card} />
+                ))}
+            </div>
+
+            <SectionCard title="Quest Completion Velocity" eyebrow="Mission Pulse" icon={Calendar}>
+                {questData.some((item) => item.count > 0) ? (
+                    <div className="h-52 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={questData} barGap={8}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                <XAxis
+                                    dataKey="date"
+                                    stroke="#64748b"
+                                    tick={{ fontSize: 10 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={formatAxisDate}
+                                />
+                                <YAxis
+                                    stroke="#64748b"
+                                    tick={{ fontSize: 10 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    allowDecimals={false}
+                                />
+                                <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
+                                <Bar dataKey="count" name="Completed" fill="#34d399" radius={[8, 8, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <EmptyChartState
+                        title="No quest history yet"
+                        body="Once completed quests start landing, this block becomes your quick weekly momentum read."
+                    />
+                )}
+            </SectionCard>
+
+            <SectionCard title="Protocol Consistency" eyebrow="Behavior Scan" icon={Activity}>
+                {protocolData.some((item) => item.hits > 0) ? (
+                    <div className="h-56 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={protocolData} layout="vertical" margin={{ left: 8, right: 8 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                                <XAxis
+                                    type="number"
+                                    stroke="#64748b"
+                                    tick={{ fontSize: 10 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    allowDecimals={false}
+                                />
+                                <YAxis
+                                    dataKey="name"
+                                    type="category"
+                                    width={72}
+                                    stroke="#94a3b8"
+                                    tick={{ fontSize: 10 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(129,140,248,0.08)' }} />
+                                <Bar dataKey="hits" name="Hits" fill="#818cf8" radius={[0, 8, 8, 0]} barSize={18} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <EmptyChartState
+                        title="Protocols are warming up"
+                        body="Track a few protocol completions and this section will surface your most consistent systems."
+                    />
+                )}
+            </SectionCard>
+        </div>
+    );
+
+    const renderFinance = () => (
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {summaryCards.map((card) => (
+                    <SummaryCard key={card.label} {...card} />
+                ))}
+            </div>
+
+            <SectionCard title="Coin Balance Trend" eyebrow="Economy Feed" icon={Coins}>
+                {coinData.some((item) => item.balance !== 0 || item.change !== 0) ? (
+                    <div className="h-56 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={coinData} margin={{ left: 0, right: 8 }}>
+                                <defs>
+                                    <linearGradient id="coinGlow" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.38} />
+                                        <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                <XAxis
+                                    dataKey="date"
+                                    stroke="#64748b"
+                                    tick={{ fontSize: 10 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={formatAxisDate}
+                                />
+                                <YAxis
+                                    stroke="#64748b"
+                                    tick={{ fontSize: 10 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    allowDecimals={false}
+                                />
+                                <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ stroke: '#fbbf24', strokeOpacity: 0.15 }} />
+                                <Area
+                                    type="monotone"
+                                    dataKey="balance"
+                                    name="Balance"
+                                    stroke="#fbbf24"
+                                    strokeWidth={2.5}
+                                    fill="url(#coinGlow)"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <EmptyChartState
+                        title="Economy data will appear here"
+                        body="Earn or spend a few coins and this turns into a cleaner pulse of balance changes over time."
+                    />
+                )}
+            </SectionCard>
+
+            <SectionCard title="Recent Ledger Activity" eyebrow="Latest Movement" icon={WalletCards}>
+                {coinHistory.length > 0 ? (
+                    <div className="space-y-2">
+                        {coinHistory
+                            .slice()
+                            .reverse()
+                            .slice(0, 5)
+                            .map((entry) => (
+                                <div
+                                    key={entry.id}
+                                    className="flex items-center justify-between gap-3 rounded-[1.2rem] border border-slate-800/90 bg-black/35 px-4 py-3 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)]"
+                                >
+                                    <div className="min-w-0 text-left">
+                                        <p className="truncate text-sm font-medium text-slate-100">
+                                            {entry.description || 'Ledger update'}
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            {new Date(entry.date).toLocaleDateString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric'
+                                            })}
+                                        </p>
+                                    </div>
+                                    <span
+                                        className={`shrink-0 rounded-full border px-2.5 py-1 font-game text-xs font-semibold uppercase tracking-[0.12em] ${
+                                            entry.type === 'earned'
+                                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                                : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                                        }`}
+                                    >
+                                        {entry.type === 'earned' ? '+' : '-'}
+                                        {entry.amount}
+                                    </span>
+                                </div>
+                            ))}
+                    </div>
+                ) : (
+                    <EmptyChartState
+                        title="No ledger entries yet"
+                        body="This list becomes more useful than a chart on mobile once purchases and rewards start stacking up."
+                    />
+                )}
+            </SectionCard>
+        </div>
+    );
+
+    const renderHealth = () => (
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {summaryCards.map((card) => (
+                    <SummaryCard key={card.label} {...card} />
+                ))}
+            </div>
+
+            <SectionCard title="Calorie Intake vs Target" eyebrow="Body Systems" icon={Heart}>
+                {(calorieData.some((item) => item.calories > 0) || Number(calories.current || 0) > 0) ? (
+                    <div className="h-56 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={calorieData} margin={{ left: 0, right: 8 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                <XAxis
+                                    dataKey="date"
+                                    stroke="#64748b"
+                                    tick={{ fontSize: 10 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={formatAxisDate}
+                                />
+                                <YAxis
+                                    stroke="#64748b"
+                                    tick={{ fontSize: 10 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    allowDecimals={false}
+                                />
+                                <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ stroke: '#f87171', strokeOpacity: 0.15 }} />
+                                <Line
+                                    type="monotone"
+                                    dataKey="calories"
+                                    name="Calories"
+                                    stroke="#f87171"
+                                    strokeWidth={2.5}
+                                    dot={{ r: 3, fill: '#f87171' }}
+                                    activeDot={{ r: 5 }}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="target"
+                                    name="Target"
+                                    stroke="#94a3b8"
+                                    strokeDasharray="5 5"
+                                    dot={false}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <EmptyChartState
+                        title="Health stream is quiet"
+                        body="Log a few entries and this view turns into a much clearer week-over-week intake snapshot."
+                    />
+                )}
+            </SectionCard>
+
+            <SectionCard title="Today at a Glance" eyebrow="Immediate Read" icon={Flame}>
+                <div className="rounded-[1.4rem] border border-slate-800/90 bg-black/35 p-4 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)]">
+                    <div className="flex items-end justify-between gap-4">
+                        <div className="text-left">
+                            <p className="font-game text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
+                                Current Progress
+                            </p>
+                            <p className="mt-2 font-game text-3xl font-semibold uppercase tracking-[0.08em] text-rose-100">
+                                {calories.current || 0}
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <p className="font-game text-[10px] uppercase tracking-[0.26em] text-slate-500">Target</p>
+                            <p className="font-game text-lg font-semibold uppercase tracking-[0.08em] text-slate-100">{calories.target || 0}</p>
+                        </div>
+                    </div>
+                    <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-800">
+                        <div
+                            className="h-full rounded-full bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-300 transition-all"
+                            style={{
+                                width: `${Math.min(((Number(calories.current || 0) / Math.max(Number(calories.target || 1), 1)) * 100), 100)}%`
+                            }}
+                        />
+                    </div>
+                    <p className="mt-3 text-left text-xs text-slate-400">
+                        {Number(calories.target || 0) - Number(calories.current || 0) > 0
+                            ? `${Number(calories.target || 0) - Number(calories.current || 0)} calories remaining today`
+                            : `${Math.abs(Number(calories.target || 0) - Number(calories.current || 0))} calories over target`}
+                    </p>
+                </div>
+            </SectionCard>
+        </div>
+    );
+
     return ReactDOM.createPortal(
         <div
-            className="fixed inset-0 z-[100] flex items-start justify-center p-0 bg-black/90 backdrop-blur-md"
+            className="fixed inset-0 z-[100] flex items-start justify-center bg-black/82 backdrop-blur-md"
             data-no-swipe="true"
         >
             <motion.div
-                initial={{ y: "-100%" }}
+                initial={{ y: '-100%' }}
                 animate={{ y: 0 }}
-                exit={{ y: "-100%" }}
-                transition={{ type: "spring", damping: 30, stiffness: 200 }}
+                exit={{ y: '-100%' }}
+                transition={{ type: 'spring', damping: 30, stiffness: 210 }}
                 drag="y"
                 dragListener={false}
                 dragControls={dragControls}
-                dragConstraints={{ top: -800, bottom: 0 }}
-                dragElastic={{ top: 0.2, bottom: 0 }}
-                onDragEnd={onPanEnd}
-                className="bg-slate-950 border-b border-slate-800 w-full max-w-5xl h-[100dvh] md:h-[90vh] md:rounded-b-3xl overflow-hidden flex flex-col shadow-2xl relative"
+                dragConstraints={{ top: -220, bottom: 0 }}
+                dragElastic={{ top: 0.22, bottom: 0 }}
+                onDragEnd={handleDragEnd}
+                onTouchStartCapture={handleSheetTouchStart}
+                onTouchEndCapture={handleSheetTouchEnd}
+                className="relative flex h-[100dvh] w-full max-w-3xl flex-col overflow-hidden border-b border-slate-700/90 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_rgba(15,23,42,0.96)_30%,_rgba(2,6,23,1)_68%)] shadow-2xl md:h-[92vh] md:rounded-b-[2rem]"
+                style={{
+                    paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)',
+                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)'
+                }}
             >
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.14),transparent_36%),radial-gradient(circle_at_bottom,rgba(251,191,36,0.1),transparent_30%)]" />
+                <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(rgba(148,163,184,0.45)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.45)_1px,transparent_1px)] [background-size:24px_24px]" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/80 to-transparent" />
 
-                {/* Header */}
-                <div className="p-4 md:p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 shrink-0">
-                    <h2 className="text-lg md:text-2xl font-game text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 flex items-center gap-2 md:gap-3">
-                        <Activity className="text-blue-400" size={20} />
-                        Data Center
-                    </h2>
-                    <div className="flex gap-1 md:gap-2">
-                        {['overview', 'finance', 'health'].map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[10px] md:text-sm font-bold uppercase tracking-wider transition-colors ${activeTab === tab
-                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
-                                    : 'text-gray-500 hover:text-gray-300'
-                                    }`}
-                            >
-                                {tab}
-                            </button>
-                        ))}
+                <div className="relative z-10 shrink-0 border-b border-slate-800/90 bg-slate-950/55 px-4 pb-4">
+                    <div className="text-left">
+                        <p className="font-game text-[10px] font-semibold uppercase tracking-[0.34em] text-slate-500">System Intel</p>
+                        <h2 className="mt-1 font-game text-2xl font-semibold uppercase tracking-[0.08em] text-slate-50">Data Center</h2>
+                        <p className="mt-1 text-sm text-slate-400">Live telemetry for your current dashboard state.</p>
+                        <p className="mt-2 font-game text-[10px] uppercase tracking-[0.26em] text-slate-500">
+                            Swipe up to close when the feed is at the top
+                        </p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-gray-500 transition-colors">
-                        <X size={20} />
-                    </button>
+
+                    <div className="mt-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                        {Object.entries(TAB_CONFIG).map(([tabKey, tab]) => {
+                            const Icon = tab.icon;
+                            const isActive = activeTab === tabKey;
+
+                            return (
+                                <button
+                                    key={tabKey}
+                                    onClick={() => setActiveTab(tabKey)}
+                                    className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm transition-all ${
+                                        isActive
+                                            ? 'border-slate-600 bg-slate-900/90 text-slate-100 shadow-[0_0_18px_rgba(0,0,0,0.22)]'
+                                            : 'border-slate-800/80 bg-black/35 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                                    }`}
+                                >
+                                    <Icon size={15} className={isActive ? tab.accent : 'text-slate-500'} />
+                                    <span className="font-game text-[13px] font-semibold uppercase tracking-[0.14em]">{tab.label}</span>
+                                    <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                                        {tab.range}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar pb-32">
-
-                    {activeTab === 'overview' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Quest Progress */}
-                            <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
-                                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                                    <Calendar size={18} className="text-emerald-400" /> Quest Completion Velocity
-                                </h3>
-                                <div className="h-64 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={questData}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                            <XAxis dataKey="date" stroke="#64748b" tick={{ fontSize: 10 }} />
-                                            <YAxis stroke="#64748b" tick={{ fontSize: 10 }} />
-                                            <Tooltip content={<CustomTooltip />} />
-                                            <Bar dataKey="count" name="Completed" fill="#34d399" radius={[4, 4, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-
-                            {/* Protocol Performance */}
-                            <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
-                                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                                    <Activity size={18} className="text-indigo-400" /> Protocol Consistency
-                                </h3>
-                                <div className="h-64 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart layout="vertical" data={protocolData}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                            <XAxis type="number" stroke="#64748b" tick={{ fontSize: 10 }} />
-                                            <YAxis dataKey="name" type="category" width={100} stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                                            <Tooltip content={<CustomTooltip />} />
-                                            <Bar dataKey="hits" name="Successes" fill="#818cf8" radius={[0, 4, 4, 0]} barSize={20} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'finance' && (
-                        <div className="space-y-6">
-                            <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
-                                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                                    <Coins size={18} className="text-yellow-400" /> Net Worth History
-                                </h3>
-                                <div className="h-80 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={coinData}>
-                                            <defs>
-                                                <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                            <XAxis dataKey="date" stroke="#64748b" tick={{ fontSize: 10 }} />
-                                            <YAxis stroke="#64748b" tick={{ fontSize: 10 }} />
-                                            <Tooltip content={<CustomTooltip />} />
-                                            <Area type="monotone" dataKey="balance" stroke="#fbbf24" fillOpacity={1} fill="url(#colorBalance)" />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-
-                            {/* Recent Transactions List */}
-                            <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
-                                <h3 className="text-lg font-bold text-white mb-4">Recent Ledger Activity</h3>
-                                <div className="space-y-2">
-                                    {coinHistory.slice().reverse().slice(0, 5).map(tx => (
-                                        <div key={tx.id} className="flex justify-between items-center bg-slate-800/40 p-3 rounded-lg">
-                                            <div>
-                                                <p className="text-sm text-gray-200 font-bold">{tx.description || 'Transaction'}</p>
-                                                <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString()}</p>
-                                            </div>
-                                            <span className={`font-mono font-bold ${tx.type === 'earned' ? 'text-green-400' : 'text-red-400'}`}>
-                                                {tx.type === 'earned' ? '+' : '-'}{tx.amount}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'health' && (
-                        <div className="space-y-6">
-                            <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
-                                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                                    <Activity size={18} className="text-red-400" /> Calorie Intake vs Target
-                                </h3>
-                                <div className="h-80 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={calorieData}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                            <XAxis dataKey="date" stroke="#64748b" tick={{ fontSize: 10 }} />
-                                            <YAxis stroke="#64748b" tick={{ fontSize: 10 }} />
-                                            <Tooltip content={<CustomTooltip />} />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="calories" stroke="#f87171" strokeWidth={2} dot={{ r: 4 }} />
-                                            <Line type="monotone" dataKey="target" stroke="#94a3b8" strokeDasharray="5 5" />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pb-6 pt-4 no-scrollbar">
+                    {activeTab === 'overview' && renderOverview()}
+                    {activeTab === 'finance' && renderFinance()}
+                    {activeTab === 'health' && renderHealth()}
                 </div>
 
-                {/* Bottom Drag Handle (Pull Up to Close) */}
-                <div
-                    className="w-full flex justify-center py-8 pb-10 active:pb-10 bg-slate-900/50 border-t border-slate-800 cursor-grab active:cursor-grabbing z-20 shrink-0 touch-none"
-                    onPointerDown={(e) => dragControls.start(e)}
-                >
-                    <div className="w-20 h-1.5 bg-slate-600/50 rounded-full" />
+                <div className="relative z-10 shrink-0 border-t border-slate-800/90 bg-slate-950/55 px-4 py-5">
+                    <div
+                        className="mx-auto flex w-16 cursor-grab justify-center rounded-full border border-slate-800/80 bg-black/35 px-1.5 py-1.5 text-slate-500 active:cursor-grabbing"
+                        onPointerDown={(event) => dragControls.start(event)}
+                    >
+                        <GripHorizontal size={16} />
+                    </div>
                 </div>
             </motion.div>
         </div>,

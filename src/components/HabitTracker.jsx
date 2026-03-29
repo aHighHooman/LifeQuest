@@ -3,13 +3,22 @@ import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { CheckCircle, Trash2, Plus, Zap, Settings, X, RotateCcw, Power } from 'lucide-react';
 import clsx from 'clsx';
+import { usePersistentState } from '../utils/persistence';
 
 // Constants
 const LOOKAHEAD_DAYS_DEFAULT = 1;
+const PROTOCOL_LOOKAHEAD_STORAGE_KEY = 'lq_protocol_lookahead_days';
+const PROTOCOL_CARD_THEME = {
+    card: 'bg-slate-900 border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.2)]',
+    content: 'bg-slate-900/80',
+    badge: 'bg-purple-900/50 text-purple-300 border-purple-500/30',
+    icon: 'text-purple-500',
+    routineText: 'text-purple-200/60',
+    actionAccent: 'text-purple-400'
+};
 
 // Shared utilities
 import { getDaysUntilDue } from '../utils/gameLogic';
-import { getTodayISO } from '../utils/dateUtils';
 import { SPRING_CONFIG } from '../constants/animations';
 
 // --- COMPONENTS ---
@@ -20,6 +29,20 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
     const x = useMotionValue(0);
     const y = useMotionValue(0);
     const rotate = useTransform(x, [-200, 200], [-30, 30]);
+    const daysUntilDue = getDaysUntilDue(habit);
+    const isDueToday = daysUntilDue === 0;
+    const isOverdue = daysUntilDue < 0;
+    const accentTheme = isDueToday ? {
+        badge: 'bg-violet-200/10 text-violet-100 border-violet-200/40',
+        icon: 'text-violet-200 drop-shadow-[0_0_12px_rgba(196,181,253,0.35)]',
+        routineText: 'text-violet-100/80',
+        actionAccent: 'text-violet-200'
+    } : isOverdue ? {
+        badge: 'bg-fuchsia-300/10 text-fuchsia-100 border-fuchsia-300/35',
+        icon: 'text-fuchsia-200 drop-shadow-[0_0_12px_rgba(244,114,182,0.28)]',
+        routineText: 'text-fuchsia-100/75',
+        actionAccent: 'text-fuchsia-200'
+    } : PROTOCOL_CARD_THEME;
 
     // Background colors for swipe feedback
     const bgRight = useTransform(x, [0, 150], ["rgba(0,0,0,0)", "rgba(168, 85, 247, 0.5)"]); // Purple (Complete)
@@ -98,8 +121,23 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
             animate="animate"
             exit="exit"
 
-            className="absolute w-[90%] max-w-md bg-slate-900 rounded-2xl border-2 border-purple-500 overflow-hidden shadow-[0_0_20px_rgba(168,85,247,0.2)] origin-bottom touch-none left-0 right-0 mx-auto h-[300px]"
+            className={clsx(
+                "absolute w-[90%] max-w-md rounded-2xl border-2 overflow-hidden origin-bottom touch-none left-0 right-0 mx-auto h-[300px]",
+                PROTOCOL_CARD_THEME.card,
+                isDueToday && "border-violet-300 shadow-[0_0_34px_rgba(196,181,253,0.26),0_0_14px_rgba(168,85,247,0.18)]",
+                isOverdue && "border-fuchsia-400 shadow-[0_0_28px_rgba(217,70,239,0.22)]"
+            )}
         >
+            {(isDueToday || isOverdue) && (
+                <div
+                    aria-hidden="true"
+                    className={clsx(
+                        "pointer-events-none absolute inset-[6px] rounded-[18px] border",
+                        isDueToday && "border-violet-200/40 shadow-[inset_0_0_18px_rgba(196,181,253,0.08)]",
+                        isOverdue && "border-fuchsia-300/30 shadow-[inset_0_0_18px_rgba(217,70,239,0.08)]"
+                    )}
+                />
+            )}
             {/* Swipe Feedback Overlays */}
             <motion.div style={{ opacity: useTransform(x, [0, 100], [0, 1]) }} className="absolute inset-0 bg-purple-500/20 z-10 flex items-center justify-center pointer-events-none">
                 <CheckCircle size={64} className="text-purple-400 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]" />
@@ -109,13 +147,10 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
                 <X size={64} className="text-slate-400 drop-shadow-[0_0_10px_rgba(148,163,184,0.8)]" />
             </motion.div>
 
-            <div className="p-6 flex flex-col h-full select-none bg-slate-900/80 backdrop-blur-sm">
-                <div className="flex justify-between items-start mb-4">
-                    <span className="text-xs font-black uppercase tracking-widest px-2 py-1 rounded bg-purple-900/50 text-purple-300 border border-purple-500/30">
+            <div className={clsx("p-6 flex flex-col h-full select-none backdrop-blur-sm", PROTOCOL_CARD_THEME.content)}>
+                <div className="flex items-start mb-4">
+                    <span className={clsx("text-xs font-black uppercase tracking-widest px-2 py-1 rounded border", accentTheme.badge)}>
                         Protocol
-                    </span>
-                    <span className="text-xs font-bold text-gray-500 uppercase">
-                        {habit.frequency}
                     </span>
                 </div>
 
@@ -124,8 +159,8 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
                 </h3>
 
                 <div className="flex-1 flex flex-col justify-center items-center text-center opacity-70">
-                    <Zap size={48} className="text-purple-500 mb-4 opacity-50" />
-                    <p className="text-sm text-purple-200/60 font-mono">
+                    <Zap size={48} className={clsx("mb-4 opacity-70", accentTheme.icon)} />
+                    <p className={clsx("text-sm font-mono", accentTheme.routineText)}>
                         {habit.frequency === 'interval'
                             ? `Every ${habit.frequencyParam} Days`
                             : `${habit.frequency.charAt(0).toUpperCase() + habit.frequency.slice(1)} Routine`}
@@ -133,7 +168,7 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-white/10 flex justify-between text-xs text-gray-500 font-mono">
-                    <div className="flex items-center gap-1"><span className="text-purple-400">►</span> COMPLETE</div>
+                    <div className="flex items-center gap-1"><span className={accentTheme.actionAccent}>►</span> COMPLETE</div>
                     <div className="flex items-center gap-1">SKIP <span className="text-rose-400">◄</span></div>
                 </div>
             </div>
@@ -387,7 +422,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                                                 <Zap size={14} className="text-purple-500" />
                                                 <input
                                                     type="range"
-                                                    min="0"
+                                                    min="1"
                                                     max="30"
                                                     value={lookaheadDays}
                                                     onChange={(e) => setLookaheadDays(parseInt(e.target.value))}
@@ -426,7 +461,14 @@ const HabitTracker = () => {
     const [isCreationOpen, setIsCreationOpen] = useState(false);
 
     // Filter Config
-    const [lookaheadDays, setLookaheadDays] = useState(LOOKAHEAD_DAYS_DEFAULT);
+    const [storedLookaheadDays, setStoredLookaheadDays] = usePersistentState(
+        PROTOCOL_LOOKAHEAD_STORAGE_KEY,
+        LOOKAHEAD_DAYS_DEFAULT
+    );
+    const lookaheadDays = Math.max(1, Number(storedLookaheadDays) || LOOKAHEAD_DAYS_DEFAULT);
+    const setLookaheadDays = useCallback((value) => {
+        setStoredLookaheadDays(Math.max(1, Number(value) || LOOKAHEAD_DAYS_DEFAULT));
+    }, [setStoredLookaheadDays]);
 
     // Deck Logic
     const [cycleOffsets, setCycleOffsets] = useState({});
@@ -445,27 +487,23 @@ const HabitTracker = () => {
         allHabits.filter(h => h.isActive === false),
         [allHabits]
     );
-
-    // Deck Filter (memoized with shared utility)
-    const todayStr = useMemo(() => getTodayISO(), []);
-    const isCompletedToday = useCallback(
-        (h) => (h.history?.[todayStr] || 0) > 0,
-        [todayStr]
+    const dueTodayHabits = useMemo(() =>
+        activeHabits.filter(h => getDaysUntilDue(h) <= 0),
+        [activeHabits]
     );
 
     const deckHabits = useMemo(() => {
         return activeHabits.filter(h => {
-            if (isCompletedToday(h)) return false;
             if (dismissedHabits.includes(h.id)) return false;
 
             const daysUntil = getDaysUntilDue(h);
-            return daysUntil <= lookaheadDays;
+            return daysUntil < lookaheadDays;
         }).sort((a, b) => {
             const cycleA = cycleOffsets[a.id] || 0;
             const cycleB = cycleOffsets[b.id] || 0;
             return cycleA - cycleB;
         });
-    }, [activeHabits, dismissedHabits, lookaheadDays, cycleOffsets, isCompletedToday]);
+    }, [activeHabits, dismissedHabits, lookaheadDays, cycleOffsets]);
 
 
     // --- HANDLERS ---
@@ -474,6 +512,7 @@ const HabitTracker = () => {
 
     const handleComplete = (id) => {
         setSlideDirection(1); // Right
+        setCycleOffsets(prev => ({ ...prev, [id]: Date.now() }));
         checkHabit(id, 'positive');
     };
 
@@ -496,10 +535,9 @@ const HabitTracker = () => {
         // Actually, we need to find the one with the highest cycle offset and give it the lowest offset.
 
         const inDeck = activeHabits.filter(h => {
-            if (isCompletedToday(h)) return false;
             if (dismissedHabits.includes(h.id)) return false;
             const daysUntil = getDaysUntilDue(h);
-            return daysUntil <= lookaheadDays;
+            return daysUntil < lookaheadDays;
         });
 
         if (inDeck.length === 0) return;
@@ -555,14 +593,11 @@ const HabitTracker = () => {
                     <h2 className="text-3xl font-game font-bold text-purple-400 tracking-widest uppercase text-glow">
                         Protocols
                     </h2>
-                    <p className="text-sm text-purple-400/60 flex items-center gap-2">
-                        System routines.
-                        <span className="text-[10px] opacity-50 border border-purple-500/30 rounded px-1">SWIPE DOWN TO ADD</span>
-                    </p>
+                    <p className="text-sm text-purple-400/60">System routines.</p>
                 </div>
 
                 <span className="text-purple-400 px-4 py-1 rounded-full text-xs font-bold">
-                    {deckHabits.length} PENDING
+                    {dueTodayHabits.length} DUE TODAY
                 </span>
 
             </div>

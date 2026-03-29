@@ -1,4 +1,13 @@
 
+const parseHistoryDate = (dateKey) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+        const [year, month, day] = dateKey.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    return new Date(dateKey);
+};
+
 export const getDaysUntilDue = (habit) => {
     // If no history, it's due
     if (!habit.history || Object.keys(habit.history).length === 0) return 0;
@@ -8,7 +17,7 @@ export const getDaysUntilDue = (habit) => {
 
     const sortedDates = Object.keys(habit.history).sort();
     const lastDateIso = sortedDates.pop();
-    const lastDate = new Date(lastDateIso);
+    const lastDate = parseHistoryDate(lastDateIso);
     lastDate.setHours(0, 0, 0, 0);
 
     // Calculate diff
