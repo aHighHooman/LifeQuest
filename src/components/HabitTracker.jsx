@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { CheckCircle, Trash2, Plus, Zap, Settings, X, RotateCcw, Power } from 'lucide-react';
+import { CheckCircle, Trash2, Plus, Zap, X, RotateCcw, Power, Coins } from 'lucide-react';
 import clsx from 'clsx';
 import { usePersistentState } from '../utils/persistence';
 
@@ -18,20 +18,42 @@ const PROTOCOL_CARD_THEME = {
 };
 
 // Shared utilities
-import { getDaysUntilDue } from '../utils/gameLogic';
+import { getDaysUntilDue, getHabitCycleState } from '../utils/gameLogic';
 import { SPRING_CONFIG } from '../constants/animations';
 
 // --- COMPONENTS ---
+const MotionDiv = motion.div;
 
+const formatRoutineLabel = (habit) => (
+    habit.frequency === 'interval'
+        ? `Every ${habit.frequencyParam} Days`
+        : `${habit.frequency.charAt(0).toUpperCase() + habit.frequency.slice(1)} Routine`
+);
 
+const getDueStatusLabel = (habit) => {
+    const { dueDateKey, daysUntilDue, isDueToday, isOverdue } = getHabitCycleState(habit);
 
-const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycleNext, onCyclePrev, isTop, isTopInDeck, isLast, custom }) => {
+    if (!dueDateKey) return 'Due Today';
+    if (isDueToday) return `Due today · ${dueDateKey}`;
+    if (isOverdue) return `Overdue by ${Math.abs(daysUntilDue)}d · ${dueDateKey}`;
+    return `Due in ${daysUntilDue}d · ${dueDateKey}`;
+};
+
+const getRewardSummary = (habit) => ({
+    completionReward: Number(habit.completionReward || 0),
+    passiveReward: Number(habit.passiveReward || 0)
+});
+
+const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyclePrev, isTopInDeck, custom }) => {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
     const rotate = useTransform(x, [-200, 200], [-30, 30]);
+    const [showDetails, setShowDetails] = useState(false);
     const daysUntilDue = getDaysUntilDue(habit);
     const isDueToday = daysUntilDue === 0;
     const isOverdue = daysUntilDue < 0;
+    const dueStatusLabel = getDueStatusLabel(habit);
+    const { completionReward, passiveReward } = getRewardSummary(habit);
     const accentTheme = isDueToday ? {
         badge: 'bg-violet-200/10 text-violet-100 border-violet-200/40',
         icon: 'text-violet-200 drop-shadow-[0_0_12px_rgba(196,181,253,0.35)]',
@@ -43,10 +65,6 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
         routineText: 'text-fuchsia-100/75',
         actionAccent: 'text-fuchsia-200'
     } : PROTOCOL_CARD_THEME;
-
-    // Background colors for swipe feedback
-    const bgRight = useTransform(x, [0, 150], ["rgba(0,0,0,0)", "rgba(168, 85, 247, 0.5)"]); // Purple (Complete)
-    const bgLeft = useTransform(x, [-150, 0], ["rgba(244, 63, 94, 0.5)", "rgba(0,0,0,0)"]); // Rose (Skip)
 
     const handleDragEnd = (event, info) => {
         const swipeThreshold = 100;
@@ -65,8 +83,12 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
         }
     };
 
+    const toggleDetails = () => {
+        setShowDetails((prev) => !prev);
+    };
+
     return (
-        <motion.div
+        <MotionDiv
             style={{
                 x,
                 y: isTopInDeck ? y : 0, // Only move top card with drag
@@ -81,6 +103,11 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
             dragPropagation={false}
             data-no-swipe="true"
             onDragEnd={handleDragEnd}
+            onTap={toggleDetails}
+            onPanStart={(e) => e.stopPropagation()}
+            onPan={(e) => e.stopPropagation()}
+            onPanEnd={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
 
             custom={custom}
             variants={{
@@ -139,40 +166,71 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onDismiss, onSkip, onCycle
                 />
             )}
             {/* Swipe Feedback Overlays */}
-            <motion.div style={{ opacity: useTransform(x, [0, 100], [0, 1]) }} className="absolute inset-0 bg-purple-500/20 z-10 flex items-center justify-center pointer-events-none">
+            <MotionDiv style={{ opacity: useTransform(x, [0, 100], [0, 1]) }} className="absolute inset-0 bg-purple-500/20 z-10 flex items-center justify-center pointer-events-none">
                 <CheckCircle size={64} className="text-purple-400 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]" />
-            </motion.div>
-            <motion.div style={{ opacity: useTransform(x, [-100, 0], [1, 0]) }} className="absolute inset-0 bg-slate-500/20 z-10 flex items-center justify-center pointer-events-none">
+            </MotionDiv>
+            <MotionDiv style={{ opacity: useTransform(x, [-100, 0], [1, 0]) }} className="absolute inset-0 bg-slate-500/20 z-10 flex items-center justify-center pointer-events-none">
                 {/* Skip Icon (Left) */}
                 <X size={64} className="text-slate-400 drop-shadow-[0_0_10px_rgba(148,163,184,0.8)]" />
-            </motion.div>
+            </MotionDiv>
 
-            <div className={clsx("p-6 flex flex-col h-full select-none backdrop-blur-sm", PROTOCOL_CARD_THEME.content)}>
+            <div className={clsx("relative p-6 flex flex-col h-full select-none backdrop-blur-sm", PROTOCOL_CARD_THEME.content)}>
                 <div className="flex items-start mb-4">
                     <span className={clsx("text-xs font-black uppercase tracking-widest px-2 py-1 rounded border", accentTheme.badge)}>
                         Protocol
                     </span>
                 </div>
 
-                <h3 className="text-2xl font-game font-bold text-white mb-2 leading-tight">
+                <h3 className="text-2xl font-mono font-bold text-white mb-2 leading-tight tracking-tight">
                     {habit.title}
                 </h3>
 
-                <div className="flex-1 flex flex-col justify-center items-center text-center opacity-70">
-                    <Zap size={48} className={clsx("mb-4 opacity-70", accentTheme.icon)} />
-                    <p className={clsx("text-sm font-mono", accentTheme.routineText)}>
-                        {habit.frequency === 'interval'
-                            ? `Every ${habit.frequencyParam} Days`
-                            : `${habit.frequency.charAt(0).toUpperCase() + habit.frequency.slice(1)} Routine`}
-                    </p>
+                <div className="flex-1 flex flex-col justify-center items-center text-center opacity-70 pb-14">
+                    {showDetails ? (
+                        <MotionDiv
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="w-full max-w-[240px] text-left"
+                        >
+                            <div className="mb-4 flex items-center justify-between">
+                                <p className="text-[10px] font-game uppercase tracking-[0.28em] text-violet-200/70">
+                                    Protocol Economy
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="min-w-0 border-l border-violet-300/20 pl-3">
+                                    <div className="min-h-[2.4rem]">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] leading-tight text-violet-200/75">Due-Day Bonus</p>
+                                    </div>
+                                    <p className="mt-3 text-3xl font-game leading-none text-white">{completionReward}</p>
+                                </div>
+                                <div className="min-w-0 border-l border-fuchsia-300/20 pl-3">
+                                    <div className="min-h-[2.4rem]">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] leading-tight text-fuchsia-100/75">Passive Generation</p>
+                                    </div>
+                                    <p className="mt-3 text-3xl font-game leading-none text-white">{passiveReward}</p>
+                                </div>
+                            </div>
+                        </MotionDiv>
+                    ) : (
+                        <>
+                            <Zap size={48} className={clsx("mb-4 opacity-70", accentTheme.icon)} />
+                            <p className={clsx("text-sm font-mono", accentTheme.routineText)}>
+                                {formatRoutineLabel(habit)}
+                            </p>
+                            <p className="mt-3 text-[11px] font-mono text-slate-300">
+                                {dueStatusLabel}
+                            </p>
+                        </>
+                    )}
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-white/10 flex justify-between text-xs text-gray-500 font-mono">
+                <div className="absolute bottom-6 left-6 right-6 border-t border-white/10 pt-4 flex justify-between text-xs text-gray-500 font-mono">
                     <div className="flex items-center gap-1"><span className={accentTheme.actionAccent}>►</span> COMPLETE</div>
                     <div className="flex items-center gap-1">SKIP <span className="text-rose-400">◄</span></div>
                 </div>
             </div>
-        </motion.div>
+        </MotionDiv>
     );
 };
 
@@ -216,7 +274,7 @@ const ProtocolDeck = ({ habits, cycleOffsets, onComplete, onSkip, onCycleNext, o
 const ProtocolListModal = ({ title, items, onClose, type, onAction, actionLabel, onSecondaryAction, secondaryActionLabel }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
-            <motion.div
+            <MotionDiv
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
@@ -236,18 +294,27 @@ const ProtocolListModal = ({ title, items, onClose, type, onAction, actionLabel,
                     {items.map(habit => {
                         const daysUntil = getDaysUntilDue(habit);
                         const isDue = daysUntil <= 0;
+                        const { completionReward, passiveReward } = getRewardSummary(habit);
 
                         return (
                             <div key={habit.id} className="bg-slate-800/50 p-3 rounded-lg flex items-center justify-between border border-slate-700">
                                 <div className="flex-1 min-w-0 pr-2">
                                     <div className="font-bold text-slate-200 text-sm truncate">{habit.title}</div>
-                                    <div className="text-[10px] text-gray-500 flex items-center gap-2">
+                                    <div className="mt-1 text-[10px] text-gray-500 flex flex-wrap items-center gap-2">
                                         <span className="uppercase">{habit.frequency}</span>
                                         {type === 'active' && (
-                                            <span className={clsx("font-mono", isDue ? "text-purple-400" : "text-slate-600")}>
-                                                {isDue ? "DUE NOW" : `Due in ${daysUntil}d`}
+                                            <span className={clsx("font-mono", isDue ? "text-purple-400" : "text-slate-500")}>
+                                                {getDueStatusLabel(habit)}
                                             </span>
                                         )}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-mono">
+                                        <span className="rounded-full border border-amber-400/15 bg-amber-500/10 px-2 py-1 text-amber-200">
+                                            Bonus {completionReward}
+                                        </span>
+                                        <span className="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-2 py-1 text-emerald-200">
+                                            Passive {passiveReward}/day
+                                        </span>
                                     </div>
                                 </div>
 
@@ -284,16 +351,18 @@ const ProtocolListModal = ({ title, items, onClose, type, onAction, actionLabel,
                         );
                     })}
                 </div>
-            </motion.div>
+            </MotionDiv>
         </div>
     );
 };
 
-const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLookaheadDays }) => {
+const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLookaheadDays, defaultCompletionReward }) => {
     const [title, setTitle] = useState('');
     const [frequency, setFrequency] = useState('daily');
     const [intervalParam, setIntervalParam] = useState(2);
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+    const [completionReward, setCompletionReward] = useState(defaultCompletionReward);
+    const [passiveReward, setPassiveReward] = useState(0);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -302,11 +371,17 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
         let param = 1;
         if (frequency === 'interval') param = intervalParam;
 
-        onAdd(title, frequency, param);
+        onAdd(title, frequency, param, {
+            completionReward,
+            passiveReward
+        });
 
         // Reset
         setTitle('');
         setFrequency('daily');
+        setIntervalParam(2);
+        setCompletionReward(Number(defaultCompletionReward || 0));
+        setPassiveReward(0);
         onClose();
     };
 
@@ -314,14 +389,14 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
         <AnimatePresence>
             {isOpen && (
                 <>
-                    <motion.div
+                    <MotionDiv
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
                         onClick={onClose}
                     />
-                    <motion.div
+                    <MotionDiv
                         initial={{ y: "-100%" }}
                         animate={{ y: 0 }}
                         exit={{ y: "-100%" }}
@@ -367,7 +442,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                                 </div>
 
                                 {isAdvancedOpen && (
-                                    <motion.div
+                                    <MotionDiv
                                         initial={{ height: 0, opacity: 0 }}
                                         animate={{ height: 'auto', opacity: 1 }}
                                         className="space-y-4 pt-2"
@@ -412,6 +487,35 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                                             )}
                                         </div>
 
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                            <div className="space-y-2">
+                                                <label className="text-xs text-slate-500">Due-Day Bonus</label>
+                                                <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">
+                                                    <Coins size={14} className="text-amber-400" />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={completionReward}
+                                                        onChange={(e) => setCompletionReward(Math.max(0, parseInt(e.target.value) || 0))}
+                                                        className="w-full bg-transparent text-right font-mono text-white focus:outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs text-slate-500">Daily Passive Income</label>
+                                                <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">
+                                                    <Coins size={14} className="text-emerald-400" />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={passiveReward}
+                                                        onChange={(e) => setPassiveReward(Math.max(0, parseInt(e.target.value) || 0))}
+                                                        className="w-full bg-transparent text-right font-mono text-white focus:outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         {/* Horizon Control - Moved here */}
                                         <div className="pt-4 border-t border-white/5 space-y-2">
                                             <div className="flex justify-between items-center">
@@ -430,7 +534,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                                                 />
                                             </div>
                                         </div>
-                                    </motion.div>
+                                    </MotionDiv>
                                 )}
                             </div>
 
@@ -445,7 +549,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                                 <span className="text-[10px] text-slate-500 uppercase tracking-widest">Swipe Up to Cancel</span>
                             </div>
                         </form>
-                    </motion.div>
+                    </MotionDiv>
                 </>
             )}
         </AnimatePresence>
@@ -453,7 +557,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
 };
 
 const HabitTracker = () => {
-    const { habits, addHabit, checkHabit, deleteHabit, toggleHabitActivation } = useGame();
+    const { habits, addHabit, checkHabit, deleteHabit, toggleHabitActivation, settings } = useGame();
 
     // Modal States
     const [showActiveList, setShowActiveList] = useState(false);
@@ -476,7 +580,7 @@ const HabitTracker = () => {
     const [slideDirection, setSlideDirection] = useState(1); // 1 = Right, -1 = Left (Skip)
 
     // --- DATA ---
-    const allHabits = Array.isArray(habits) ? habits : [];
+    const allHabits = useMemo(() => (Array.isArray(habits) ? habits : []), [habits]);
 
     // Active & Inactive Split (memoized)
     const activeHabits = useMemo(() =>
@@ -575,7 +679,7 @@ const HabitTracker = () => {
     };
 
     return (
-        <motion.div
+        <MotionDiv
             className="pb-4 md:pb-0 relative flex flex-col w-full flex-1 h-full touch-none"
             onPanEnd={(e, info) => {
                 // Global swipe down to open creation
@@ -677,11 +781,13 @@ const HabitTracker = () => {
 
             {/* Creation Panel */}
             <ProtocolCreationPanel
+                key={`${isCreationOpen}-${settings.protocolReward}`}
                 isOpen={isCreationOpen}
                 onClose={() => setIsCreationOpen(false)}
                 onAdd={addHabit}
                 lookaheadDays={lookaheadDays}
                 setLookaheadDays={setLookaheadDays}
+                defaultCompletionReward={settings.protocolReward}
             />
 
 
@@ -714,7 +820,7 @@ const HabitTracker = () => {
                     />
                 )}
             </AnimatePresence>
-        </motion.div>
+        </MotionDiv>
     );
 };
 

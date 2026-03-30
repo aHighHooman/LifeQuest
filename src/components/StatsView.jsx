@@ -375,7 +375,7 @@ const StatsView = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     const handleDragEnd = (_, info) => {
-        if (info.offset.y < -80) {
+        if (info.offset.y < -80 || info.velocity.y < -500) {
             onClose();
         }
     };
@@ -692,6 +692,7 @@ const StatsView = ({ isOpen, onClose }) => {
                 drag="y"
                 dragListener={false}
                 dragControls={dragControls}
+                dragSnapToOrigin
                 dragConstraints={{ top: -220, bottom: 0 }}
                 dragElastic={{ top: 0.22, bottom: 0 }}
                 onDragEnd={handleDragEnd}
@@ -699,7 +700,6 @@ const StatsView = ({ isOpen, onClose }) => {
                 onTouchEndCapture={handleSheetTouchEnd}
                 className="relative flex h-[100dvh] w-full max-w-3xl flex-col overflow-hidden border-b border-slate-700/90 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_rgba(15,23,42,0.96)_30%,_rgba(2,6,23,1)_68%)] shadow-2xl md:h-[92vh] md:rounded-b-[2rem]"
                 style={{
-                    paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)',
                     paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)'
                 }}
             >
@@ -707,7 +707,10 @@ const StatsView = ({ isOpen, onClose }) => {
                 <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(rgba(148,163,184,0.45)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.45)_1px,transparent_1px)] [background-size:24px_24px]" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/80 to-transparent" />
 
-                <div className="relative z-10 shrink-0 border-b border-slate-800/90 bg-slate-950/55 px-4 pb-4">
+                <div
+                    className="relative z-10 shrink-0 border-b border-slate-800/90 bg-slate-950/55 px-4 pb-4"
+                    style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+                >
                     <div className="text-left">
                         <p className="font-game text-[10px] font-semibold uppercase tracking-[0.34em] text-slate-500">System Intel</p>
                         <h2 className="mt-1 font-game text-2xl font-semibold uppercase tracking-[0.08em] text-slate-50">Data Center</h2>

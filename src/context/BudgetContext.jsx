@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { usePersistentState } from '../utils/persistence';
 
@@ -15,6 +16,9 @@ export const BudgetProvider = ({ children }) => {
     const [groceryList, setGroceryList] = usePersistentState('lq_grocery_list', INITIAL_GROCERY_ITEMS);
     const [priceDatabase, setPriceDatabase] = usePersistentState('lq_price_db', INITIAL_PRICE_DB);
     const [groceryPeriod, setGroceryPeriod] = usePersistentState('lq_grocery_period', 'weekly');
+    const [stipendAmount, setStipendAmount] = usePersistentState('lq_budget_stipend_amount', 0);
+    const [stipendPeriod, setStipendPeriod] = usePersistentState('lq_budget_stipend_period', 'weekly');
+    const [stipendPaidThrough, setStipendPaidThrough] = usePersistentState('lq_budget_stipend_paid_through', null);
     const [goldToUsdRatio, setGoldToUsdRatio] = usePersistentState('lq_gold_ratio', 10);
 
     const addRewardFromGold = useCallback((goldAmount) => {
@@ -36,16 +40,38 @@ export const BudgetProvider = ({ children }) => {
         const newItem = {
             id: Date.now().toString(),
             name,
-            quantity,
+            quantity: Math.max(1, Number(quantity) || 1),
             price,
-            completed: false
+            completed: false,
+            completedDateKey: null,
+            completedAt: null
         };
         setGroceryList(prev => [...prev, newItem]);
     }, [priceDatabase, setGroceryList]);
 
-    const toggleGroceryItem = useCallback((id) => {
+    const markGroceryItemCompleted = useCallback((id, dateKey) => {
         setGroceryList(prev => prev.map(item =>
-            item.id === id ? { ...item, completed: !item.completed } : item
+            item.id === id
+                ? {
+                    ...item,
+                    completed: true,
+                    completedDateKey: dateKey,
+                    completedAt: new Date().toISOString()
+                }
+                : item
+        ));
+    }, [setGroceryList]);
+
+    const unmarkGroceryItemCompleted = useCallback((id) => {
+        setGroceryList(prev => prev.map(item =>
+            item.id === id
+                ? {
+                    ...item,
+                    completed: false,
+                    completedDateKey: null,
+                    completedAt: null
+                }
+                : item
         ));
     }, [setGroceryList]);
 
@@ -54,11 +80,24 @@ export const BudgetProvider = ({ children }) => {
     }, [setGroceryList]);
 
     const resetGroceryList = useCallback(() => {
-        setGroceryList(prev => prev.map(item => ({ ...item, completed: false })));
+        setGroceryList(prev => prev.map(item => ({
+            ...item,
+            completed: false,
+            completedDateKey: null,
+            completedAt: null
+        })));
     }, [setGroceryList]);
 
     const clearGroceryList = useCallback(() => {
         setGroceryList([]);
+    }, [setGroceryList]);
+
+    const removeCompletedGroceriesBefore = useCallback((todayKey) => {
+        setGroceryList(prev => prev.filter(item => {
+            if (!item.completed) return true;
+            if (!item.completedDateKey) return false;
+            return item.completedDateKey >= todayKey;
+        }));
     }, [setGroceryList]);
 
     const totalGrocerySpent = useMemo(() => groceryList
@@ -75,10 +114,13 @@ export const BudgetProvider = ({ children }) => {
         groceryList, setGroceryList,
         priceDatabase, updatePrice,
         groceryPeriod, setGroceryPeriod,
+        stipendAmount, setStipendAmount,
+        stipendPeriod, setStipendPeriod,
+        stipendPaidThrough, setStipendPaidThrough,
         goldToUsdRatio, setGoldToUsdRatio,
         addRewardFromGold, removeRewardFromGold,
-        addGroceryItem, toggleGroceryItem, removeGroceryItem,
-        resetGroceryList, clearGroceryList,
+        addGroceryItem, markGroceryItemCompleted, unmarkGroceryItemCompleted, removeGroceryItem,
+        resetGroceryList, clearGroceryList, removeCompletedGroceriesBefore,
         totalGrocerySpent, totalGroceryEstimated
     }), [
         totalMonthlyBudget, setTotalMonthlyBudget,
@@ -87,10 +129,13 @@ export const BudgetProvider = ({ children }) => {
         groceryList, setGroceryList,
         priceDatabase, updatePrice,
         groceryPeriod, setGroceryPeriod,
+        stipendAmount, setStipendAmount,
+        stipendPeriod, setStipendPeriod,
+        stipendPaidThrough, setStipendPaidThrough,
         goldToUsdRatio, setGoldToUsdRatio,
         addRewardFromGold, removeRewardFromGold,
-        addGroceryItem, toggleGroceryItem, removeGroceryItem,
-        resetGroceryList, clearGroceryList,
+        addGroceryItem, markGroceryItemCompleted, unmarkGroceryItemCompleted, removeGroceryItem,
+        resetGroceryList, clearGroceryList, removeCompletedGroceriesBefore,
         totalGrocerySpent, totalGroceryEstimated
     ]);
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export const APP_VERSION = '1.1.0'; // Incrementing for this update
+export const APP_VERSION = '1.3.0'; // Incrementing for this update
 export const VERSION_KEY = 'lq_version';
 
 /**
@@ -85,7 +85,9 @@ const performSafetyBackup = () => {
         const keysToBackup = [
             'lq_stats', 'lq_quests', 'lq_habits', 'lq_settings',
             'lq_calories', 'lq_coin_history',
-            'lq_budget_total', 'lq_grocery_list'
+            'lq_budget_total', 'lq_grocery_list', 'lq_price_db', 'lq_grocery_period',
+            'lq_budget_grocery_alloc', 'lq_budget_earned', 'lq_gold_ratio',
+            'lq_budget_stipend_amount', 'lq_budget_stipend_period', 'lq_budget_stipend_paid_through'
         ];
 
         const backup = {};

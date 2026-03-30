@@ -344,7 +344,15 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
             }}
         >
             <React.Suspense fallback={null}>
-                <StatsView isOpen={showStats} onClose={() => setShowStats(false)} />
+                <AnimatePresence>
+                    {showStats && (
+                        <StatsView
+                            key="stats-view"
+                            isOpen={showStats}
+                            onClose={() => setShowStats(false)}
+                        />
+                    )}
+                </AnimatePresence>
             </React.Suspense>
 
             <FocusSelectionModal isOpen={showFocusModal} onClose={() => setShowFocusModal(false)} />

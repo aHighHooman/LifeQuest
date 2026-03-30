@@ -122,7 +122,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
                         <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-2">Reward Configuration</h3>
 
                         <div className="space-y-3">
-                            <label className="text-sm font-bold text-gray-300">Protocol Rewards (Credits)</label>
+                            <label className="text-sm font-bold text-gray-300">Default Protocol Bonus (Credits)</label>
                             <input
                                 type="number"
                                 name="protocolReward"

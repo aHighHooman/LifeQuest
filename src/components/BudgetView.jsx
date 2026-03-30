@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { useBudget } from '../context/BudgetContext';
 import {
     Plus,
@@ -6,56 +7,569 @@ import {
     CheckCircle2,
     Circle,
     ShoppingCart,
-    DollarSign,
     Settings,
-    RefreshCw,
     Coins,
-    Minus,
     CreditCard,
     ArrowRightLeft,
     X,
     Database
 } from 'lucide-react';
 import { useGame } from '../context/GameContext';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
+import { getTodayISO } from '../utils/dateUtils';
 
 // Constants
 const TAB_PROVISIONS = 'provisions';
 const TAB_LEDGER = 'ledger';
+const COIN_HOLD_DURATION_MS = 980;
 
-const CoinSwitch = ({ onClick }) => {
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const mulberry32 = (seed) => {
+    let value = seed >>> 0;
+
+    return () => {
+        value += 0x6D2B79F5;
+        let t = value;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+};
+
+const isInsideCoin = (point) => {
+    const dx = point.x - 50;
+    const dy = point.y - 50;
+    return Math.hypot(dx, dy) <= 46;
+};
+
+const pullToCoinEdge = (point) => {
+    const dx = point.x - 50;
+    const dy = point.y - 50;
+    const angle = Math.atan2(dy, dx);
+    const radius = Math.min(46, Math.max(0, Math.hypot(dx, dy)));
+    return {
+        x: 50 + Math.cos(angle) * radius,
+        y: 50 + Math.sin(angle) * radius
+    };
+};
+
+const buildSmoothPath = (points) => {
+    if (points.length < 2) return '';
+
+    let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+    for (let i = 1; i < points.length; i += 1) {
+        const prev = points[i - 1];
+        const current = points[i];
+        const mx = ((prev.x + current.x) / 2).toFixed(2);
+        const my = ((prev.y + current.y) / 2).toFixed(2);
+        d += ` Q ${prev.x.toFixed(2)} ${prev.y.toFixed(2)} ${mx} ${my}`;
+    }
+
+    const last = points[points.length - 1];
+    d += ` T ${last.x.toFixed(2)} ${last.y.toFixed(2)}`;
+    return d;
+};
+
+const continueCrackToEdge = (rand, points, current, direction, depth) => {
+    let cursor = { x: current.x, y: current.y };
+    let heading = direction;
+    let attempts = 0;
+
+    while (isInsideCoin(cursor) && attempts < 18) {
+        const step = 4.8 + rand() * 3.8 - depth * 0.25;
+        heading += (rand() - 0.5) * (0.18 + depth * 0.08);
+        const next = {
+            x: cursor.x + Math.cos(heading) * step,
+            y: cursor.y + Math.sin(heading) * step
+        };
+
+        if (!isInsideCoin(next)) {
+            points.push(pullToCoinEdge(next));
+            return;
+        }
+
+        points.push(next);
+        cursor = next;
+        attempts += 1;
+    }
+
+    if (isInsideCoin(cursor)) {
+        points.push(pullToCoinEdge({
+            x: cursor.x + Math.cos(heading) * 80,
+            y: cursor.y + Math.sin(heading) * 80
+        }));
+    }
+};
+
+const buildCrackTree = (rand, start, angle, depth, cracks, inheritedStart) => {
+    const points = [{ x: start.x, y: start.y }];
+    let current = { x: start.x, y: start.y };
+    let direction = angle;
+    const segments = 4 + Math.floor(rand() * 4) - depth;
+    const startAt = inheritedStart ?? clamp(0.14 + depth * 0.085 + rand() * 0.045, 0.1, 0.9);
+    const duration = clamp(0.028 + rand() * 0.045 - depth * 0.004, 0.02, 0.085);
+    const width = clamp(1.45 - depth * 0.18 + rand() * 0.18, 0.72, 1.55);
+    const shouldReachEdge = depth === 0 || rand() < 0.6;
+    let hitEdge = false;
+
+    for (let i = 0; i < segments; i += 1) {
+        const step = 5 + rand() * 5 - depth * 0.45;
+        direction += (rand() - 0.5) * (0.5 + depth * 0.16);
+        const next = {
+            x: current.x + Math.cos(direction) * step,
+            y: current.y + Math.sin(direction) * step
+        };
+
+        if (!isInsideCoin(next)) {
+            points.push(pullToCoinEdge(next));
+            hitEdge = true;
+            break;
+        }
+
+        points.push(next);
+        current = next;
+
+        if (depth < 2 && i >= 1 && rand() < (0.28 - depth * 0.08)) {
+            const branchAngle = direction + (rand() < 0.5 ? -1 : 1) * (0.45 + rand() * 0.7);
+            buildCrackTree(
+                rand,
+                current,
+                branchAngle,
+                depth + 1,
+                cracks,
+                clamp(startAt + 0.022 + rand() * 0.055, 0.12, 0.96)
+            );
+        }
+    }
+
+    if (shouldReachEdge && !hitEdge) {
+        continueCrackToEdge(rand, points, current, direction, depth);
+    }
+
+    if (points.length > 1) {
+        cracks.push({
+            d: buildSmoothPath(points),
+            startAt,
+            endAt: clamp(startAt + duration, startAt + 0.08, 1),
+            width,
+            depth
+        });
+    }
+};
+
+const createCoinCrackNetwork = (seed) => {
+    const rand = mulberry32(seed);
+    const cracks = [];
+    const roots = 5 + Math.floor(rand() * 2);
+
+    for (let i = 0; i < roots; i += 1) {
+        const rootAngle = (Math.PI * 2 * i) / roots + (rand() - 0.5) * 0.65;
+        const rootRadius = 4 + rand() * 9;
+        const rootStart = clamp(0.18 + (i * 0.105) + ((i % 2) * 0.04) + ((rand() - 0.5) * 0.025), 0.14, 0.9);
+        const origin = {
+            x: 50 + Math.cos(rootAngle) * rootRadius,
+            y: 50 + Math.sin(rootAngle) * rootRadius
+        };
+
+        buildCrackTree(rand, origin, rootAngle + (rand() - 0.5) * 0.6, 0, cracks, rootStart);
+    }
+
+    return cracks
+        .sort((a, b) => a.startAt - b.startAt)
+        .map((crack, index) => ({ ...crack, key: `${seed}-${index}` }));
+};
+
+const getCrackReveal = (progress, crack) => {
+    const local = clamp((progress - crack.startAt) / (crack.endAt - crack.startAt), 0, 1);
+    if (local <= 0) return 0;
+
+    let eased = 0;
+    if (local < 0.08) {
+        eased = 0;
+    } else if (local < 0.2) {
+        eased = 0.06 + ((local - 0.08) / 0.12) * 0.82;
+    } else if (local < 0.4) {
+        eased = 0.88 + ((local - 0.2) / 0.2) * 0.08;
+    } else {
+        eased = 0.96 + ((local - 0.4) / 0.6) * 0.04;
+    }
+
+    return clamp(eased, 0, 1);
+};
+
+const getCrackEnergy = (cracks, progress) => {
+    if (!cracks.length) return 0;
+
+    const total = cracks.reduce((sum, crack) => {
+        const reveal = getCrackReveal(progress, crack);
+        const weight = crack.depth === 0 ? 1.2 : crack.depth === 1 ? 0.75 : 0.48;
+        return sum + reveal * weight;
+    }, 0);
+
+    return clamp(total / (cracks.length * 0.38), 0, 1);
+};
+
+const CoinCrackSvg = ({ cracks, progress, glowFilterId, hotFilterId, warmBack = false }) => (
+    <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+        <defs>
+            <clipPath id={`${glowFilterId}-clip`}>
+                <circle cx="50" cy="50" r="46" />
+            </clipPath>
+            <filter id={glowFilterId} x="-40%" y="-40%" width="180%" height="180%">
+                <feGaussianBlur stdDeviation="1.8" result="blur" />
+                <feColorMatrix
+                    in="blur"
+                    type="matrix"
+                    values={warmBack
+                        ? '1 0 0 0 0  0 0.8 0 0 0  0 0 0.38 0 0  0 0 0 1 0'
+                        : '1 0 0 0 0  0 0.75 0 0 0  0 0 0.32 0 0  0 0 0 1 0'}
+                />
+            </filter>
+            <filter id={hotFilterId} x="-40%" y="-40%" width="180%" height="180%">
+                <feGaussianBlur stdDeviation="0.45" />
+            </filter>
+        </defs>
+
+        <g clipPath={`url(#${glowFilterId}-clip)`}>
+            {cracks.map((crack) => {
+                const reveal = getCrackReveal(progress, crack);
+                const dashOffset = (1 - reveal) * 100;
+                const sharedOpacity = reveal === 0 ? 0 : 0.12 + progress * 0.28;
+
+                return (
+                    <g key={crack.key}>
+                        <path
+                            d={crack.d}
+                            pathLength={100}
+                            stroke="rgba(76, 28, 6, 0.5)"
+                            strokeWidth={crack.width + 1.3}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            fill="none"
+                            vectorEffect="non-scaling-stroke"
+                            strokeDasharray="100"
+                            strokeDashoffset={dashOffset}
+                            opacity={sharedOpacity * 0.65}
+                        />
+                        <path
+                            d={crack.d}
+                            pathLength={100}
+                            stroke={warmBack ? 'rgba(255, 188, 88, 0.95)' : 'rgba(255, 173, 56, 0.95)'}
+                            strokeWidth={crack.width + 0.95}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            fill="none"
+                            vectorEffect="non-scaling-stroke"
+                            strokeDasharray="100"
+                            strokeDashoffset={dashOffset}
+                            opacity={sharedOpacity + reveal * 0.42}
+                            filter={`url(#${glowFilterId})`}
+                        />
+                        <path
+                            d={crack.d}
+                            pathLength={100}
+                            stroke={warmBack ? 'rgba(255, 249, 230, 0.98)' : 'rgba(255, 247, 224, 0.98)'}
+                            strokeWidth={Math.max(0.65, crack.width - 0.15)}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            fill="none"
+                            vectorEffect="non-scaling-stroke"
+                            strokeDasharray="100"
+                            strokeDashoffset={dashOffset}
+                            opacity={sharedOpacity + reveal * 0.52}
+                            filter={`url(#${hotFilterId})`}
+                        />
+                    </g>
+                );
+            })}
+        </g>
+    </svg>
+);
+
+const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
     const [spinCount, setSpinCount] = useState(0);
     const [shadowScale, setShadowScale] = useState(1);
+    const [holdProgress, setHoldProgress] = useState(0);
+    const [shakeOffset, setShakeOffset] = useState({ x: 0, y: 0 });
+    const [burstPulse, setBurstPulse] = useState(0);
+    const buttonRef = useRef(null);
     const rotating = useRef(false);
+    const targetSpinCountRef = useRef(0);
+    const holdFrameRef = useRef(null);
+    const holdTimeoutRef = useRef(null);
+    const burstTimeoutRef = useRef(null);
+    const shakeIntervalRef = useRef(null);
+    const holdStartRef = useRef(0);
+    const holdingRef = useRef(false);
+    const holdTriggeredRef = useRef(false);
+    const suppressClickRef = useRef(false);
+    const suppressClickTimeoutRef = useRef(null);
+    const holdProgressRef = useRef(0);
+    const fractureBrightnessRef = useRef(0);
+    const frontCracksRef = useRef(null);
+    const backCracksRef = useRef(null);
 
-    const handleClick = (e) => {
+    if (!frontCracksRef.current) {
+        frontCracksRef.current = createCoinCrackNetwork(90210);
+    }
+    if (!backCracksRef.current) {
+        backCracksRef.current = createCoinCrackNetwork(90387);
+    }
+
+    const frontCracks = frontCracksRef.current;
+    const backCracks = backCracksRef.current;
+    const fractureBrightness = Math.max(
+        getCrackEnergy(frontCracks, holdProgress),
+        getCrackEnergy(backCracks, holdProgress)
+    );
+    const synchronizedGlow = clamp(
+        (holdProgress * 0.74) + (fractureBrightness * (0.08 + (holdProgress * 0.18))),
+        0,
+        1
+    );
+    holdProgressRef.current = holdProgress;
+    fractureBrightnessRef.current = fractureBrightness;
+    const auraOpacity = synchronizedGlow <= 0.001 ? 0 : synchronizedGlow * 0.92;
+    const chargeRingOpacity = synchronizedGlow <= 0.001 ? 0 : synchronizedGlow * 0.58;
+    const faceLightOpacity = synchronizedGlow <= 0.001 ? 0 : synchronizedGlow * 1.18;
+    const liveShadowScale = Math.min(shadowScale, 1 - (fractureBrightness * 0.16));
+
+    const clearInteractionTimers = () => {
+        if (holdFrameRef.current) {
+            cancelAnimationFrame(holdFrameRef.current);
+            holdFrameRef.current = null;
+        }
+        if (holdTimeoutRef.current) {
+            clearTimeout(holdTimeoutRef.current);
+            holdTimeoutRef.current = null;
+        }
+        if (burstTimeoutRef.current) {
+            clearTimeout(burstTimeoutRef.current);
+            burstTimeoutRef.current = null;
+        }
+        if (suppressClickTimeoutRef.current) {
+            clearTimeout(suppressClickTimeoutRef.current);
+            suppressClickTimeoutRef.current = null;
+        }
+        if (shakeIntervalRef.current) {
+            clearInterval(shakeIntervalRef.current);
+            shakeIntervalRef.current = null;
+        }
+    };
+
+    useEffect(() => () => {
+        clearInteractionTimers();
+    }, []);
+
+    const resetCoinState = () => {
+        clearInteractionTimers();
+        holdingRef.current = false;
+        holdTriggeredRef.current = false;
+        suppressClickRef.current = false;
+        rotating.current = false;
+        targetSpinCountRef.current = spinCount;
+        holdProgressRef.current = 0;
+        fractureBrightnessRef.current = 0;
+        setHoldProgress(0);
+        setShakeOffset({ x: 0, y: 0 });
+        setBurstPulse(0);
+    };
+
+    useEffect(() => {
+        if (resetSignal === undefined) return;
+        resetCoinState();
+    }, [resetSignal]);
+
+    const scheduleFlipSettle = () => {
+        if (holdTimeoutRef.current) {
+            clearTimeout(holdTimeoutRef.current);
+        }
+
+        holdTimeoutRef.current = setTimeout(() => {
+            setSpinCount((current) => {
+                if (current < targetSpinCountRef.current) {
+                    scheduleFlipSettle();
+                    return targetSpinCountRef.current;
+                }
+
+                rotating.current = false;
+                setShadowScale(1);
+                return current;
+            });
+        }, 900);
+    };
+
+    const triggerFlip = (e) => {
         if (e) e.stopPropagation();
-        if (rotating.current) return;
+        targetSpinCountRef.current += 1;
         rotating.current = true;
         setShadowScale(0.8);
-        setSpinCount(prev => prev + 1);
+        setSpinCount(prev => {
+            const next = prev + 1;
+            return rotating.current && prev === next - 1 ? next : next;
+        });
         if (onClick) onClick(e);
-        setTimeout(() => {
-            rotating.current = false;
-            setShadowScale(1);
-        }, 900);
+        scheduleFlipSettle();
+    };
+
+    const handleClick = (e) => {
+        if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            if (e) e.stopPropagation();
+            return;
+        }
+        triggerFlip(e);
+    };
+
+    const stopShake = () => {
+        if (shakeIntervalRef.current) {
+            clearInterval(shakeIntervalRef.current);
+            shakeIntervalRef.current = null;
+        }
+        setShakeOffset({ x: 0, y: 0 });
+    };
+
+    const completeHold = (e) => {
+        holdTriggeredRef.current = true;
+        holdingRef.current = false;
+        suppressClickRef.current = true;
+        if (suppressClickTimeoutRef.current) {
+            clearTimeout(suppressClickTimeoutRef.current);
+        }
+        suppressClickTimeoutRef.current = setTimeout(() => {
+            suppressClickRef.current = false;
+            suppressClickTimeoutRef.current = null;
+        }, 80);
+        setHoldProgress(1);
+        stopShake();
+        setBurstPulse(prev => prev + 1);
+        burstTimeoutRef.current = setTimeout(() => {
+            setHoldProgress(0);
+            setBurstPulse(0);
+        }, 260);
+        if (onHoldComplete) {
+            onHoldComplete({
+                event: e,
+                rect: buttonRef.current?.getBoundingClientRect?.() ?? null
+            });
+        }
+    };
+
+    const animateHold = (e) => {
+        const elapsed = performance.now() - holdStartRef.current;
+        const progress = Math.min(elapsed / COIN_HOLD_DURATION_MS, 1);
+        setHoldProgress(progress);
+
+        if (progress >= 1) {
+            completeHold(e);
+            return;
+        }
+
+        holdFrameRef.current = requestAnimationFrame(() => animateHold(e));
+    };
+
+    const startHold = (e) => {
+        if (rotating.current || holdingRef.current) return;
+
+        holdingRef.current = true;
+        holdTriggeredRef.current = false;
+        holdStartRef.current = performance.now();
+        setHoldProgress(0);
+
+        shakeIntervalRef.current = setInterval(() => {
+            const intensity = 0.08 + (holdProgressRef.current * 0.4) + (fractureBrightnessRef.current * 0.5);
+            setShakeOffset({
+                x: (Math.random() * 2 - 1) * intensity,
+                y: (Math.random() * 2 - 1) * intensity * 0.45
+            });
+        }, 42);
+
+        holdFrameRef.current = requestAnimationFrame(() => animateHold(e));
+    };
+
+    const endHold = (_e, { resetCharge = false } = {}) => {
+        if (!holdingRef.current && !holdTriggeredRef.current) return;
+
+        holdingRef.current = false;
+        if (holdFrameRef.current) {
+            cancelAnimationFrame(holdFrameRef.current);
+            holdFrameRef.current = null;
+        }
+        stopShake();
+
+        if (!holdTriggeredRef.current) {
+            setHoldProgress(0);
+        } else if (resetCharge) {
+            setHoldProgress(0);
+        }
     };
 
     return (
         <div className="relative z-50 overflow-visible">
             <button
+                ref={buttonRef}
+                type="button"
                 onClick={handleClick}
+                onPointerDown={(e) => {
+                    e.currentTarget.setPointerCapture?.(e.pointerId);
+                    startHold(e);
+                }}
+                onPointerUp={(e) => {
+                    e.currentTarget.releasePointerCapture?.(e.pointerId);
+                    endHold(e);
+                }}
+                onPointerLeave={() => endHold(null, { resetCharge: true })}
+                onPointerCancel={() => endHold(null, { resetCharge: true })}
                 style={{ pointerEvents: 'auto', perspective: '1000px' }}
                 className="relative w-28 h-28 group"
             >
-                <motion.div
-                    className="w-full h-full relative preserve-3d"
-                    initial={false}
-                    animate={{ rotateY: spinCount * 180 }}
-                    transition={{ duration: 0.9, ease: [0.22, 0.9, 0.3, 1] }}
-                    style={{ transformStyle: 'preserve-3d' }}
+                <div
+                    className="absolute inset-[-28px] rounded-full pointer-events-none"
+                    style={{
+                        opacity: auraOpacity,
+                        filter: `blur(${12 + (synchronizedGlow * 22)}px)`,
+                        transform: `translate(${synchronizedGlow * 4}px, ${synchronizedGlow * -2}px) scale(${0.88 + (synchronizedGlow * 0.28)})`,
+                        background: 'radial-gradient(circle at 42% 36%, rgba(255,242,196,0.9), transparent 24%), radial-gradient(circle at 62% 58%, rgba(255,177,67,0.7), transparent 32%), radial-gradient(circle at 28% 70%, rgba(255,154,55,0.45), transparent 22%)'
+                    }}
+                />
+                <div
+                    className="absolute inset-[-18px] rounded-[44%_56%_52%_48%] pointer-events-none"
+                    style={{
+                        opacity: chargeRingOpacity,
+                        filter: `blur(${12 + (synchronizedGlow * 18)}px)`,
+                        transform: `rotate(${6 + (synchronizedGlow * 10)}deg) scale(${0.78 + (synchronizedGlow * 0.18)})`,
+                        background: 'radial-gradient(circle at 32% 38%, rgba(255,236,177,0.8), transparent 24%), radial-gradient(circle at 68% 56%, rgba(255,173,69,0.72), transparent 28%), radial-gradient(circle at 52% 52%, rgba(255,140,45,0.5), transparent 44%)'
+                    }}
+                />
+                {burstPulse > 0 && (
+                    <div
+                        key={burstPulse}
+                        className="absolute inset-[-90px] rounded-full pointer-events-none"
+                        style={{
+                            background: 'radial-gradient(circle, rgba(255,236,184,0.52), rgba(255,184,72,0.18) 32%, transparent 68%)',
+                            animation: 'coinBurst 650ms cubic-bezier(0.16, 1, 0.3, 1)'
+                        }}
+                    />
+                )}
+                <div
+                    className="w-full h-full relative"
+                    style={{
+                        transform: `translate(${shakeOffset.x}px, ${shakeOffset.y}px) scale(${1 + (holdProgress * 0.004) + (fractureBrightness * 0.024)})`,
+                        transformStyle: 'preserve-3d'
+                    }}
                 >
+                    <motion.div
+                        className="w-full h-full relative preserve-3d"
+                        initial={false}
+                        animate={{ rotateY: spinCount * 180 }}
+                        transition={{ duration: 0.9, ease: [0.22, 0.9, 0.3, 1] }}
+                        style={{
+                            transformStyle: 'preserve-3d'
+                        }}
+                    >
                     {/* THICKNESS / EDGE LAYERS (The "meat" of the coin) */}
                     {/* We stack discs between Front (Z=6) and Back (Z=-6) */}
                     {[4, 3, 2, 1, 0, -1, -2, -3, -4].map((z) => (
@@ -68,12 +582,29 @@ const CoinSwitch = ({ onClick }) => {
 
                     {/* FRONT FACE (Provisions) */}
                     <div
-                        className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 shadow-[0_0_15px_rgba(251,191,36,0.5)] border-4 border-amber-400/50 flex flex-col items-center justify-center backface-hidden"
+                        className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 border-4 border-amber-400/50 flex flex-col items-center justify-center backface-hidden"
                         style={{
                             backfaceVisibility: 'hidden',
                             transform: 'translateZ(6px)' // Moved forward
                         }}
                     >
+                        <div
+                            className="absolute inset-0 rounded-full pointer-events-none"
+                            style={{
+                                opacity: faceLightOpacity,
+                                transform: `scale(${1 + (synchronizedGlow * 0.068)})`,
+                                filter: `blur(${1 + (synchronizedGlow * 10)}px) saturate(${1 + (synchronizedGlow * 0.62)})`,
+                                background: 'radial-gradient(circle at 46% 44%, rgba(255,247,216,0.92), transparent 22%), radial-gradient(circle at 58% 58%, rgba(255,197,87,0.88), transparent 30%), radial-gradient(circle at 36% 62%, rgba(255,143,43,0.52), transparent 18%), conic-gradient(from 210deg at 50% 50%, rgba(255,255,255,0) 0deg, rgba(255,223,132,0.7) 55deg, rgba(255,255,255,0) 110deg, rgba(255,157,49,0.76) 190deg, rgba(255,255,255,0) 250deg, rgba(255,245,204,0.5) 315deg, rgba(255,255,255,0) 360deg)'
+                            }}
+                        />
+                        <div className="absolute inset-0 rounded-full pointer-events-none mix-blend-screen opacity-[0.18]">
+                            <CoinCrackSvg
+                                cracks={frontCracks}
+                                progress={holdProgress}
+                                glowFilterId="coin-front-glow"
+                                hotFilterId="coin-front-hot"
+                            />
+                        </div>
                         <div className="absolute inset-1 rounded-full border border-amber-900/20" />
                         <div className="absolute inset-[6px] rounded-full border border-amber-100/30" />
 
@@ -93,12 +624,30 @@ const CoinSwitch = ({ onClick }) => {
 
                     {/* BACK FACE (Ledger) */}
                     <div
-                        className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-400 via-amber-600 to-amber-800 shadow-[0_0_15px_rgba(251,191,36,0.5)] border-4 border-amber-400/50 flex flex-col items-center justify-center backface-hidden"
+                        className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-400 via-amber-600 to-amber-800 border-4 border-amber-400/50 flex flex-col items-center justify-center backface-hidden"
                         style={{
                             backfaceVisibility: 'hidden',
                             transform: 'rotateY(180deg) translateZ(6px)' // Rotated and moved "forward" (which is backward relative to scene)
                         }}
                     >
+                        <div
+                            className="absolute inset-0 rounded-full pointer-events-none"
+                            style={{
+                                opacity: faceLightOpacity,
+                                transform: `scale(${1 + (synchronizedGlow * 0.068)})`,
+                                filter: `blur(${1 + (synchronizedGlow * 10)}px) saturate(${1 + (synchronizedGlow * 0.62)})`,
+                                background: 'radial-gradient(circle at 46% 44%, rgba(255,247,216,0.92), transparent 22%), radial-gradient(circle at 58% 58%, rgba(255,197,87,0.88), transparent 30%), radial-gradient(circle at 36% 62%, rgba(255,143,43,0.52), transparent 18%), conic-gradient(from 210deg at 50% 50%, rgba(255,255,255,0) 0deg, rgba(255,223,132,0.7) 55deg, rgba(255,255,255,0) 110deg, rgba(255,157,49,0.76) 190deg, rgba(255,255,255,0) 250deg, rgba(255,245,204,0.5) 315deg, rgba(255,255,255,0) 360deg)'
+                            }}
+                        />
+                        <div className="absolute inset-0 rounded-full pointer-events-none mix-blend-screen opacity-[0.18]">
+                            <CoinCrackSvg
+                                cracks={backCracks}
+                                progress={holdProgress}
+                                glowFilterId="coin-back-glow"
+                                hotFilterId="coin-back-hot"
+                                warmBack
+                            />
+                        </div>
                         <div className="absolute inset-1 rounded-full border border-amber-900/20" />
                         <div className="absolute inset-[6px] rounded-full border border-amber-100/30" />
 
@@ -115,13 +664,26 @@ const CoinSwitch = ({ onClick }) => {
                         {/* Shine Effect */}
                         <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                </motion.div>
+                    </motion.div>
+                </div>
 
                 {/* Shadow underneath */}
                 <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-20 h-5 bg-black/60 blur-xl rounded-[100%] pointer-events-none transition-transform duration-1000"
-                    style={{ transform: `translateX(-50%) scale(${shadowScale})` }}
+                    style={{ transform: `translateX(-50%) scale(${liveShadowScale})` }}
                 />
             </button>
+            <style>{`
+                @keyframes coinBurst {
+                    0% {
+                        opacity: 0.85;
+                        transform: scale(0.18);
+                    }
+                    100% {
+                        opacity: 0;
+                        transform: scale(1.08);
+                    }
+                }
+            `}</style>
         </div>
     );
 };
@@ -130,26 +692,34 @@ const BudgetView = () => {
     const {
         totalMonthlyBudget, setTotalMonthlyBudget,
         groceryAllocation, setGroceryAllocation,
-        earnedRewards,
         groceryList,
         priceDatabase, updatePrice,
         groceryPeriod, setGroceryPeriod,
-        addGroceryItem, toggleGroceryItem, removeGroceryItem,
-        resetGroceryList, clearGroceryList,
-        totalGrocerySpent, totalGroceryEstimated,
+        stipendAmount, setStipendAmount,
+        stipendPeriod, setStipendPeriod, setStipendPaidThrough,
+        addGroceryItem, markGroceryItemCompleted, unmarkGroceryItemCompleted, removeGroceryItem,
+        clearGroceryList,
+        totalGroceryEstimated,
         goldToUsdRatio, setGoldToUsdRatio
     } = useBudget();
+    const { stats, spendCoins, addGold } = useGame();
 
     const [activeTab, setActiveTab] = useState(TAB_PROVISIONS);
     const [showSettings, setShowSettings] = useState(false);
+    const [settingsOriginRect, setSettingsOriginRect] = useState(null);
+    const [coinResetSignal, setCoinResetSignal] = useState(0);
 
     // --- CURRENCY HELPERS ---
     // The backend (Context) stores values in USD (standard unit).
     // The UI (BudgetView) displays values in "Credits" (Gold), based on the exchange rate.
 
     // Display: USD -> Credits
+    const toCreditValue = (usdAmount) => {
+        return Number((Number(usdAmount || 0) * goldToUsdRatio).toFixed(0));
+    };
+
     const toCredits = (usdAmount) => {
-        return (usdAmount * goldToUsdRatio).toFixed(0);
+        return toCreditValue(usdAmount).toString();
     };
 
     // Input: Credits -> USD
@@ -159,8 +729,12 @@ const BudgetView = () => {
     };
 
     const formatCredits = (usdAmount) => {
-        return Math.floor(usdAmount * goldToUsdRatio).toLocaleString();
-    }
+        return toCreditValue(usdAmount).toLocaleString();
+    };
+
+    const resetStipendAnchor = () => {
+        setStipendPaidThrough(getTodayISO());
+    };
 
 
 
@@ -180,10 +754,10 @@ const BudgetView = () => {
             </div>
             <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
                 <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Allocated</span>
+                <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Stipend</span>
                 <div className="flex items-center gap-1">
                     <Coins size={14} className="text-amber-500" />
-                    <span className="text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{formatCredits(groceryAllocation)}</span>
+                    <span className="text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{Number(stipendAmount || 0).toLocaleString()}</span>
                 </div>
             </div>
             <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
@@ -191,20 +765,80 @@ const BudgetView = () => {
                 <span className="text-[9px] font-bold text-amber-400/80 uppercase tracking-widest mb-0.5">Liquid Assets</span>
                 <div className="flex items-center gap-1">
                     <Coins size={14} className="text-amber-400" />
-                    <span className="text-lg font-black font-game text-amber-400 leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">{formatCredits(earnedRewards)}</span>
+                    <span className="text-lg font-black font-game text-amber-400 leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">{stats.gold.toLocaleString()}</span>
                 </div>
             </div>
         </div>
     );
 
-    const SettingsModal = () => (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowSettings(false)}>
-            <div className="bg-slate-900 border border-amber-500/30 rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-[0_0_50px_rgba(245,158,11,0.1)] overflow-hidden" onClick={e => e.stopPropagation()}>
+    const closeSettings = () => {
+        setShowSettings(false);
+        setSettingsOriginRect(null);
+        setCoinResetSignal(prev => prev + 1);
+    };
+
+    const openSettingsFromCoin = ({ event, rect }) => {
+        if (event) event.stopPropagation();
+        setSettingsOriginRect(rect);
+        setShowSettings(true);
+    };
+
+    const SettingsModal = ({ originRect }) => {
+        const originCenterX = originRect ? (originRect.left + (originRect.width / 2)) - (window.innerWidth / 2) : 0;
+        const originCenterY = originRect ? (originRect.top + (originRect.height / 2)) - (window.innerHeight / 2) : 0;
+        const originScale = originRect
+            ? clamp(Math.min(originRect.width / 360, originRect.height / 360), 0.22, 0.42)
+            : 0.92;
+
+        return ReactDOM.createPortal(
+            <>
+                <motion.div
+                    data-no-swipe="true"
+                    className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-sm"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        closeSettings();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                />
+                <div className="fixed inset-0 z-[251] flex items-center justify-center p-4 pointer-events-none">
+                    <motion.div
+                        data-no-swipe="true"
+                        className="bg-slate-900 border border-amber-500/30 rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-[0_0_50px_rgba(245,158,11,0.1)] overflow-hidden pointer-events-auto"
+                        initial={{
+                            opacity: 0,
+                            scale: originScale,
+                            x: originCenterX,
+                            y: originCenterY
+                        }}
+                        animate={{
+                            opacity: 1,
+                            scale: 1,
+                            x: 0,
+                            y: 0
+                        }}
+                        exit={{
+                            opacity: 0,
+                            scale: originRect ? Math.max(originScale, 0.84) : 0.96,
+                            x: originRect ? originCenterX * 0.12 : 0,
+                            y: originRect ? originCenterY * 0.12 : 0
+                        }}
+                        transition={{
+                            duration: originRect ? 0.28 : 0.18,
+                            ease: [0.22, 0.9, 0.3, 1]
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
                 <div className="p-4 border-b border-amber-900/50 flex justify-between items-center bg-slate-950/80">
                     <h3 className="font-game font-bold text-lg text-amber-500 flex items-center gap-2">
                         <Settings size={18} /> VAULT CONFIG
                     </h3>
-                    <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-white transition-colors"><X size={20} /></button>
+                    <button onClick={closeSettings} className="text-gray-500 hover:text-white transition-colors"><X size={20} /></button>
                 </div>
 
                 <div className="p-4 space-y-4 overflow-y-auto custom-scrollbar">
@@ -242,6 +876,37 @@ const BudgetView = () => {
                             >
                                 <option value="weekly">Weekly</option>
                                 <option value="bi-weekly">Bi-Weekly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Stipend Amount (Credits)</label>
+                            <div className="relative">
+                                <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={stipendAmount}
+                                    onChange={(e) => {
+                                        setStipendAmount(Math.max(0, parseInt(e.target.value, 10) || 0));
+                                        resetStipendAnchor();
+                                    }}
+                                    className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Stipend Period</label>
+                            <select
+                                value={stipendPeriod}
+                                onChange={(e) => {
+                                    setStipendPeriod(e.target.value);
+                                    resetStipendAnchor();
+                                }}
+                                className="w-full bg-black/50 border border-amber-900/50 rounded px-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
+                            >
+                                <option value="weekly">Weekly</option>
+                                <option value="bi-weekly">Bi-Weekly</option>
+                                <option value="monthly">Monthly</option>
                             </select>
                         </div>
                         <div>
@@ -295,14 +960,19 @@ const BudgetView = () => {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    );
+                    </motion.div>
+                </div>
+            </>,
+            document.body
+        );
+    };
 
-    const ProvisionsView = ({ groceryList, totalGroceryEstimated, totalGrocerySpent, groceryAllocation }) => {
+    const ProvisionsView = ({ groceryList, totalGroceryEstimated }) => {
         const [itemName, setItemName] = useState('');
+        const [itemQuantity, setItemQuantity] = useState('1');
         const [itemPriceCredits, setItemPriceCredits] = useState(''); // Store input as credits string
         const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+        const totalUnits = groceryList.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
 
         const filteredDbItems = Object.keys(priceDatabase).filter(item =>
             item.toLowerCase().includes(itemName.toLowerCase())
@@ -311,6 +981,7 @@ const BudgetView = () => {
         const handleAdd = (e) => {
             e.preventDefault();
             if (!itemName) return;
+            const quantity = Math.max(1, parseInt(itemQuantity, 10) || 1);
 
             // Logic: Use input price (Credits) OR DB price (USD -> convert to Credits for display? No wait.)
             // updatePrice takes USD.
@@ -325,8 +996,9 @@ const BudgetView = () => {
             // Note: If item exists in DB but no price input, addGroceryItem uses DB price.
             // If item is new and no price input, DB defaults 0.
 
-            addGroceryItem(itemName);
+            addGroceryItem(itemName, quantity);
             setItemName('');
+            setItemQuantity('1');
             setItemPriceCredits('');
             setIsDropdownOpen(false);
         };
@@ -342,12 +1014,47 @@ const BudgetView = () => {
             setIsDropdownOpen(false);
         };
 
+        const handleTogglePurchased = (item) => {
+            const todayKey = getTodayISO();
+            const quantity = Number(item.quantity || 1);
+            const totalCoinCost = toCreditValue(item.price * quantity);
+
+            if (!item.completed) {
+                markGroceryItemCompleted(item.id, todayKey);
+                if (totalCoinCost > 0) {
+                    spendCoins(totalCoinCost, `Groceries: ${item.name} x${quantity}`);
+                }
+                return;
+            }
+
+            if (item.completedDateKey !== todayKey) {
+                return;
+            }
+
+            unmarkGroceryItemCompleted(item.id);
+            if (totalCoinCost > 0) {
+                addGold(totalCoinCost, 'Grocery Refund', {
+                    description: `Grocery refund: ${item.name} x${quantity}`
+                });
+            }
+        };
+
 
         return (
             <div className="flex-1 flex flex-col h-full overflow-hidden relative">
                 {/* INPUT BAR (Moved to Top) */}
                 <div className="shrink-0 p-3 bg-black/90 border-b border-amber-900/50 backdrop-blur-xl z-30 shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
                     <form onSubmit={handleAdd} className="flex gap-2 items-center">
+                        <div className="w-16 relative">
+                            <input
+                                type="number"
+                                min="1"
+                                placeholder="1"
+                                value={itemQuantity}
+                                onChange={(e) => setItemQuantity(e.target.value)}
+                                className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-2 py-3 text-sm text-amber-400 placeholder-amber-900/30 focus:border-amber-500/50 outline-none text-center font-mono"
+                            />
+                        </div>
                         <div className="flex-1 relative">
                             <input
                                 type="text"
@@ -402,10 +1109,12 @@ const BudgetView = () => {
                 <div className="shrink-0 px-4 py-2 flex items-center justify-between text-[10px] font-game text-amber-500/60 uppercase tracking-widest border-b border-white/5 bg-black/20">
                     <div className="flex gap-4">
                         <span>Cycle: {groceryPeriod}</span>
-                        <span>Items: {groceryList.length}</span>
+                        <span>Entries: {groceryList.length}</span>
+                        <span>Items: {totalUnits}</span>
                     </div>
-                    <div className={clsx(totalGroceryEstimated > groceryAllocation ? "text-red-500 animate-pulse" : "text-amber-500")}>
-                        {((totalGroceryEstimated / groceryAllocation) * 100).toFixed(0)}% Utilized
+                    <div className="text-amber-400 flex items-center gap-1 font-bold">
+                        <Coins size={10} />
+                        <span>Total: {formatCredits(totalGroceryEstimated)}</span>
                     </div>
                 </div>
 
@@ -433,7 +1142,7 @@ const BudgetView = () => {
                                 >
                                     <div className="flex items-center gap-3 relative z-10">
                                         <button
-                                            onClick={() => toggleGroceryItem(item.id)}
+                                            onClick={() => handleTogglePurchased(item)}
                                             className={clsx(
                                                 "transition-all duration-300",
                                                 item.completed ? "text-amber-900" : "text-amber-500 hover:text-amber-300"
@@ -442,14 +1151,25 @@ const BudgetView = () => {
                                             {item.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                                         </button>
                                         <div className="flex flex-col">
-                                            <span className={clsx("text-sm font-bold leading-none", item.completed && "line-through opacity-50")}>{item.name}</span>
-                                            {!item.completed && <span className="text-[9px] font-mono text-amber-500/50 mt-1 uppercase tracking-wider">est. {toCredits(item.price)} C</span>}
+                                            <div className="flex items-center gap-2">
+                                                <span className={clsx("text-sm font-bold leading-none", item.completed && "line-through opacity-50")}>{item.name}</span>
+                                                <span className={clsx(
+                                                    "rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider",
+                                                    item.completed
+                                                        ? "border-slate-800 text-slate-700"
+                                                        : "border-amber-500/20 text-amber-400/80"
+                                                )}>
+                                                    x{item.quantity || 1}
+                                                </span>
+                                            </div>
+                                            {!item.completed && <span className="text-[9px] font-mono text-amber-500/50 mt-1 uppercase tracking-wider">est. {toCredits(item.price)} C each</span>}
+                                            {item.completed && <span className="text-[9px] font-mono text-slate-700 mt-1 uppercase tracking-wider">purchased {item.completedDateKey === getTodayISO() ? 'today' : item.completedDateKey}</span>}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 relative z-10">
                                         <div className={clsx("font-mono text-sm flex items-center gap-1", item.completed ? "text-xs text-slate-700" : "text-amber-400 font-bold")}>
                                             <Coins size={12} />
-                                            {toCredits(item.price)}
+                                            {toCredits(item.price * (item.quantity || 1))}
                                         </div>
                                         <button
                                             onClick={() => removeGroceryItem(item.id)}
@@ -473,7 +1193,7 @@ const BudgetView = () => {
     };
 
     const LedgerView = () => {
-        const { spendCoins, coinHistory, stats } = useGame();
+        const { spendCoins, coinHistory } = useGame();
         const [desc, setDesc] = useState('');
         const [amount, setAmount] = useState('');
 
@@ -488,8 +1208,7 @@ const BudgetView = () => {
             setAmount('');
         };
 
-        const recentSpending = coinHistory
-            .filter(t => t.type === 'spent')
+        const recentTransactions = [...coinHistory]
             .sort((a, b) => new Date(b.date) - new Date(a.date));
 
         return (
@@ -537,17 +1256,22 @@ const BudgetView = () => {
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-48 touch-pan-y overscroll-none">
                     <div className="px-2 py-2 text-[10px] font-mono text-amber-500/40 uppercase border-b border-white/5 mb-1">Recent Activity Log</div>
                     <div className="space-y-1">
-                        {recentSpending.length === 0 ? (
+                        {recentTransactions.length === 0 ? (
                             <div className="text-center py-8 text-amber-900/30 italic text-xs">No transactions recorded.</div>
                         ) : (
-                            recentSpending.map(tx => (
+                            recentTransactions.map(tx => (
                                 <div key={tx.id} className="flex items-center justify-between p-2 rounded hover:bg-white/5 border border-transparent hover:border-white/5 transition-colors group">
                                     <div className="flex flex-col">
                                         <span className="text-xs font-bold text-amber-100/80">{tx.description}</span>
                                         <span className="text-[9px] font-mono text-gray-600">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                     </div>
-                                    <div className="font-mono text-red-400 text-xs font-bold bg-red-900/10 px-2 py-1 rounded border border-red-900/20 group-hover:border-red-500/30 flex items-center gap-1">
-                                        <Coins size={10} /> -{tx.amount}
+                                    <div className={clsx(
+                                        "font-mono text-xs font-bold px-2 py-1 rounded border flex items-center gap-1",
+                                        tx.type === 'earned'
+                                            ? "text-emerald-300 bg-emerald-900/10 border-emerald-900/20 group-hover:border-emerald-500/30"
+                                            : "text-red-400 bg-red-900/10 border-red-900/20 group-hover:border-red-500/30"
+                                    )}>
+                                        <Coins size={10} /> {tx.type === 'earned' ? '+' : '-'}{tx.amount}
                                     </div>
                                 </div>
                             ))
@@ -571,18 +1295,6 @@ const BudgetView = () => {
             {/* 1. VAULT HEADER (Fixed) */}
             <VaultHeader />
 
-
-
-            {/* 3. SETTINGS TOGGLE (Float) */}
-            <button
-                onClick={() => setShowSettings(true)}
-                className="absolute top-3 right-3 z-30 p-2 text-amber-500/50 hover:text-amber-400 hover:bg-amber-500/10 rounded-full transition-colors"
-                title="Vault Configuration"
-            >
-                <Settings size={18} />
-            </button>
-
-
             {/* 4. MAIN VIEWPORT (Swappable) */}
             <div className="flex-1 overflow-hidden relative">
                 <AnimatePresence mode="wait" initial={false}>
@@ -599,8 +1311,6 @@ const BudgetView = () => {
                             <ProvisionsView
                                 groceryList={groceryList}
                                 totalGroceryEstimated={totalGroceryEstimated}
-                                totalGrocerySpent={totalGrocerySpent}
-                                groceryAllocation={groceryAllocation}
                             />
                         </motion.div>
                     ) : (
@@ -629,11 +1339,15 @@ const BudgetView = () => {
                         if (e) e.stopPropagation();
                         setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS);
                     }}
+                    onHoldComplete={openSettingsFromCoin}
+                    resetSignal={coinResetSignal}
                 />
             </div>
 
             {/* Modals */}
-            {showSettings && <SettingsModal />}
+            <AnimatePresence>
+                {showSettings && <SettingsModal originRect={settingsOriginRect} />}
+            </AnimatePresence>
         </div>
     );
 };
