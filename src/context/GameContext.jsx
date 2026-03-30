@@ -11,6 +11,12 @@ import {
     getLatestHabitCompletionDateKey,
 } from '../utils/gameLogic';
 import { getTodayISO, isWithinDays } from '../utils/dateUtils';
+import {
+    createPortableSnapshot,
+    readProtocolLookaheadDays,
+    storePortableImportBackup,
+    writeProtocolLookaheadDays
+} from '../utils/portableState.js';
 
 const GameContext = createContext();
 
@@ -40,11 +46,65 @@ const INITIAL_SETTINGS = {
 
 const INITIAL_CALORIES = { current: 0, target: 2000, history: [] };
 const INITIAL_COIN_HISTORY = [];
+const INITIAL_BUDGET_TRANSFER = {
+    totalMonthlyBudget: 0,
+    groceryAllocation: 0,
+    earnedRewards: 0,
+    groceryList: [],
+    priceDatabase: {},
+    groceryPeriod: 'weekly',
+    stipendAmount: 0,
+    stipendPeriod: 'weekly',
+    stipendPaidThrough: null,
+    goldToUsdRatio: 10
+};
 const STIPEND_PERIOD_DAYS = {
     weekly: 7,
     'bi-weekly': 14,
     monthly: 30
 };
+
+const normalizeStatsForImport = (stats = {}) => ({
+    ...INITIAL_STATS,
+    ...stats
+});
+
+const normalizeSettingsForImport = (settings = {}) => ({
+    ...INITIAL_SETTINGS,
+    ...settings,
+    questRewards: {
+        ...INITIAL_SETTINGS.questRewards,
+        ...(settings.questRewards || {})
+    }
+});
+
+const normalizeCaloriesForImport = (calories = {}) => ({
+    ...INITIAL_CALORIES,
+    ...calories,
+    history: Array.isArray(calories.history) ? calories.history : INITIAL_CALORIES.history
+});
+
+const normalizeBudgetForImport = (budget = {}) => ({
+    ...INITIAL_BUDGET_TRANSFER,
+    ...budget,
+    groceryList: Array.isArray(budget.groceryList) ? budget.groceryList : INITIAL_BUDGET_TRANSFER.groceryList,
+    priceDatabase: budget.priceDatabase && !Array.isArray(budget.priceDatabase)
+        ? budget.priceDatabase
+        : INITIAL_BUDGET_TRANSFER.priceDatabase
+});
+
+const normalizeImportedSnapshot = (snapshot) => ({
+    stats: normalizeStatsForImport(snapshot.stats),
+    settings: normalizeSettingsForImport(snapshot.settings),
+    quests: Array.isArray(snapshot.quests) ? snapshot.quests : INITIAL_TASKS,
+    habits: Array.isArray(snapshot.habits) ? snapshot.habits : INITIAL_HABITS,
+    calories: normalizeCaloriesForImport(snapshot.calories),
+    coinHistory: Array.isArray(snapshot.coinHistory) ? snapshot.coinHistory : INITIAL_COIN_HISTORY,
+    budget: normalizeBudgetForImport(snapshot.budget),
+    ui: {
+        protocolLookaheadDays: Math.max(1, Number(snapshot.ui?.protocolLookaheadDays) || 1)
+    }
+});
 
 const createLedgerTimestamp = (dateKey) => {
     if (!dateKey) return new Date().toISOString();
@@ -201,10 +261,26 @@ const settleBudgetStipend = (amount, period, paidThroughDateKey, todayKey) => {
 
 export const GameProvider = ({ children }) => {
     const {
+        totalMonthlyBudget,
+        setTotalMonthlyBudget,
+        groceryAllocation,
+        setGroceryAllocation,
+        earnedRewards,
+        setEarnedRewards,
+        groceryList,
+        setGroceryList,
+        priceDatabase,
+        setPriceDatabase,
+        groceryPeriod,
+        setGroceryPeriod,
+        goldToUsdRatio,
+        setGoldToUsdRatio,
         addRewardFromGold,
         removeRewardFromGold,
         stipendAmount,
+        setStipendAmount,
         stipendPeriod,
+        setStipendPeriod,
         stipendPaidThrough,
         setStipendPaidThrough,
         removeCompletedGroceriesBefore
@@ -225,6 +301,92 @@ export const GameProvider = ({ children }) => {
     const updateSettings = useCallback((newSettings) => {
         setSettings(prev => ({ ...prev, ...newSettings }));
     }, [setSettings]);
+
+    const exportAppState = useCallback(() => createPortableSnapshot({
+        stats,
+        settings,
+        quests,
+        habits,
+        calories,
+        coinHistory,
+        budget: {
+            totalMonthlyBudget,
+            groceryAllocation,
+            earnedRewards,
+            groceryList,
+            priceDatabase,
+            groceryPeriod,
+            stipendAmount,
+            stipendPeriod,
+            stipendPaidThrough,
+            goldToUsdRatio
+        },
+        ui: {
+            protocolLookaheadDays: readProtocolLookaheadDays()
+        }
+    }), [
+        calories,
+        coinHistory,
+        earnedRewards,
+        goldToUsdRatio,
+        groceryAllocation,
+        groceryList,
+        groceryPeriod,
+        habits,
+        priceDatabase,
+        quests,
+        settings,
+        stats,
+        stipendAmount,
+        stipendPaidThrough,
+        stipendPeriod,
+        totalMonthlyBudget
+    ]);
+
+    const importAppState = useCallback((snapshot) => {
+        const backupKey = storePortableImportBackup(exportAppState());
+        const nextState = normalizeImportedSnapshot(snapshot);
+
+        setStats(nextState.stats);
+        setSettings(nextState.settings);
+        setQuests(nextState.quests);
+        setHabits(nextState.habits);
+        setCalories(nextState.calories);
+        setCoinHistory(nextState.coinHistory);
+
+        setTotalMonthlyBudget(nextState.budget.totalMonthlyBudget);
+        setGroceryAllocation(nextState.budget.groceryAllocation);
+        setEarnedRewards(nextState.budget.earnedRewards);
+        setGroceryList(nextState.budget.groceryList);
+        setPriceDatabase(nextState.budget.priceDatabase);
+        setGroceryPeriod(nextState.budget.groceryPeriod);
+        setStipendAmount(nextState.budget.stipendAmount);
+        setStipendPeriod(nextState.budget.stipendPeriod);
+        setStipendPaidThrough(nextState.budget.stipendPaidThrough);
+        setGoldToUsdRatio(nextState.budget.goldToUsdRatio);
+
+        writeProtocolLookaheadDays(nextState.ui.protocolLookaheadDays);
+
+        return { backupKey };
+    }, [
+        exportAppState,
+        setCalories,
+        setCoinHistory,
+        setEarnedRewards,
+        setGoldToUsdRatio,
+        setGroceryAllocation,
+        setGroceryList,
+        setGroceryPeriod,
+        setHabits,
+        setPriceDatabase,
+        setQuests,
+        setSettings,
+        setStats,
+        setStipendAmount,
+        setStipendPaidThrough,
+        setStipendPeriod,
+        setTotalMonthlyBudget
+    ]);
 
     const addCalories = useCallback((amount) => {
         setCalories(prev => {
@@ -508,6 +670,27 @@ export const GameProvider = ({ children }) => {
         }));
     }, [addGold, addRewardFromGold, addXp, habits, setHabits, settings.protocolReward, takeDamage]);
 
+    const updateHabitRewards = useCallback((id, rewardConfig = {}) => {
+        const hasCompletionReward = Object.prototype.hasOwnProperty.call(rewardConfig, 'completionReward');
+        const hasPassiveReward = Object.prototype.hasOwnProperty.call(rewardConfig, 'passiveReward');
+
+        if (!hasCompletionReward && !hasPassiveReward) return;
+
+        setHabits(prev => prev.map(h => {
+            if (h.id !== id) return h;
+
+            return {
+                ...h,
+                completionReward: hasCompletionReward
+                    ? Math.max(0, Number(rewardConfig.completionReward) || 0)
+                    : Number(h.completionReward ?? settings.protocolReward) || 0,
+                passiveReward: hasPassiveReward
+                    ? Math.max(0, Number(rewardConfig.passiveReward) || 0)
+                    : Number(h.passiveReward || 0) || 0
+            };
+        }));
+    }, [setHabits, settings.protocolReward]);
+
     const deleteHabit = useCallback((id) => {
         setHabits(prev => prev.filter(h => h.id !== id));
     }, [setHabits]);
@@ -623,15 +806,15 @@ export const GameProvider = ({ children }) => {
     const contextValue = useMemo(() => ({
         stats, quests, habits, settings, calories, coinHistory,
         addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
-        addHabit, checkHabit, deleteHabit, toggleHabitActivation,
+        addHabit, checkHabit, deleteHabit, toggleHabitActivation, updateHabitRewards,
         updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins, addGold,
-        toggleToday
+        toggleToday, exportAppState, importAppState
     }), [
         stats, quests, habits, settings, calories, coinHistory,
         addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
-        addHabit, checkHabit, deleteHabit, toggleHabitActivation,
+        addHabit, checkHabit, deleteHabit, toggleHabitActivation, updateHabitRewards,
         updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins, addGold,
-        toggleToday
+        toggleToday, exportAppState, importAppState
     ]);
 
     return (

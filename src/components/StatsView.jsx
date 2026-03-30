@@ -698,10 +698,7 @@ const StatsView = ({ isOpen, onClose }) => {
                 onDragEnd={handleDragEnd}
                 onTouchStartCapture={handleSheetTouchStart}
                 onTouchEndCapture={handleSheetTouchEnd}
-                className="relative flex h-[100dvh] w-full max-w-3xl flex-col overflow-hidden border-b border-slate-700/90 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_rgba(15,23,42,0.96)_30%,_rgba(2,6,23,1)_68%)] shadow-2xl md:h-[92vh] md:rounded-b-[2rem]"
-                style={{
-                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)'
-                }}
+                className="relative flex h-screen min-h-screen w-full max-w-3xl flex-col overflow-hidden border-b border-slate-700/90 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_rgba(15,23,42,0.96)_30%,_rgba(2,6,23,1)_68%)] shadow-2xl md:h-[92vh] md:min-h-0 md:rounded-b-[2rem]"
             >
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.14),transparent_36%),radial-gradient(circle_at_bottom,rgba(251,191,36,0.1),transparent_30%)]" />
                 <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(rgba(148,163,184,0.45)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.45)_1px,transparent_1px)] [background-size:24px_24px]" />
@@ -746,13 +743,16 @@ const StatsView = ({ isOpen, onClose }) => {
                     </div>
                 </div>
 
-                <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pb-6 pt-4 no-scrollbar">
+                <div ref={scrollRef} className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4 no-scrollbar">
                     {activeTab === 'overview' && renderOverview()}
                     {activeTab === 'finance' && renderFinance()}
                     {activeTab === 'health' && renderHealth()}
                 </div>
 
-                <div className="relative z-10 shrink-0 border-t border-slate-800/90 bg-slate-950/55 px-4 py-5">
+                <div
+                    className="relative z-10 shrink-0 border-t border-slate-800/90 bg-slate-950/55 px-4 pt-5"
+                    style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)' }}
+                >
                     <div
                         className="mx-auto flex w-16 cursor-grab justify-center rounded-full border border-slate-800/80 bg-black/35 px-1.5 py-1.5 text-slate-500 active:cursor-grabbing"
                         onPointerDown={(event) => dragControls.start(event)}

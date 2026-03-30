@@ -1,13 +1,14 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { CheckCircle, Trash2, Plus, Zap, X, RotateCcw, Power, Coins } from 'lucide-react';
 import clsx from 'clsx';
 import { usePersistentState } from '../utils/persistence';
+import { PROTOCOL_LOOKAHEAD_STORAGE_KEY } from '../constants/persistenceKeys.js';
 
 // Constants
 const LOOKAHEAD_DAYS_DEFAULT = 1;
-const PROTOCOL_LOOKAHEAD_STORAGE_KEY = 'lq_protocol_lookahead_days';
+const REWARD_EDIT_HOLD_MS = 800;
 const PROTOCOL_CARD_THEME = {
     card: 'bg-slate-900 border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.2)]',
     content: 'bg-slate-900/80',
@@ -44,16 +45,75 @@ const getRewardSummary = (habit) => ({
     passiveReward: Number(habit.passiveReward || 0)
 });
 
-const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyclePrev, isTopInDeck, custom }) => {
+const ProtocolRewardField = ({
+    label,
+    value,
+    accentBorderClass,
+    labelClassName,
+    onBeginEdit
+}) => {
+    const holdTimerRef = useRef(null);
+
+    const clearHoldTimer = useCallback(() => {
+        if (holdTimerRef.current) {
+            clearTimeout(holdTimerRef.current);
+            holdTimerRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => () => {
+        clearHoldTimer();
+    }, [clearHoldTimer]);
+
+    const handlePointerDown = useCallback((e) => {
+        e.stopPropagation();
+        clearHoldTimer();
+        holdTimerRef.current = setTimeout(() => {
+            onBeginEdit(value);
+        }, REWARD_EDIT_HOLD_MS);
+    }, [clearHoldTimer, onBeginEdit, value]);
+
+    const handlePointerRelease = useCallback((e) => {
+        e?.stopPropagation?.();
+        clearHoldTimer();
+    }, [clearHoldTimer]);
+
+    return (
+        <div className={clsx("min-w-0 border-l pl-3", accentBorderClass)}>
+            <div className="min-h-[2.4rem]">
+                <p className={clsx("text-[10px] font-bold uppercase tracking-[0.2em] leading-tight", labelClassName)}>
+                    {label}
+                </p>
+            </div>
+            <button
+                type="button"
+                onPointerDown={handlePointerDown}
+                onPointerUp={handlePointerRelease}
+                onPointerLeave={handlePointerRelease}
+                onPointerCancel={handlePointerRelease}
+                onClick={(e) => e.stopPropagation()}
+                className="mt-3 text-left"
+            >
+                <span className="text-3xl font-game leading-none text-white">{value}</span>
+            </button>
+        </div>
+    );
+};
+
+const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyclePrev, onUpdateRewards, isTopInDeck, custom }) => {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
     const rotate = useTransform(x, [-200, 200], [-30, 30]);
     const [showDetails, setShowDetails] = useState(false);
+    const [editingRewardField, setEditingRewardField] = useState(null);
+    const [rewardDraftValue, setRewardDraftValue] = useState('');
     const daysUntilDue = getDaysUntilDue(habit);
     const isDueToday = daysUntilDue === 0;
     const isOverdue = daysUntilDue < 0;
     const dueStatusLabel = getDueStatusLabel(habit);
     const { completionReward, passiveReward } = getRewardSummary(habit);
+    const isEditingReward = Boolean(editingRewardField);
+    const editingRewardLabel = editingRewardField === 'passiveReward' ? 'Passive Generation' : 'Due-Day Bonus';
     const accentTheme = isDueToday ? {
         badge: 'bg-violet-200/10 text-violet-100 border-violet-200/40',
         icon: 'text-violet-200 drop-shadow-[0_0_12px_rgba(196,181,253,0.35)]',
@@ -84,8 +144,49 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
     };
 
     const toggleDetails = () => {
-        setShowDetails((prev) => !prev);
+        if (isEditingReward) return;
+        setShowDetails((prev) => {
+            if (prev) {
+                setEditingRewardField(null);
+                setRewardDraftValue('');
+            }
+
+            return !prev;
+        });
     };
+
+    const handleBeginRewardEdit = useCallback((field, currentValue) => {
+        setEditingRewardField(field);
+        setRewardDraftValue(String(currentValue));
+    }, []);
+
+    const handleRewardSave = useCallback(() => {
+        if (!editingRewardField) return;
+
+        onUpdateRewards(habit.id, {
+            [editingRewardField]: Math.max(0, parseInt(rewardDraftValue, 10) || 0)
+        });
+        setEditingRewardField(null);
+        setRewardDraftValue('');
+    }, [editingRewardField, habit.id, onUpdateRewards, rewardDraftValue]);
+
+    const handleRewardCancel = useCallback(() => {
+        setEditingRewardField(null);
+        setRewardDraftValue('');
+    }, []);
+
+    const handleRewardEditorKeyDown = useCallback((e) => {
+        if (e.key === 'Enter') {
+            e.stopPropagation();
+            handleRewardSave();
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            e.stopPropagation();
+            handleRewardCancel();
+        }
+    }, [handleRewardCancel, handleRewardSave]);
 
     return (
         <MotionDiv
@@ -97,7 +198,7 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
                 scale: 1 - index * 0.05,
                 top: index * 10
             }}
-            drag={isTopInDeck ? true : false}
+            drag={isTopInDeck && !isEditingReward ? true : false}
             dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
             dragElastic={0.6}
             dragPropagation={false}
@@ -185,12 +286,15 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
                     {habit.title}
                 </h3>
 
-                <div className="flex-1 flex flex-col justify-center items-center text-center opacity-70 pb-14">
+                <div className={clsx(
+                    "flex-1 flex flex-col items-center text-center",
+                    showDetails ? "justify-start pt-3 pb-16" : "justify-center opacity-70 pb-14"
+                )}>
                     {showDetails ? (
                         <MotionDiv
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="w-full max-w-[240px] text-left"
+                            className="w-full max-w-[248px] text-left"
                         >
                             <div className="mb-4 flex items-center justify-between">
                                 <p className="text-[10px] font-game uppercase tracking-[0.28em] text-violet-200/70">
@@ -198,18 +302,20 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
                                 </p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="min-w-0 border-l border-violet-300/20 pl-3">
-                                    <div className="min-h-[2.4rem]">
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] leading-tight text-violet-200/75">Due-Day Bonus</p>
-                                    </div>
-                                    <p className="mt-3 text-3xl font-game leading-none text-white">{completionReward}</p>
-                                </div>
-                                <div className="min-w-0 border-l border-fuchsia-300/20 pl-3">
-                                    <div className="min-h-[2.4rem]">
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] leading-tight text-fuchsia-100/75">Passive Generation</p>
-                                    </div>
-                                    <p className="mt-3 text-3xl font-game leading-none text-white">{passiveReward}</p>
-                                </div>
+                                <ProtocolRewardField
+                                    label="Due-Day Bonus"
+                                    value={completionReward}
+                                    accentBorderClass="border-violet-300/20"
+                                    labelClassName="text-violet-200/75"
+                                    onBeginEdit={(currentValue) => handleBeginRewardEdit('completionReward', currentValue)}
+                                />
+                                <ProtocolRewardField
+                                    label="Passive Generation"
+                                    value={passiveReward}
+                                    accentBorderClass="border-fuchsia-300/20"
+                                    labelClassName="text-fuchsia-100/75"
+                                    onBeginEdit={(currentValue) => handleBeginRewardEdit('passiveReward', currentValue)}
+                                />
                             </div>
                         </MotionDiv>
                     ) : (
@@ -225,7 +331,56 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
                     )}
                 </div>
 
-                <div className="absolute bottom-6 left-6 right-6 border-t border-white/10 pt-4 flex justify-between text-xs text-gray-500 font-mono">
+                {showDetails && isEditingReward && (
+                    <MotionDiv
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="absolute left-6 right-6 top-[108px] bottom-20 z-30 flex items-center justify-center pointer-events-none"
+                    >
+                        <div
+                            className="w-full max-w-[248px] rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-[0_14px_36px_rgba(0,0,0,0.4)] pointer-events-auto"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                        >
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-200/65">
+                                Editing {editingRewardLabel}
+                            </p>
+                            <input
+                                type="number"
+                                min="0"
+                                value={rewardDraftValue}
+                                onChange={(e) => setRewardDraftValue(e.target.value)}
+                                onKeyDown={handleRewardEditorKeyDown}
+                                className="mt-3 w-full rounded-lg border border-white/15 bg-black/70 px-3 py-3 text-right font-mono text-2xl text-white focus:outline-none focus:border-violet-300/60"
+                                autoFocus
+                            />
+                            <div className="mt-3 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRewardSave();
+                                    }}
+                                    className="flex-1 rounded-md bg-violet-500/90 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-white transition-colors hover:bg-violet-400"
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRewardCancel();
+                                    }}
+                                    className="flex-1 rounded-md border border-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300 transition-colors hover:border-white/20 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </MotionDiv>
+                )}
+
+                <div className="absolute bottom-6 left-6 right-6 z-10 border-t border-white/10 pt-4 flex justify-between text-xs text-gray-500 font-mono">
                     <div className="flex items-center gap-1"><span className={accentTheme.actionAccent}>►</span> COMPLETE</div>
                     <div className="flex items-center gap-1">SKIP <span className="text-rose-400">◄</span></div>
                 </div>
@@ -234,7 +389,7 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
     );
 };
 
-const ProtocolDeck = ({ habits, cycleOffsets, onComplete, onSkip, onCycleNext, onCyclePrev, slideDirection = 1 }) => {
+const ProtocolDeck = ({ habits, cycleOffsets, onComplete, onSkip, onCycleNext, onCyclePrev, onUpdateRewards, slideDirection = 1 }) => {
     // Only show top 4
     const visibleHabits = habits.slice(0, 4);
 
@@ -263,6 +418,7 @@ const ProtocolDeck = ({ habits, cycleOffsets, onComplete, onSkip, onCycleNext, o
                         onSkip={onSkip}
                         onCycleNext={onCycleNext}
                         onCyclePrev={onCyclePrev}
+                        onUpdateRewards={onUpdateRewards}
                         custom={slideDirection}
                     />
                 ))}
@@ -557,7 +713,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
 };
 
 const HabitTracker = () => {
-    const { habits, addHabit, checkHabit, deleteHabit, toggleHabitActivation, settings } = useGame();
+    const { habits, addHabit, checkHabit, deleteHabit, toggleHabitActivation, updateHabitRewards, settings } = useGame();
 
     // Modal States
     const [showActiveList, setShowActiveList] = useState(false);
@@ -715,6 +871,7 @@ const HabitTracker = () => {
                     onSkip={handleSkip}
                     onCycleNext={handleCycleNext}
                     onCyclePrev={handleCyclePrev}
+                    onUpdateRewards={updateHabitRewards}
                     slideDirection={slideDirection}
                 />
             </div>

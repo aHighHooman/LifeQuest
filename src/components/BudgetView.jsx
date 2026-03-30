@@ -289,6 +289,211 @@ const CoinCrackSvg = ({ cracks, progress, glowFilterId, hotFilterId, warmBack = 
     </svg>
 );
 
+const SettingsModal = ({
+    originRect,
+    closeSettings,
+    totalMonthlyBudget,
+    toCredits,
+    fromCredits,
+    setTotalMonthlyBudget,
+    groceryAllocation,
+    setGroceryAllocation,
+    groceryPeriod,
+    setGroceryPeriod,
+    stipendAmount,
+    setStipendAmount,
+    resetStipendAnchor,
+    stipendPeriod,
+    setStipendPeriod,
+    goldToUsdRatio,
+    setGoldToUsdRatio,
+    clearGroceryList,
+    priceDatabase,
+    updatePrice
+}) => {
+    const originCenterX = originRect ? (originRect.left + (originRect.width / 2)) - (window.innerWidth / 2) : 0;
+    const originCenterY = originRect ? (originRect.top + (originRect.height / 2)) - (window.innerHeight / 2) : 0;
+    const originScale = originRect
+        ? clamp(Math.min(originRect.width / 360, originRect.height / 360), 0.22, 0.42)
+        : 0.92;
+
+    return ReactDOM.createPortal(
+        <>
+            <motion.div
+                data-no-swipe="true"
+                className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    closeSettings();
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+            />
+            <div className="fixed inset-0 z-[251] flex items-center justify-center p-4 pointer-events-none">
+                <motion.div
+                    data-no-swipe="true"
+                    className="bg-slate-900 border border-amber-500/30 rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-[0_0_50px_rgba(245,158,11,0.1)] overflow-hidden pointer-events-auto"
+                    initial={{
+                        opacity: 0,
+                        scale: originScale,
+                        x: originCenterX,
+                        y: originCenterY
+                    }}
+                    animate={{
+                        opacity: 1,
+                        scale: 1,
+                        x: 0,
+                        y: 0
+                    }}
+                    exit={{
+                        opacity: 0,
+                        scale: originRect ? Math.max(originScale, 0.84) : 0.96,
+                        x: originRect ? originCenterX * 0.12 : 0,
+                        y: originRect ? originCenterY * 0.12 : 0
+                    }}
+                    transition={{
+                        duration: originRect ? 0.28 : 0.18,
+                        ease: [0.22, 0.9, 0.3, 1]
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
+                    <div className="p-4 border-b border-amber-900/50 flex justify-between items-center bg-slate-950/80">
+                        <h3 className="font-game font-bold text-lg text-amber-500 flex items-center gap-2">
+                            <Settings size={18} /> VAULT CONFIG
+                        </h3>
+                        <button onClick={closeSettings} className="text-gray-500 hover:text-white transition-colors"><X size={20} /></button>
+                    </div>
+
+                    <div className="p-4 space-y-4 overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-1 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Monthly Budget (Credits)</label>
+                                <div className="relative">
+                                    <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
+                                    <input
+                                        type="number"
+                                        value={toCredits(totalMonthlyBudget)}
+                                        onChange={(e) => setTotalMonthlyBudget(fromCredits(e.target.value))}
+                                        className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Grocery Allocation (Credits)</label>
+                                <div className="relative">
+                                    <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
+                                    <input
+                                        type="number"
+                                        value={toCredits(groceryAllocation)}
+                                        onChange={(e) => setGroceryAllocation(fromCredits(e.target.value))}
+                                        className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Frequency</label>
+                                <select
+                                    value={groceryPeriod}
+                                    onChange={(e) => setGroceryPeriod(e.target.value)}
+                                    className="w-full bg-black/50 border border-amber-900/50 rounded px-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
+                                >
+                                    <option value="weekly">Weekly</option>
+                                    <option value="bi-weekly">Bi-Weekly</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Stipend Amount (Credits)</label>
+                                <div className="relative">
+                                    <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={stipendAmount}
+                                        onChange={(e) => {
+                                            setStipendAmount(Math.max(0, parseInt(e.target.value, 10) || 0));
+                                            resetStipendAnchor();
+                                        }}
+                                        className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Stipend Period</label>
+                                <select
+                                    value={stipendPeriod}
+                                    onChange={(e) => {
+                                        setStipendPeriod(e.target.value);
+                                        resetStipendAnchor();
+                                    }}
+                                    className="w-full bg-black/50 border border-amber-900/50 rounded px-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
+                                >
+                                    <option value="weekly">Weekly</option>
+                                    <option value="bi-weekly">Bi-Weekly</option>
+                                    <option value="monthly">Monthly</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Exchange Rate (Credits : $1)</label>
+                                <input
+                                    type="number"
+                                    value={goldToUsdRatio}
+                                    onChange={(e) => setGoldToUsdRatio(Number(e.target.value))}
+                                    className="w-full bg-black/50 border border-amber-900/50 rounded px-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-amber-900/30">
+                            <button
+                                onClick={clearGroceryList}
+                                className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-500 text-[10px] font-bold uppercase rounded border border-red-900/30 hover:border-red-500/50 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Trash2 size={14} /> Purge Provision Manifest
+                            </button>
+                        </div>
+
+                        <div className="pt-2">
+                            <h4 className="text-[10px] font-bold text-amber-500/70 uppercase mb-3 tracking-widest flex items-center gap-2">
+                                <Database size={12} /> Master Price Database
+                            </h4>
+                            <div className="grid grid-cols-1 gap-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                                {Object.entries(priceDatabase).map(([name, price]) => (
+                                    <div key={name} className="flex items-center justify-between p-2 rounded bg-black/40 border border-amber-900/20 hover:border-amber-500/30 transition-colors group">
+                                        <span className="text-xs text-amber-100/70 group-hover:text-amber-100">{name}</span>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center text-amber-500">
+                                                <Coins size={10} className="mr-1" />
+                                                <span className="text-xs font-mono">{toCredits(price)}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    const currentCredits = toCredits(price);
+                                                    const newCredits = prompt(`Update unit cost for ${name} (Credits):`, currentCredits);
+                                                    if (newCredits !== null && !isNaN(newCredits)) {
+                                                        updatePrice(name, fromCredits(newCredits));
+                                                    }
+                                                }}
+                                                className="p-1 hover:bg-amber-900/50 rounded text-amber-700 hover:text-amber-400 transition-colors"
+                                            >
+                                                <Settings size={10} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+            </div>
+        </>,
+        document.body
+    );
+};
+
 const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
     const [spinCount, setSpinCount] = useState(0);
     const [shadowScale, setShadowScale] = useState(1);
@@ -783,190 +988,6 @@ const BudgetView = () => {
         setShowSettings(true);
     };
 
-    const SettingsModal = ({ originRect }) => {
-        const originCenterX = originRect ? (originRect.left + (originRect.width / 2)) - (window.innerWidth / 2) : 0;
-        const originCenterY = originRect ? (originRect.top + (originRect.height / 2)) - (window.innerHeight / 2) : 0;
-        const originScale = originRect
-            ? clamp(Math.min(originRect.width / 360, originRect.height / 360), 0.22, 0.42)
-            : 0.92;
-
-        return ReactDOM.createPortal(
-            <>
-                <motion.div
-                    data-no-swipe="true"
-                    className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-sm"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        closeSettings();
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                />
-                <div className="fixed inset-0 z-[251] flex items-center justify-center p-4 pointer-events-none">
-                    <motion.div
-                        data-no-swipe="true"
-                        className="bg-slate-900 border border-amber-500/30 rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-[0_0_50px_rgba(245,158,11,0.1)] overflow-hidden pointer-events-auto"
-                        initial={{
-                            opacity: 0,
-                            scale: originScale,
-                            x: originCenterX,
-                            y: originCenterY
-                        }}
-                        animate={{
-                            opacity: 1,
-                            scale: 1,
-                            x: 0,
-                            y: 0
-                        }}
-                        exit={{
-                            opacity: 0,
-                            scale: originRect ? Math.max(originScale, 0.84) : 0.96,
-                            x: originRect ? originCenterX * 0.12 : 0,
-                            y: originRect ? originCenterY * 0.12 : 0
-                        }}
-                        transition={{
-                            duration: originRect ? 0.28 : 0.18,
-                            ease: [0.22, 0.9, 0.3, 1]
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                    >
-                <div className="p-4 border-b border-amber-900/50 flex justify-between items-center bg-slate-950/80">
-                    <h3 className="font-game font-bold text-lg text-amber-500 flex items-center gap-2">
-                        <Settings size={18} /> VAULT CONFIG
-                    </h3>
-                    <button onClick={closeSettings} className="text-gray-500 hover:text-white transition-colors"><X size={20} /></button>
-                </div>
-
-                <div className="p-4 space-y-4 overflow-y-auto custom-scrollbar">
-                    <div className="grid grid-cols-1 gap-4">
-                        <div>
-                            <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Monthly Budget (Credits)</label>
-                            <div className="relative">
-                                <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
-                                <input
-                                    type="number"
-                                    value={toCredits(totalMonthlyBudget)}
-                                    onChange={(e) => setTotalMonthlyBudget(fromCredits(e.target.value))}
-                                    className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Grocery Allocation (Credits)</label>
-                            <div className="relative">
-                                <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
-                                <input
-                                    type="number"
-                                    value={toCredits(groceryAllocation)}
-                                    onChange={(e) => setGroceryAllocation(fromCredits(e.target.value))}
-                                    className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Frequency</label>
-                            <select
-                                value={groceryPeriod}
-                                onChange={(e) => setGroceryPeriod(e.target.value)}
-                                className="w-full bg-black/50 border border-amber-900/50 rounded px-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
-                            >
-                                <option value="weekly">Weekly</option>
-                                <option value="bi-weekly">Bi-Weekly</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Stipend Amount (Credits)</label>
-                            <div className="relative">
-                                <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={stipendAmount}
-                                    onChange={(e) => {
-                                        setStipendAmount(Math.max(0, parseInt(e.target.value, 10) || 0));
-                                        resetStipendAnchor();
-                                    }}
-                                    className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Stipend Period</label>
-                            <select
-                                value={stipendPeriod}
-                                onChange={(e) => {
-                                    setStipendPeriod(e.target.value);
-                                    resetStipendAnchor();
-                                }}
-                                className="w-full bg-black/50 border border-amber-900/50 rounded px-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
-                            >
-                                <option value="weekly">Weekly</option>
-                                <option value="bi-weekly">Bi-Weekly</option>
-                                <option value="monthly">Monthly</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Exchange Rate (Credits : $1)</label>
-                            <input
-                                type="number"
-                                value={goldToUsdRatio}
-                                onChange={(e) => setGoldToUsdRatio(Number(e.target.value))}
-                                className="w-full bg-black/50 border border-amber-900/50 rounded px-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-amber-900/30">
-                        <button
-                            onClick={clearGroceryList}
-                            className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-500 text-[10px] font-bold uppercase rounded border border-red-900/30 hover:border-red-500/50 transition-all flex items-center justify-center gap-2"
-                        >
-                            <Trash2 size={14} /> Purge Provision Manifest
-                        </button>
-                    </div>
-
-                    <div className="pt-2">
-                        <h4 className="text-[10px] font-bold text-amber-500/70 uppercase mb-3 tracking-widest flex items-center gap-2">
-                            <Database size={12} /> Master Price Database
-                        </h4>
-                        <div className="grid grid-cols-1 gap-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                            {Object.entries(priceDatabase).map(([name, price]) => (
-                                <div key={name} className="flex items-center justify-between p-2 rounded bg-black/40 border border-amber-900/20 hover:border-amber-500/30 transition-colors group">
-                                    <span className="text-xs text-amber-100/70 group-hover:text-amber-100">{name}</span>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center text-amber-500">
-                                            <Coins size={10} className="mr-1" />
-                                            <span className="text-xs font-mono">{toCredits(price)}</span>
-                                        </div>
-                                        <button
-                                            onClick={() => {
-                                                const currentCredits = toCredits(price);
-                                                const newCredits = prompt(`Update unit cost for ${name} (Credits):`, currentCredits);
-                                                if (newCredits !== null && !isNaN(newCredits)) {
-                                                    updatePrice(name, fromCredits(newCredits));
-                                                }
-                                            }}
-                                            className="p-1 hover:bg-amber-900/50 rounded text-amber-700 hover:text-amber-400 transition-colors"
-                                        >
-                                            <Settings size={10} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-                    </motion.div>
-                </div>
-            </>,
-            document.body
-        );
-    };
-
     const ProvisionsView = ({ groceryList, totalGroceryEstimated }) => {
         const [itemName, setItemName] = useState('');
         const [itemQuantity, setItemQuantity] = useState('1');
@@ -1346,7 +1367,30 @@ const BudgetView = () => {
 
             {/* Modals */}
             <AnimatePresence>
-                {showSettings && <SettingsModal originRect={settingsOriginRect} />}
+                {showSettings && (
+                    <SettingsModal
+                        originRect={settingsOriginRect}
+                        closeSettings={closeSettings}
+                        totalMonthlyBudget={totalMonthlyBudget}
+                        toCredits={toCredits}
+                        fromCredits={fromCredits}
+                        setTotalMonthlyBudget={setTotalMonthlyBudget}
+                        groceryAllocation={groceryAllocation}
+                        setGroceryAllocation={setGroceryAllocation}
+                        groceryPeriod={groceryPeriod}
+                        setGroceryPeriod={setGroceryPeriod}
+                        stipendAmount={stipendAmount}
+                        setStipendAmount={setStipendAmount}
+                        resetStipendAnchor={resetStipendAnchor}
+                        stipendPeriod={stipendPeriod}
+                        setStipendPeriod={setStipendPeriod}
+                        goldToUsdRatio={goldToUsdRatio}
+                        setGoldToUsdRatio={setGoldToUsdRatio}
+                        clearGroceryList={clearGroceryList}
+                        priceDatabase={priceDatabase}
+                        updatePrice={updatePrice}
+                    />
+                )}
             </AnimatePresence>
         </div>
     );
