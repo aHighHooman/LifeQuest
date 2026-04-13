@@ -128,7 +128,8 @@ const EmptyChartState = ({ title, body }) => (
     </div>
 );
 
-const SummaryCard = ({ icon: Icon, label, value, helper, tone = 'blue' }) => {
+const SummaryCard = ({ icon, label, value, helper, tone = 'blue' }) => {
+    const IconComponent = icon;
     const toneStyles = TONE_STYLES[tone] || TONE_STYLES.blue;
 
     return (
@@ -141,7 +142,7 @@ const SummaryCard = ({ icon: Icon, label, value, helper, tone = 'blue' }) => {
                     <p className={`mt-2 font-game text-[1.7rem] font-semibold uppercase tracking-[0.06em] ${toneStyles.value}`}>{value}</p>
                 </div>
                 <div className={`rounded-full p-2.5 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] ${toneStyles.icon}`}>
-                    <Icon size={18} strokeWidth={2.2} />
+                    <IconComponent size={18} strokeWidth={2.2} />
                 </div>
             </div>
             <p className={`mt-3 text-xs leading-relaxed ${toneStyles.helper}`}>{helper}</p>
@@ -227,14 +228,14 @@ const StatsView = ({ isOpen, onClose }) => {
             .sort()
             .reduce((total, date) => total + grouped[date], 0);
 
-        let runningBalance = historicalBalance;
-
-        return last14Days.map((date) => {
+        return last14Days.map((date, index) => {
             const change = grouped[date] || 0;
-            runningBalance += change;
+            const balance = historicalBalance + last14Days
+                .slice(0, index + 1)
+                .reduce((sum, day) => sum + (grouped[day] || 0), 0);
             return {
                 date,
-                balance: runningBalance,
+                balance,
                 change
             };
         });
@@ -244,8 +245,8 @@ const StatsView = ({ isOpen, onClose }) => {
         const grouped = {};
 
         (calories.history || []).forEach((entry) => {
-            const dateKey = toLocalDateKey(entry.date);
-            grouped[dateKey] = (grouped[dateKey] || 0) + entry.amount;
+            const dateKey = entry.dateKey || toLocalDateKey(entry.timestamp || entry.date);
+            grouped[dateKey] = (grouped[dateKey] || 0) + Number(entry.calories ?? entry.amount ?? 0);
         });
 
         return last7Days.map((date) => ({
@@ -361,8 +362,7 @@ const StatsView = ({ isOpen, onClose }) => {
     }, [
         activeTab,
         calorieData,
-        calories.current,
-        calories.target,
+        calories,
         coinData,
         coinHistory.length,
         habits,

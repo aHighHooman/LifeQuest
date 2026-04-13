@@ -909,7 +909,7 @@ const BudgetView = () => {
     } = useBudget();
     const { stats, spendCoins, addGold } = useGame();
 
-    const [activeTab, setActiveTab] = useState(TAB_PROVISIONS);
+    const [activeTab, setActiveTab] = useState(TAB_LEDGER);
     const [showSettings, setShowSettings] = useState(false);
     const [settingsOriginRect, setSettingsOriginRect] = useState(null);
     const [coinResetSignal, setCoinResetSignal] = useState(0);

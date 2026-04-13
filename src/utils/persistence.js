@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export const APP_VERSION = '1.3.0'; // Incrementing for this update
+export const APP_VERSION = '1.4.0'; // Incrementing for this update
 export const VERSION_KEY = 'lq_version';
 
 /**

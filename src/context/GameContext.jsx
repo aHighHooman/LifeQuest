@@ -10,7 +10,7 @@ import {
     getHabitPassivePayoutDateKeys,
     getLatestHabitCompletionDateKey,
 } from '../utils/gameLogic';
-import { getTodayISO, isWithinDays } from '../utils/dateUtils';
+import { getTodayISO, isWithinDays, toLocalDateKey } from '../utils/dateUtils';
 import {
     createPortableSnapshot,
     readProtocolLookaheadDays,
@@ -44,7 +44,7 @@ const INITIAL_SETTINGS = {
     }
 };
 
-const INITIAL_CALORIES = { current: 0, target: 2000, history: [] };
+const INITIAL_CALORIES = { current: 0, target: 2000, history: [], savedFoods: [], recentFoodIds: [] };
 const INITIAL_COIN_HISTORY = [];
 const INITIAL_BUDGET_TRANSFER = {
     totalMonthlyBudget: 0,
@@ -78,11 +78,115 @@ const normalizeSettingsForImport = (settings = {}) => ({
     }
 });
 
-const normalizeCaloriesForImport = (calories = {}) => ({
-    ...INITIAL_CALORIES,
-    ...calories,
-    history: Array.isArray(calories.history) ? calories.history : INITIAL_CALORIES.history
+const createId = (prefix = 'id') => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeCalorieNumber = (value) => {
+    const parsed = Math.round(Number(value) || 0);
+    return Math.max(0, parsed);
+};
+
+const normalizeCalorieLabel = (label, fallback = 'Manual Entry') => {
+    const trimmed = `${label ?? ''}`.trim();
+    return trimmed || fallback;
+};
+
+const createCalorieHistoryEntry = ({
+    id = createId('cal'),
+    timestamp = new Date().toISOString(),
+    dateKey,
+    calories,
+    label,
+    source = 'manual',
+    foodId = null
+}) => {
+    const safeTimestamp = timestamp || new Date().toISOString();
+    const safeCalories = normalizeCalorieNumber(calories);
+    const safeSource = source || 'manual';
+    return {
+        id,
+        timestamp: safeTimestamp,
+        dateKey: dateKey || toLocalDateKey(safeTimestamp),
+        calories: safeCalories,
+        label: normalizeCalorieLabel(
+            label,
+            safeSource === 'preset' ? `Quick Add ${safeCalories}` : 'Manual Entry'
+        ),
+        source: safeSource,
+        foodId: foodId || null
+    };
+};
+
+const createSavedFoodRecord = ({
+    id = createId('food'),
+    name,
+    calories,
+    createdAt = new Date().toISOString(),
+    updatedAt = createdAt
+}) => ({
+    id,
+    name: normalizeCalorieLabel(name, 'Untitled Food'),
+    calories: Math.max(1, normalizeCalorieNumber(calories)),
+    createdAt,
+    updatedAt
 });
+
+const normalizeCalorieHistoryEntry = (entry, index) => {
+    const timestamp = entry?.timestamp || entry?.date || new Date().toISOString();
+    const calories = entry?.calories ?? entry?.amount ?? 0;
+    const source = entry?.source || 'manual';
+    const fallbackLabel = source === 'preset'
+        ? `Quick Add ${normalizeCalorieNumber(calories)}`
+        : 'Manual Entry';
+
+    return createCalorieHistoryEntry({
+        id: entry?.id || createId(`cal-${index}`),
+        timestamp,
+        dateKey: entry?.dateKey || toLocalDateKey(timestamp),
+        calories,
+        label: entry?.label || fallbackLabel,
+        source,
+        foodId: entry?.foodId || null
+    });
+};
+
+const normalizeSavedFood = (food, index) => createSavedFoodRecord({
+    id: food?.id || createId(`food-${index}`),
+    name: food?.name,
+    calories: food?.calories,
+    createdAt: food?.createdAt || new Date().toISOString(),
+    updatedAt: food?.updatedAt || food?.createdAt || new Date().toISOString()
+});
+
+const recomputeCalorieCurrent = (history, todayKey = getTodayISO()) => {
+    return (history || []).reduce((sum, entry) => {
+        if (entry.dateKey !== todayKey) return sum;
+        return sum + normalizeCalorieNumber(entry.calories);
+    }, 0);
+};
+
+const normalizeCaloriesForImport = (calories = {}) => {
+    const history = Array.isArray(calories.history)
+        ? calories.history.map(normalizeCalorieHistoryEntry)
+        : INITIAL_CALORIES.history;
+    const savedFoods = Array.isArray(calories.savedFoods)
+        ? calories.savedFoods.map(normalizeSavedFood)
+        : INITIAL_CALORIES.savedFoods;
+    const savedFoodIds = new Set(savedFoods.map((food) => food.id));
+    const recentFoodIds = Array.isArray(calories.recentFoodIds)
+        ? calories.recentFoodIds.filter((id) => savedFoodIds.has(id)).slice(0, 10)
+        : INITIAL_CALORIES.recentFoodIds;
+    const target = Math.max(1, normalizeCalorieNumber(calories.target || INITIAL_CALORIES.target));
+
+    return {
+        ...INITIAL_CALORIES,
+        ...calories,
+        current: recomputeCalorieCurrent(history),
+        target,
+        history,
+        savedFoods,
+        recentFoodIds
+    };
+};
 
 const normalizeBudgetForImport = (budget = {}) => ({
     ...INITIAL_BUDGET_TRANSFER,
@@ -114,7 +218,7 @@ const createLedgerTimestamp = (dateKey) => {
 };
 
 const createCoinHistoryEntry = ({ amount, description, type = 'earned', date = new Date().toISOString() }) => ({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: createId('coin'),
     date,
     amount,
     description,
@@ -294,6 +398,13 @@ export const GameProvider = ({ children }) => {
     const [calories, setCalories] = usePersistentState('lq_calories', INITIAL_CALORIES);
     const [coinHistory, setCoinHistory] = usePersistentState('lq_coin_history', INITIAL_COIN_HISTORY);
 
+    useEffect(() => {
+        const normalizedCalories = normalizeCaloriesForImport(calories);
+        if (JSON.stringify(normalizedCalories) !== JSON.stringify(calories)) {
+            setCalories(normalizedCalories);
+        }
+    }, [calories, setCalories]);
+
     const updateStats = useCallback((newStats) => {
         setStats(prev => ({ ...prev, ...newStats }));
     }, [setStats]);
@@ -388,16 +499,136 @@ export const GameProvider = ({ children }) => {
         setTotalMonthlyBudget
     ]);
 
-    const addCalories = useCallback((amount) => {
+    const logCalories = useCallback(({
+        calories: amount,
+        label,
+        source = 'manual',
+        foodId = null
+    }) => {
+        const safeCalories = normalizeCalorieNumber(amount);
+        if (safeCalories <= 0) return false;
+
+        const now = new Date().toISOString();
+        const nextEntry = createCalorieHistoryEntry({
+            timestamp: now,
+            calories: safeCalories,
+            label,
+            source,
+            foodId
+        });
+
         setCalories(prev => {
-            const newCurrent = Math.max(0, prev.current + amount);
-            const newEntry = { date: new Date().toISOString(), amount };
-            return { ...prev, current: newCurrent, history: [...prev.history, newEntry] };
+            const nextRecentFoodIds = foodId
+                ? [foodId, ...(prev.recentFoodIds || []).filter((id) => id !== foodId)].slice(0, 10)
+                : prev.recentFoodIds || [];
+            const nextHistory = [...(prev.history || []), nextEntry];
+            return {
+                ...prev,
+                history: nextHistory,
+                recentFoodIds: nextRecentFoodIds,
+                current: recomputeCalorieCurrent(nextHistory)
+            };
+        });
+
+        return true;
+    }, [setCalories]);
+
+    const addCalories = useCallback((amount) => {
+        return logCalories({
+            calories: amount,
+            label: `Quick Add ${normalizeCalorieNumber(amount)}`,
+            source: 'preset'
+        });
+    }, [logCalories]);
+
+    const updateCalorieEntry = useCallback((entryId, updates = {}) => {
+        const todayKey = getTodayISO();
+
+        setCalories(prev => {
+            const nextHistory = (prev.history || []).map((entry) => {
+                if (entry.id !== entryId || entry.dateKey !== todayKey) return entry;
+
+                const nextCalories = updates.calories === undefined
+                    ? entry.calories
+                    : Math.max(1, normalizeCalorieNumber(updates.calories));
+                const nextLabel = updates.label === undefined
+                    ? entry.label
+                    : normalizeCalorieLabel(updates.label, entry.label);
+                const nextFoodId = updates.foodId === undefined ? entry.foodId : (updates.foodId || null);
+                const nextSource = updates.source || entry.source;
+
+                return {
+                    ...entry,
+                    calories: nextCalories,
+                    label: nextLabel,
+                    foodId: nextFoodId,
+                    source: nextSource
+                };
+            });
+
+            return {
+                ...prev,
+                history: nextHistory,
+                current: recomputeCalorieCurrent(nextHistory)
+            };
         });
     }, [setCalories]);
 
+    const deleteCalorieEntry = useCallback((entryId) => {
+        const todayKey = getTodayISO();
+
+        setCalories(prev => {
+            const nextHistory = (prev.history || []).filter(
+                (entry) => !(entry.id === entryId && entry.dateKey === todayKey)
+            );
+
+            return {
+                ...prev,
+                history: nextHistory,
+                current: recomputeCalorieCurrent(nextHistory)
+            };
+        });
+    }, [setCalories]);
+
+    const createSavedFood = useCallback(({ name, calories }) => {
+        const nextFood = createSavedFoodRecord({ name, calories });
+
+        setCalories(prev => ({
+            ...prev,
+            savedFoods: [...(prev.savedFoods || []), nextFood]
+        }));
+
+        return nextFood;
+    }, [setCalories]);
+
+    const updateSavedFood = useCallback((foodId, updates = {}) => {
+        setCalories(prev => ({
+            ...prev,
+            savedFoods: (prev.savedFoods || []).map((food) => {
+                if (food.id !== foodId) return food;
+
+                return createSavedFoodRecord({
+                    ...food,
+                    ...updates,
+                    id: food.id,
+                    createdAt: food.createdAt,
+                    updatedAt: new Date().toISOString()
+                });
+            })
+        }));
+    }, [setCalories]);
+
+    const deleteSavedFood = useCallback((foodId) => {
+        setCalories(prev => ({
+            ...prev,
+            savedFoods: (prev.savedFoods || []).filter((food) => food.id !== foodId),
+            recentFoodIds: (prev.recentFoodIds || []).filter((id) => id !== foodId)
+        }));
+    }, [setCalories]);
+
     const setCalorieGoal = useCallback((amount) => {
-        setCalories(prev => ({ ...prev, target: amount }));
+        const safeGoal = Math.max(1, normalizeCalorieNumber(amount));
+        setCalories(prev => ({ ...prev, target: safeGoal }));
     }, [setCalories]);
 
     const appendCoinHistoryEntries = useCallback((entries) => {
@@ -773,7 +1004,10 @@ export const GameProvider = ({ children }) => {
             setStats(prev => ({ ...prev, lastLoginDate: today }));
         }
 
-        setCalories(prev => ({ ...prev, current: 0 }));
+        setCalories(prev => ({
+            ...prev,
+            current: recomputeCalorieCurrent(prev.history || [], today)
+        }));
     }, [
         addRewardFromGold,
         appendCoinHistoryEntries,
@@ -807,13 +1041,15 @@ export const GameProvider = ({ children }) => {
         stats, quests, habits, settings, calories, coinHistory,
         addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
         addHabit, checkHabit, deleteHabit, toggleHabitActivation, updateHabitRewards,
-        updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins, addGold,
+        updateStats, updateSettings, addCalories, logCalories, updateCalorieEntry, deleteCalorieEntry,
+        createSavedFood, updateSavedFood, deleteSavedFood, setCalorieGoal, spendCoins, addGold,
         toggleToday, exportAppState, importAppState
     }), [
         stats, quests, habits, settings, calories, coinHistory,
         addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
         addHabit, checkHabit, deleteHabit, toggleHabitActivation, updateHabitRewards,
-        updateStats, updateSettings, addCalories, setCalorieGoal, spendCoins, addGold,
+        updateStats, updateSettings, addCalories, logCalories, updateCalorieEntry, deleteCalorieEntry,
+        createSavedFood, updateSavedFood, deleteSavedFood, setCalorieGoal, spendCoins, addGold,
         toggleToday, exportAppState, importAppState
     ]);
 

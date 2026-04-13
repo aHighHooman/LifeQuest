@@ -3,22 +3,49 @@ import { GameProvider, useGame } from './context/GameContext';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
+import Dashboard from './components/Dashboard';
+import QuestBoard from './components/QuestBoard';
+import HabitTracker from './components/HabitTracker';
+import Navigation from './components/Navigation';
+import BudgetView from './components/BudgetView';
+import CalorieTracker from './components/CalorieTracker';
 
-const Dashboard = React.lazy(() => import('./components/Dashboard'));
-const QuestBoard = React.lazy(() => import('./components/QuestBoard'));
-const HabitTracker = React.lazy(() => import('./components/HabitTracker'));
-const Navigation = React.lazy(() => import('./components/Navigation'));
-const BudgetView = React.lazy(() => import('./components/BudgetView'));
-const CalorieTracker = React.lazy(() => import('./components/CalorieTracker'));
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
 
-// Loading component
-const LoadingSpinner = () => (
-  <div className="flex items-center justify-center p-8">
-    <div className="w-8 h-8 border-4 border-game-accent border-t-transparent rounded-full animate-spin"></div>
-  </div>
-);
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('AppErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.error) {
+      const message = this.state.error?.message || 'Unknown runtime error';
+      return (
+        <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+          <div className="w-full max-w-2xl rounded-3xl border border-rose-500/30 bg-black/60 p-6 shadow-2xl">
+            <p className="text-xs uppercase tracking-[0.3em] text-rose-400/70">Runtime Failure</p>
+            <h1 className="mt-2 text-2xl font-bold text-rose-100">LifeQuest hit an error while rendering.</h1>
+            <pre className="mt-4 whitespace-pre-wrap rounded-2xl bg-slate-900/80 p-4 text-sm text-rose-100">{message}</pre>
+            <p className="mt-4 text-sm text-slate-300">
+              If this appeared right after an update, a stale app cache or service worker may also be involved.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
   const context = useGame();
@@ -45,34 +72,30 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
   }
 
   return (
-    <div className="h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col">
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    <AppErrorBoundary>
+      <div className="h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col">
+        <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-      <React.Suspense fallback={<div className="min-h-screen bg-game-bg" />}>
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
           <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))] flex flex-col min-h-full">
-            <motion.main
+            <Motion.main
               className="flex-1 flex flex-col relative z-10"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <React.Suspense fallback={<LoadingSpinner />}>
-                <Profiler id={`screen:${currentTab}`} onRender={onProfileRender}>
-                  {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} onOpenSettings={() => setIsSettingsOpen(true)} />}
-                  {currentTab === 'quests' && <QuestBoard />}
-                  {currentTab === 'protocols' && <HabitTracker />}
-                  {currentTab === 'budget' && <BudgetView />}
-                  {currentTab === 'calories' && <CalorieTracker />}
-                </Profiler>
-              </React.Suspense>
-            </motion.main>
+              <Profiler id={`screen:${currentTab}`} onRender={onProfileRender}>
+                {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} onOpenSettings={() => setIsSettingsOpen(true)} />}
+                {currentTab === 'quests' && <QuestBoard />}
+                {currentTab === 'protocols' && <HabitTracker />}
+                {currentTab === 'budget' && <BudgetView />}
+                {currentTab === 'calories' && <CalorieTracker />}
+              </Profiler>
+            </Motion.main>
           </div>
         </Navigation>
-      </React.Suspense>
-
-
-    </div>
+      </div>
+    </AppErrorBoundary>
   );
 }
 

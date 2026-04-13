@@ -1,7 +1,7 @@
 import { PROTOCOL_LOOKAHEAD_STORAGE_KEY } from '../constants/persistenceKeys.js';
 import { safeGet, safeSet } from './persistence.js';
 
-export const PORTABLE_FORMAT_VERSION = 1;
+export const PORTABLE_FORMAT_VERSION = 2;
 export const PORTABLE_APP_NAME = 'LifeQuest';
 export const PORTABLE_BACKUP_PREFIX = 'lq_backup_transfer_pre_import';
 export const DEFAULT_PROTOCOL_LOOKAHEAD_DAYS = 1;
@@ -16,6 +16,8 @@ const SECTION_ORDER = [
     'habits',
     'calories',
     'calorieHistory',
+    'calorieSavedFoods',
+    'calorieRecentFoods',
     'coinHistory',
     'groceryList',
     'priceDatabase'
@@ -30,6 +32,8 @@ const SECTION_TYPES = {
     habits: 'json-array',
     calories: 'scalar',
     calorieHistory: 'json-array',
+    calorieSavedFoods: 'json-array',
+    calorieRecentFoods: 'json-array',
     coinHistory: 'json-array',
     groceryList: 'json-array',
     priceDatabase: 'json-object'
@@ -164,8 +168,16 @@ const finalizeSection = (sectionName, lines, sections) => {
         : parseJsonSection(sectionName, lines);
 };
 
-const validateSectionPresence = (sections) => {
-    SECTION_ORDER.forEach((sectionName) => {
+const getRequiredSectionsForVersion = (formatVersion) => {
+    if (Number(formatVersion) < 2) {
+        return SECTION_ORDER.filter((sectionName) => !['calorieSavedFoods', 'calorieRecentFoods'].includes(sectionName));
+    }
+
+    return SECTION_ORDER;
+};
+
+const validateSectionPresence = (sections, formatVersion) => {
+    getRequiredSectionsForVersion(formatVersion).forEach((sectionName) => {
         if (!(sectionName in sections)) {
             throw new Error(`Missing required section [${sectionName}].`);
         }
@@ -272,6 +284,10 @@ export const formatPortableSnapshot = (snapshot) => {
         '',
         renderJsonSection('calorieHistory', snapshot.calories.history || []),
         '',
+        renderJsonSection('calorieSavedFoods', snapshot.calories.savedFoods || []),
+        '',
+        renderJsonSection('calorieRecentFoods', snapshot.calories.recentFoodIds || []),
+        '',
         renderJsonSection('coinHistory', snapshot.coinHistory),
         '',
         renderJsonSection('groceryList', snapshot.budget.groceryList),
@@ -314,18 +330,20 @@ export const parsePortableSnapshot = (text) => {
 
     finalizeSection(currentSection, sectionLines, sections);
 
-    if (Number(header.formatVersion) !== PORTABLE_FORMAT_VERSION) {
-        throw new Error(`Unsupported formatVersion "${header.formatVersion}". Expected ${PORTABLE_FORMAT_VERSION}.`);
+    const formatVersion = Number(header.formatVersion);
+
+    if (![1, PORTABLE_FORMAT_VERSION].includes(formatVersion)) {
+        throw new Error(`Unsupported formatVersion "${header.formatVersion}". Expected 1 or ${PORTABLE_FORMAT_VERSION}.`);
     }
 
     if (!header.generatedAt) {
         throw new Error('Missing required metadata key "generatedAt".');
     }
 
-    validateSectionPresence(sections);
+    validateSectionPresence(sections, formatVersion);
 
     return {
-        formatVersion: Number(header.formatVersion),
+        formatVersion,
         generatedAt: header.generatedAt,
         appName: header.appName || PORTABLE_APP_NAME,
         stats: sections.stats,
@@ -343,7 +361,9 @@ export const parsePortableSnapshot = (text) => {
         calories: {
             current: sections.calories.current,
             target: sections.calories.target,
-            history: sections.calorieHistory
+            history: sections.calorieHistory,
+            savedFoods: sections.calorieSavedFoods || [],
+            recentFoodIds: sections.calorieRecentFoods || []
         },
         coinHistory: sections.coinHistory,
         budget: {
