@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useGame } from '../context/GameContext';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
 import {
@@ -91,6 +92,24 @@ const describeDonutSlice = (centerX, centerY, innerRadius, outerRadius, startAng
         `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y}`,
         'Z'
     ].join(' ');
+};
+
+const describeOpenArc = (centerX, centerY, radius, startAngle, endAngle, sweepFlag = 1) => {
+    let resolvedEnd = endAngle;
+
+    if (sweepFlag === 1 && resolvedEnd < startAngle) {
+        resolvedEnd += 360;
+    }
+
+    if (sweepFlag === 0 && resolvedEnd > startAngle) {
+        resolvedEnd -= 360;
+    }
+
+    const start = polarToCartesian(centerX, centerY, radius, startAngle);
+    const end = polarToCartesian(centerX, centerY, radius, resolvedEnd);
+    const largeArcFlag = Math.abs(resolvedEnd - startAngle) > 180 ? 1 : 0;
+
+    return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
 };
 
 const getWheelPosition = (angle, radius) => {
@@ -287,9 +306,27 @@ const ActionOrb = ({ icon, label, onClick, accent = 'rose', className }) => {
 const ManualEntryPanel = ({ onSubmit, onClose }) => {
     const [calories, setCalories] = useState('');
     const [label, setLabel] = useState('');
-    const [saveToLibrary, setSaveToLibrary] = useState(false);
+    const [bubbles] = useState(() => createBubbles().slice(0, 5));
+    const [labelFocused, setLabelFocused] = useState(false);
+    const labelInputRef = useRef(null);
+    const manualArcId = useId();
+    const labelArcId = useId();
+    const injectArcId = useId();
 
-    const canSubmit = normalizeCalories(calories) > 0 && (!saveToLibrary || `${label}`.trim().length > 0);
+    const canSubmit = normalizeCalories(calories) > 0;
+    const orbGeometry = {
+        outerInner: 39.2,
+        outerOuter: 46.4,
+        outerText: 42.9,
+        innerInner: 26,
+        innerOuter: 39.2,
+        topStart: 330,
+        topEnd: 390,
+        bottomStart: 150,
+        bottomEnd: 210
+    };
+    const labelDisplay = `${label}`.trim() ? shortenLabel(label, 16).toUpperCase() : 'LABEL';
+    const labelActive = labelFocused || Boolean(`${label}`.trim());
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -297,95 +334,151 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
 
         onSubmit({
             calories: normalizeCalories(calories),
-            label: `${label}`.trim(),
-            saveToLibrary
+            label: `${label}`.trim()
         });
 
         setCalories('');
         setLabel('');
-        setSaveToLibrary(false);
         onClose();
     };
 
     return (
         <Motion.form
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, scale: 0.88, y: 18 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 18 }}
+            transition={{ type: 'spring', stiffness: 240, damping: 24 }}
             onSubmit={handleSubmit}
-            className="rounded-[28px] border border-rose-500/20 bg-black/70 backdrop-blur-xl p-4 sm:p-5 shadow-[0_0_30px_rgba(0,0,0,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+            className="relative aspect-square w-[min(92vw,34rem)] max-w-[34rem] overflow-hidden rounded-full bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.98)_0%,rgba(2,6,23,0.99)_56%,rgba(0,0,0,1)_100%)] shadow-[0_28px_80px_rgba(0,0,0,0.52)] backdrop-blur-xl"
         >
-            <div className="flex items-center justify-between gap-4">
-                <div>
-                    <div className="text-[10px] uppercase tracking-[0.28em] text-rose-400/65">Manual Injector</div>
-                    <div className="mt-1 font-game text-lg font-semibold uppercase tracking-[0.08em] text-rose-50">
-                        Log Custom Intake
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-full border border-slate-700/70 bg-slate-900/80 p-2 text-slate-400 transition-colors hover:text-white"
-                >
-                    <X size={16} />
-                </button>
-            </div>
+            <div className="absolute inset-0 rounded-full" />
+            <div className="absolute inset-[4.5%] rounded-full" />
+            <div className="absolute inset-[11%] rounded-full shadow-[inset_0_0_40px_rgba(15,23,42,0.8)]" />
+            <div className="absolute inset-[8%] rounded-full opacity-[0.14] bg-[linear-gradient(rgba(244,63,94,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(244,63,94,0.16)_1px,transparent_1px)] bg-[size:18px_18px]" />
+            <Motion.div
+                className="absolute inset-[16%] rounded-full bg-white/[0.02]"
+                animate={{ scale: [1, 1.025, 1], opacity: [0.28, 0.42, 0.28] }}
+                transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <Motion.div
+                className="absolute inset-[23%] rounded-full bg-white/[0.015]"
+                animate={{ scale: [1.02, 0.985, 1.02], opacity: [0.16, 0.28, 0.16] }}
+                transition={{ duration: 5.6, repeat: Infinity, ease: 'easeInOut' }}
+            />
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1.2fr]">
-                <label className="block">
-                    <span className="text-[10px] uppercase tracking-[0.28em] text-rose-300/55">Calories</span>
+            <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
+                <defs>
+                    <path id={manualArcId} d={describeOpenArc(50, 50, 43.7, orbGeometry.topStart, orbGeometry.topEnd, 1)} />
+                    <path id={labelArcId} d={describeOpenArc(50, 50, 33.1, orbGeometry.topStart, orbGeometry.topEnd, 1)} />
+                    <path id={injectArcId} d={describeOpenArc(50, 50, 33.4, orbGeometry.bottomEnd, orbGeometry.bottomStart, 0)} />
+                </defs>
+
+                <path
+                    d={describeDonutSlice(50, 50, orbGeometry.innerInner, orbGeometry.innerOuter, orbGeometry.topStart, orbGeometry.topEnd)}
+                    fill={labelFocused ? 'rgba(29, 16, 29, 0.94)' : label ? 'rgba(13, 17, 31, 0.95)' : 'rgba(7, 12, 24, 0.9)'}
+                />
+                <path
+                    d={describeDonutSlice(50, 50, orbGeometry.innerInner, orbGeometry.innerOuter, orbGeometry.bottomStart, orbGeometry.bottomEnd)}
+                    fill={canSubmit ? 'rgba(74, 12, 34, 0.92)' : 'rgba(9, 16, 30, 0.94)'}
+                    stroke={canSubmit ? 'rgba(251,113,133,0.18)' : 'rgba(255,255,255,0.06)'}
+                    strokeWidth="0.28"
+                />
+                <text fill="rgba(251,113,133,0.82)" fontSize="3" letterSpacing="0.24em" fontWeight="700">
+                    <textPath href={`#${manualArcId}`} startOffset="50%" textAnchor="middle">
+                        MANUAL INJECTOR
+                    </textPath>
+                </text>
+                <text
+                    fill={labelActive ? 'rgba(241,245,249,0.92)' : 'rgba(148,163,184,0.72)'}
+                    fontSize="2.95"
+                    fontWeight="700"
+                    letterSpacing="0.12em"
+                >
+                    <textPath href={`#${labelArcId}`} startOffset="50%" textAnchor="middle">
+                        {labelDisplay}
+                    </textPath>
+                </text>
+                <text
+                    fill={canSubmit ? 'rgba(10,10,10,0.95)' : 'rgba(251,113,133,0.54)'}
+                    fontSize="2.95"
+                    fontWeight="800"
+                    letterSpacing="0.14em"
+                    dy="0"
+                >
+                    <textPath href={`#${injectArcId}`} startOffset="50%" textAnchor="middle">
+                        INJECT ENTRY
+                    </textPath>
+                </text>
+            </svg>
+
+            <label className="absolute inset-x-[14%] top-[10%] z-20 block h-[30%] cursor-text">
+                <span className="sr-only">Label</span>
+                <input
+                    ref={labelInputRef}
+                    type="text"
+                    value={label}
+                    onChange={(event) => setLabel(event.target.value)}
+                    onFocus={() => setLabelFocused(true)}
+                    onBlur={() => setLabelFocused(false)}
+                    className="h-full w-full cursor-text rounded-[999px] bg-transparent opacity-0 outline-none"
+                    placeholder="LABEL"
+                    aria-label="Label"
+                    maxLength={32}
+                />
+            </label>
+
+            <div className="absolute left-1/2 top-1/2 z-20 aspect-square w-[52%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full bg-[radial-gradient(circle_at_center,rgba(17,24,39,0.98)_0%,rgba(8,12,24,0.98)_62%,rgba(2,6,23,1)_100%)] shadow-[inset_0_0_34px_rgba(0,0,0,0.65)]">
+                <div className="absolute inset-[10%] rounded-full bg-white/[0.03]" />
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:22px_22px] opacity-[0.08]" />
+
+                {bubbles.map((bubble) => (
+                    <Motion.div
+                        key={bubble.id}
+                        className="absolute bottom-6 rounded-full bg-rose-200/15 blur-[1px]"
+                        style={{
+                            width: bubble.size,
+                            height: bubble.size,
+                            left: `${bubble.x}%`
+                        }}
+                        animate={{ y: [0, -80], opacity: [0, 0.75, 0] }}
+                        transition={{
+                            repeat: Infinity,
+                            duration: bubble.duration + 0.8,
+                            delay: bubble.delay,
+                            ease: 'linear'
+                        }}
+                    />
+                ))}
+
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-5 text-center">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-rose-300/60">Calories</span>
                     <input
                         autoFocus
                         type="number"
                         min="1"
+                        inputMode="numeric"
                         value={calories}
                         onChange={(event) => setCalories(event.target.value)}
-                        className="mt-2 w-full rounded-2xl border border-rose-500/25 bg-black px-4 py-3 text-lg font-mono text-rose-50 outline-none transition-colors focus:border-rose-400"
+                        className="mt-2 w-full bg-transparent text-center font-mono text-[clamp(2.8rem,8vw,4.3rem)] font-black tracking-[-0.08em] text-rose-50 outline-none placeholder:text-rose-200/20"
                         placeholder="240"
+                        aria-label="Calories"
                     />
-                </label>
-
-                <label className="block">
-                    <span className="text-[10px] uppercase tracking-[0.28em] text-rose-300/55">Label (optional)</span>
-                    <input
-                        type="text"
-                        value={label}
-                        onChange={(event) => setLabel(event.target.value)}
-                        className="mt-2 w-full rounded-2xl border border-rose-500/25 bg-black px-4 py-3 text-base font-game uppercase tracking-[0.08em] text-rose-50 outline-none transition-colors focus:border-rose-400"
-                        placeholder="Greek Yogurt"
-                    />
-                </label>
-            </div>
-
-            <label className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/70 px-4 py-3">
-                <input
-                    type="checkbox"
-                    checked={saveToLibrary}
-                    onChange={(event) => setSaveToLibrary(event.target.checked)}
-                    className="h-4 w-4 rounded border-slate-500 bg-black"
-                />
-                <div>
-                    <div className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-100">Save to food library</div>
-                    <div className="text-xs text-slate-400">Useful for foods you reach for often.</div>
+                    <div className="mt-1 text-[9px] uppercase tracking-[0.24em] text-slate-500">Inject into today</div>
                 </div>
-            </label>
-
-            <div className="mt-4 flex gap-3">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="flex-1 rounded-2xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-300 transition-colors hover:text-white"
-                >
-                    Cancel
-                </button>
-                <button
-                    type="submit"
-                    disabled={!canSubmit}
-                    className="flex-1 rounded-2xl bg-rose-500 px-4 py-3 text-xs font-bold uppercase tracking-[0.2em] text-black transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:bg-rose-900/60 disabled:text-rose-200/50"
-                >
-                    Inject Entry
-                </button>
             </div>
+
+            <button
+                type="submit"
+                disabled={!canSubmit}
+                className={clsx(
+                    'absolute inset-x-[16%] bottom-[14%] z-20 h-[26%] focus:outline-none disabled:cursor-not-allowed',
+                    canSubmit ? 'cursor-pointer' : 'cursor-not-allowed'
+                )}
+                aria-label="Inject entry"
+            >
+                <span className="sr-only">Inject entry</span>
+            </button>
         </Motion.form>
     );
 };
@@ -1227,8 +1320,11 @@ const SegmentedWheel = ({
                             fill={fill}
                             stroke={stroke}
                             strokeWidth={segment.interactive && activeSector === segment.id ? 1.2 : 0.7}
-                            className={clsx(segment.interactive && 'cursor-pointer transition-colors')}
+                            className={clsx(
+                                segment.interactive && 'cursor-pointer transition-[fill,stroke,filter] focus:outline-none focus-visible:outline-none focus-visible:stroke-rose-300 focus-visible:[filter:drop-shadow(0_0_6px_rgba(251,113,133,0.45))]'
+                            )}
                             onClick={segment.interactive ? segment.onClick : undefined}
+                            onMouseDown={segment.interactive ? (event) => event.preventDefault() : undefined}
                             onKeyDown={segment.interactive ? (event) => handleSectorKeyDown(event, segment.onClick) : undefined}
                             role={segment.interactive ? 'button' : undefined}
                             tabIndex={segment.interactive ? 0 : undefined}
@@ -1365,8 +1461,8 @@ const CalorieTracker = () => {
         });
     };
 
-    const handleManualSubmit = ({ calories: amount, label, saveToLibrary }) => {
-        if (saveToLibrary && `${label}`.trim()) {
+    const handleManualSubmit = ({ calories: amount, label }) => {
+        if (`${label}`.trim()) {
             const food = createSavedFood({
                 name: label,
                 calories: amount
@@ -1404,8 +1500,47 @@ const CalorieTracker = () => {
         setShowVault(true);
     };
 
+    const sheetPortal = typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+                {activeSheet === 'manual' && (
+                    <div
+                        className="fixed inset-0 z-[220] flex items-center justify-center bg-black/55 px-3 py-4 backdrop-blur-[3px] sm:px-4"
+                        onClick={() => setActiveSheet(null)}
+                        data-no-swipe="true"
+                    >
+                        <ManualEntryPanel
+                            onClose={() => setActiveSheet(null)}
+                            onSubmit={handleManualSubmit}
+                        />
+                    </div>
+                )}
+
+                {activeSheet === 'foods' && (
+                    <div
+                        className="pointer-events-none fixed inset-x-0 bottom-24 z-[220] flex justify-center px-3 sm:bottom-28 sm:px-4"
+                        data-no-swipe="true"
+                    >
+                        <div className="pointer-events-auto w-full max-w-3xl">
+                            <FoodsTray
+                                savedFoods={savedFoods}
+                                recentItems={recentItems}
+                                onClose={() => setActiveSheet(null)}
+                                onQuickAddFood={handleQuickFood}
+                                onSelectRecent={handleRecentSelection}
+                                onOpenManager={openFoodManager}
+                            />
+                        </div>
+                    </div>
+                )}
+            </AnimatePresence>,
+            document.body
+        )
+        : null;
+
     return (
-        <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-black text-rose-50">
+        <>
+            <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-black text-rose-50">
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute inset-0 bg-black" />
                 <div className="absolute inset-[-12%] bg-[radial-gradient(circle_at_center,rgba(190,24,93,0.18)_0%,rgba(136,19,55,0.12)_14%,rgba(88,28,45,0.07)_24%,transparent_46%)] blur-[90px]" />
@@ -1439,34 +1574,6 @@ const CalorieTracker = () => {
             </div>
 
             <AnimatePresence>
-                {activeSheet === 'manual' && (
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 sm:px-4 sm:pb-4">
-                        <div className="pointer-events-auto w-full max-w-3xl">
-                            <ManualEntryPanel
-                                onClose={() => setActiveSheet(null)}
-                                onSubmit={handleManualSubmit}
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {activeSheet === 'foods' && (
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 sm:px-4 sm:pb-4">
-                        <div className="pointer-events-auto w-full max-w-3xl">
-                            <FoodsTray
-                                savedFoods={savedFoods}
-                                recentItems={recentItems}
-                                onClose={() => setActiveSheet(null)}
-                                onQuickAddFood={handleQuickFood}
-                                onSelectRecent={handleRecentSelection}
-                                onOpenManager={openFoodManager}
-                            />
-                        </div>
-                    </div>
-                )}
-            </AnimatePresence>
-
-            <AnimatePresence>
                 {showGoalModal && (
                     <GoalSettingModal
                         current={safeTarget}
@@ -1494,7 +1601,9 @@ const CalorieTracker = () => {
                     />
                 )}
             </AnimatePresence>
-        </div>
+            </div>
+            {sheetPortal}
+        </>
     );
 };
 
