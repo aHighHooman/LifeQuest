@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useBudget } from '../context/BudgetContext';
 import {
@@ -24,6 +24,7 @@ import { getTodayISO } from '../utils/dateUtils';
 const TAB_PROVISIONS = 'provisions';
 const TAB_LEDGER = 'ledger';
 const COIN_HOLD_DURATION_MS = 980;
+const COIN_DEPTH_LAYERS = [4, 3, 2, 1, 0, -1, -2, -3, -4];
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -212,7 +213,7 @@ const getCrackEnergy = (cracks, progress) => {
     return clamp(total / (cracks.length * 0.38), 0, 1);
 };
 
-const CoinCrackSvg = ({ cracks, progress, glowFilterId, hotFilterId, warmBack = false }) => (
+const CoinCrackSvg = memo(({ cracks, progress, glowFilterId, hotFilterId, warmBack = false }) => (
     <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
         <defs>
             <clipPath id={`${glowFilterId}-clip`}>
@@ -287,9 +288,9 @@ const CoinCrackSvg = ({ cracks, progress, glowFilterId, hotFilterId, warmBack = 
             })}
         </g>
     </svg>
-);
+));
 
-const SettingsModal = ({
+const SettingsModal = memo(({
     originRect,
     closeSettings,
     totalMonthlyBudget,
@@ -316,6 +317,7 @@ const SettingsModal = ({
     const originScale = originRect
         ? clamp(Math.min(originRect.width / 360, originRect.height / 360), 0.22, 0.42)
         : 0.92;
+    const priceEntries = useMemo(() => Object.entries(priceDatabase), [priceDatabase]);
 
     return ReactDOM.createPortal(
         <>
@@ -461,7 +463,7 @@ const SettingsModal = ({
                                 <Database size={12} /> Master Price Database
                             </h4>
                             <div className="grid grid-cols-1 gap-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                                {Object.entries(priceDatabase).map(([name, price]) => (
+                                {priceEntries.map(([name, price]) => (
                                     <div key={name} className="flex items-center justify-between p-2 rounded bg-black/40 border border-amber-900/20 hover:border-amber-500/30 transition-colors group">
                                         <span className="text-xs text-amber-100/70 group-hover:text-amber-100">{name}</span>
                                         <div className="flex items-center gap-2">
@@ -492,17 +494,17 @@ const SettingsModal = ({
         </>,
         document.body
     );
-};
+});
 
-const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
-    const [spinCount, setSpinCount] = useState(0);
+const CoinSwitch = memo(({ onClick, onHoldComplete, resetSignal }) => {
+    const [spinCount, setSpinCount] = useState(1);
     const [shadowScale, setShadowScale] = useState(1);
     const [holdProgress, setHoldProgress] = useState(0);
     const [shakeOffset, setShakeOffset] = useState({ x: 0, y: 0 });
     const [burstPulse, setBurstPulse] = useState(0);
     const buttonRef = useRef(null);
     const rotating = useRef(false);
-    const targetSpinCountRef = useRef(0);
+    const targetSpinCountRef = useRef(1);
     const holdFrameRef = useRef(null);
     const holdTimeoutRef = useRef(null);
     const burstTimeoutRef = useRef(null);
@@ -514,18 +516,8 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
     const suppressClickTimeoutRef = useRef(null);
     const holdProgressRef = useRef(0);
     const fractureBrightnessRef = useRef(0);
-    const frontCracksRef = useRef(null);
-    const backCracksRef = useRef(null);
-
-    if (!frontCracksRef.current) {
-        frontCracksRef.current = createCoinCrackNetwork(90210);
-    }
-    if (!backCracksRef.current) {
-        backCracksRef.current = createCoinCrackNetwork(90387);
-    }
-
-    const frontCracks = frontCracksRef.current;
-    const backCracks = backCracksRef.current;
+    const frontCracks = useMemo(() => createCoinCrackNetwork(90210), []);
+    const backCracks = useMemo(() => createCoinCrackNetwork(90387), []);
     const fractureBrightness = Math.max(
         getCrackEnergy(frontCracks, holdProgress),
         getCrackEnergy(backCracks, holdProgress)
@@ -535,14 +527,17 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
         0,
         1
     );
-    holdProgressRef.current = holdProgress;
-    fractureBrightnessRef.current = fractureBrightness;
     const auraOpacity = synchronizedGlow <= 0.001 ? 0 : synchronizedGlow * 0.92;
     const chargeRingOpacity = synchronizedGlow <= 0.001 ? 0 : synchronizedGlow * 0.58;
     const faceLightOpacity = synchronizedGlow <= 0.001 ? 0 : synchronizedGlow * 1.18;
     const liveShadowScale = Math.min(shadowScale, 1 - (fractureBrightness * 0.16));
 
-    const clearInteractionTimers = () => {
+    useEffect(() => {
+        holdProgressRef.current = holdProgress;
+        fractureBrightnessRef.current = fractureBrightness;
+    }, [fractureBrightness, holdProgress]);
+
+    const clearInteractionTimers = useCallback(() => {
         if (holdFrameRef.current) {
             cancelAnimationFrame(holdFrameRef.current);
             holdFrameRef.current = null;
@@ -563,13 +558,13 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
             clearInterval(shakeIntervalRef.current);
             shakeIntervalRef.current = null;
         }
-    };
+    }, []);
 
     useEffect(() => () => {
         clearInteractionTimers();
-    }, []);
+    }, [clearInteractionTimers]);
 
-    const resetCoinState = () => {
+    const resetCoinState = useCallback(() => {
         clearInteractionTimers();
         holdingRef.current = false;
         holdTriggeredRef.current = false;
@@ -581,12 +576,19 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
         setHoldProgress(0);
         setShakeOffset({ x: 0, y: 0 });
         setBurstPulse(0);
-    };
+    }, [clearInteractionTimers, spinCount]);
 
     useEffect(() => {
         if (resetSignal === undefined) return;
-        resetCoinState();
-    }, [resetSignal]);
+
+        const frame = requestAnimationFrame(() => {
+            resetCoinState();
+        });
+
+        return () => {
+            cancelAnimationFrame(frame);
+        };
+    }, [resetSignal, resetCoinState]);
 
     const scheduleFlipSettle = () => {
         if (holdTimeoutRef.current) {
@@ -663,8 +665,8 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
         }
     };
 
-    const animateHold = (e) => {
-        const elapsed = performance.now() - holdStartRef.current;
+    const animateHold = (e, now) => {
+        const elapsed = now - holdStartRef.current;
         const progress = Math.min(elapsed / COIN_HOLD_DURATION_MS, 1);
         setHoldProgress(progress);
 
@@ -673,7 +675,7 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
             return;
         }
 
-        holdFrameRef.current = requestAnimationFrame(() => animateHold(e));
+        holdFrameRef.current = requestAnimationFrame((nextNow) => animateHold(e, nextNow));
     };
 
     const startHold = (e) => {
@@ -681,7 +683,7 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
 
         holdingRef.current = true;
         holdTriggeredRef.current = false;
-        holdStartRef.current = performance.now();
+        holdStartRef.current = e?.timeStamp ?? performance.now();
         setHoldProgress(0);
 
         shakeIntervalRef.current = setInterval(() => {
@@ -692,7 +694,7 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
             });
         }, 42);
 
-        holdFrameRef.current = requestAnimationFrame(() => animateHold(e));
+        holdFrameRef.current = requestAnimationFrame((now) => animateHold(e, now));
     };
 
     const endHold = (_e, { resetCharge = false } = {}) => {
@@ -777,7 +779,7 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
                     >
                     {/* THICKNESS / EDGE LAYERS (The "meat" of the coin) */}
                     {/* We stack discs between Front (Z=6) and Back (Z=-6) */}
-                    {[4, 3, 2, 1, 0, -1, -2, -3, -4].map((z) => (
+                    {COIN_DEPTH_LAYERS.map((z) => (
                         <div
                             key={z}
                             className="absolute inset-0 rounded-full bg-amber-800 border-2 border-amber-900/50"
@@ -891,7 +893,362 @@ const CoinSwitch = ({ onClick, onHoldComplete, resetSignal }) => {
             `}</style>
         </div>
     );
-};
+});
+
+const VaultHeader = memo(({ totalMonthlyBudget, stipendAmount, formatCredits, liquidAssets }) => (
+    <div className="shrink-0 grid grid-cols-3 gap-2 p-2 pt-12 bg-black/40 border-b border-amber-900/50 backdrop-blur-md z-20" style={{ touchAction: 'none' }}>
+        <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
+            <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Budget</span>
+            <div className="flex items-center gap-1">
+                <Coins size={14} className="text-amber-500" />
+                <span className="text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{formatCredits(totalMonthlyBudget)}</span>
+            </div>
+        </div>
+        <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
+            <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Stipend</span>
+            <div className="flex items-center gap-1">
+                <Coins size={14} className="text-amber-500" />
+                <span className="text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{Number(stipendAmount || 0).toLocaleString()}</span>
+            </div>
+        </div>
+        <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
+            <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <span className="text-[9px] font-bold text-amber-400/80 uppercase tracking-widest mb-0.5">Liquid Assets</span>
+            <div className="flex items-center gap-1">
+                <Coins size={14} className="text-amber-400" />
+                <span className="text-lg font-black font-game text-amber-400 leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">{liquidAssets.toLocaleString()}</span>
+            </div>
+        </div>
+    </div>
+));
+
+const ProvisionsView = memo(({
+    groceryList,
+    totalGroceryEstimated,
+    groceryPeriod,
+    priceDatabase,
+    addGroceryItem,
+    markGroceryItemCompleted,
+    unmarkGroceryItemCompleted,
+    removeGroceryItem,
+    spendCoins,
+    addGold,
+    toCreditValue,
+    toCredits,
+    fromCredits,
+    formatCredits,
+    updatePrice
+}) => {
+    const [itemName, setItemName] = useState('');
+    const [itemQuantity, setItemQuantity] = useState('1');
+    const [itemPriceCredits, setItemPriceCredits] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const totalUnits = useMemo(
+        () => groceryList.reduce((sum, item) => sum + Number(item.quantity || 1), 0),
+        [groceryList]
+    );
+    const filteredDbItems = useMemo(() => {
+        if (!itemName) return [];
+
+        const normalizedItemName = itemName.toLowerCase();
+        return Object.keys(priceDatabase).filter((item) =>
+            item.toLowerCase().includes(normalizedItemName)
+        );
+    }, [priceDatabase, itemName]);
+    const todayKey = getTodayISO();
+
+    const handleAdd = useCallback((e) => {
+        e.preventDefault();
+        if (!itemName) return;
+
+        const quantity = Math.max(1, parseInt(itemQuantity, 10) || 1);
+        if (itemPriceCredits) {
+            updatePrice(itemName, fromCredits(itemPriceCredits));
+        }
+
+        addGroceryItem(itemName, quantity);
+        setItemName('');
+        setItemQuantity('1');
+        setItemPriceCredits('');
+        setIsDropdownOpen(false);
+    }, [addGroceryItem, fromCredits, itemName, itemPriceCredits, itemQuantity, updatePrice]);
+
+    const selectFromDb = useCallback((name) => {
+        setItemName(name);
+        setItemPriceCredits(priceDatabase[name] ? toCredits(priceDatabase[name]) : '');
+        setIsDropdownOpen(false);
+    }, [priceDatabase, toCredits]);
+
+    const handleTogglePurchased = useCallback((item) => {
+        const quantity = Number(item.quantity || 1);
+        const totalCoinCost = toCreditValue(item.price * quantity);
+
+        if (!item.completed) {
+            markGroceryItemCompleted(item.id, todayKey);
+            if (totalCoinCost > 0) {
+                spendCoins(totalCoinCost, `Groceries: ${item.name} x${quantity}`);
+            }
+            return;
+        }
+
+        if (item.completedDateKey !== todayKey) {
+            return;
+        }
+
+        unmarkGroceryItemCompleted(item.id);
+        if (totalCoinCost > 0) {
+            addGold(totalCoinCost, 'Grocery Refund', {
+                description: `Grocery refund: ${item.name} x${quantity}`
+            });
+        }
+    }, [addGold, markGroceryItemCompleted, spendCoins, toCreditValue, todayKey, unmarkGroceryItemCompleted]);
+
+    return (
+        <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+            <div className="shrink-0 p-3 bg-black/90 border-b border-amber-900/50 backdrop-blur-xl z-30 shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
+                <form onSubmit={handleAdd} className="flex gap-2 items-center">
+                    <div className="w-16 relative">
+                        <input
+                            type="number"
+                            min="1"
+                            placeholder="1"
+                            value={itemQuantity}
+                            onChange={(e) => setItemQuantity(e.target.value)}
+                            className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-2 py-3 text-sm text-amber-400 placeholder-amber-900/30 focus:border-amber-500/50 outline-none text-center font-mono"
+                        />
+                    </div>
+                    <div className="flex-1 relative">
+                        <input
+                            type="text"
+                            placeholder="PROVISION"
+                            value={itemName}
+                            onChange={(e) => {
+                                setItemName(e.target.value);
+                                setIsDropdownOpen(true);
+                            }}
+                            className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-3 py-3 text-sm text-amber-100 placeholder-amber-900/30 focus:border-amber-500/50 outline-none uppercase font-mono tracking-wide"
+                        />
+                        {isDropdownOpen && filteredDbItems.length > 0 && itemName && (
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-black border border-amber-900 rounded-lg shadow-2xl overflow-hidden max-h-32 overflow-y-auto z-50">
+                                {filteredDbItems.map((item) => (
+                                    <button
+                                        key={item}
+                                        type="button"
+                                        onClick={() => selectFromDb(item)}
+                                        className="w-full text-left px-3 py-2 hover:bg-amber-900/30 text-xs text-amber-100/80 flex justify-between items-center border-b border-amber-900/20 last:border-0"
+                                    >
+                                        <span>{item}</span>
+                                        <span className="font-mono text-amber-500 flex items-center gap-1">
+                                            <Coins size={10} />
+                                            {toCredits(priceDatabase[item])}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className="w-24 relative">
+                        <input
+                            type="number"
+                            placeholder="0"
+                            value={itemPriceCredits}
+                            onChange={(e) => setItemPriceCredits(e.target.value)}
+                            className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-2 py-3 text-sm text-amber-400 placeholder-amber-900/30 focus:border-amber-500/50 outline-none text-right font-mono"
+                        />
+                        <Coins size={12} className="absolute left-2 top-4 text-amber-600/50" />
+                    </div>
+                    <button
+                        type="submit"
+                        className="bg-amber-600 hover:bg-amber-500 text-black py-3 px-4 rounded transition-colors shadow-[0_0_10px_rgba(245,158,11,0.2)] font-bold"
+                    >
+                        <Plus size={20} />
+                    </button>
+                </form>
+            </div>
+
+            <div className="shrink-0 px-4 py-2 flex items-center justify-between text-[10px] font-game text-amber-500/60 uppercase tracking-widest border-b border-white/5 bg-black/20">
+                <div className="flex gap-4">
+                    <span>Cycle: {groceryPeriod}</span>
+                    <span>Entries: {groceryList.length}</span>
+                    <span>Items: {totalUnits}</span>
+                </div>
+                <div className="text-amber-400 flex items-center gap-1 font-bold">
+                    <Coins size={10} />
+                    <span>Total: {formatCredits(totalGroceryEstimated)}</span>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 pb-48 touch-pan-y overscroll-none">
+                {groceryList.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-48 text-amber-900/40 border-2 border-dashed border-amber-900/20 rounded-xl m-4">
+                        <ShoppingCart size={32} className="mb-2 opacity-50" />
+                        <span className="font-game text-xs tracking-widest uppercase">Manifest Empty</span>
+                    </div>
+                ) : (
+                    <AnimatePresence>
+                        {groceryList.map((item) => {
+                            const isPurchasedToday = item.completedDateKey === todayKey;
+
+                            return (
+                                <motion.div
+                                    key={item.id}
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className={clsx(
+                                        "group flex items-center justify-between p-3 rounded border transition-all relative overflow-hidden",
+                                        item.completed
+                                            ? "bg-slate-900/30 border-slate-800 text-slate-600"
+                                            : "bg-amber-950/20 border-amber-500/20 text-amber-100 hover:bg-amber-900/20"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3 relative z-10">
+                                        <button
+                                            onClick={() => handleTogglePurchased(item)}
+                                            className={clsx(
+                                                "transition-all duration-300",
+                                                item.completed ? "text-amber-900" : "text-amber-500 hover:text-amber-300"
+                                            )}
+                                        >
+                                            {item.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                                        </button>
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-2">
+                                                <span className={clsx("text-sm font-bold leading-none", item.completed && "line-through opacity-50")}>{item.name}</span>
+                                                <span className={clsx(
+                                                    "rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider",
+                                                    item.completed
+                                                        ? "border-slate-800 text-slate-700"
+                                                        : "border-amber-500/20 text-amber-400/80"
+                                                )}>
+                                                    x{item.quantity || 1}
+                                                </span>
+                                            </div>
+                                            {!item.completed && <span className="text-[9px] font-mono text-amber-500/50 mt-1 uppercase tracking-wider">est. {toCredits(item.price)} C each</span>}
+                                            {item.completed && <span className="text-[9px] font-mono text-slate-700 mt-1 uppercase tracking-wider">purchased {isPurchasedToday ? 'today' : item.completedDateKey}</span>}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 relative z-10">
+                                        <div className={clsx("font-mono text-sm flex items-center gap-1", item.completed ? "text-xs text-slate-700" : "text-amber-400 font-bold")}>
+                                            <Coins size={12} />
+                                            {toCredits(item.price * (item.quantity || 1))}
+                                        </div>
+                                        <button
+                                            onClick={() => removeGroceryItem(item.id)}
+                                            className="text-amber-900 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+
+                                    {!item.completed && (
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/5 to-transparent skew-x-12 translate-x-[-150%] group-hover:animate-holoscan pointer-events-none" />
+                                    )}
+                                </motion.div>
+                            );
+                        })}
+                    </AnimatePresence>
+                )}
+            </div>
+        </div>
+    );
+});
+
+const LedgerView = memo(({ spendCoins, coinHistory }) => {
+    const [desc, setDesc] = useState('');
+    const [amount, setAmount] = useState('');
+    const recentTransactions = useMemo(() => (
+        [...coinHistory]
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .map((tx) => {
+                const timestamp = new Date(tx.date);
+                return {
+                    ...tx,
+                    dateLabel: timestamp.toLocaleDateString(),
+                    timeLabel: timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+            })
+    ), [coinHistory]);
+
+    const handleSpend = useCallback((e) => {
+        e.preventDefault();
+        if (!desc || !amount) return;
+
+        spendCoins(parseInt(amount, 10), desc);
+        setDesc('');
+        setAmount('');
+    }, [amount, desc, spendCoins]);
+
+    return (
+        <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
+            <div className="shrink-0 p-4 border-b border-amber-900/30 bg-black/20">
+                <div className="mb-3 flex items-center gap-2 text-amber-500/70">
+                    <ArrowRightLeft size={14} />
+                    <span className="text-[10px] font-game uppercase tracking-widest">Execute Transaction</span>
+                </div>
+
+                <form onSubmit={handleSpend} className="flex flex-col gap-3">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="PAYMENT REFERENCE..."
+                            value={desc}
+                            onChange={(e) => setDesc(e.target.value)}
+                            className="flex-1 bg-slate-900/50 border border-amber-900/50 rounded px-3 py-3 text-amber-100 placeholder-amber-900/50 focus:border-amber-500/50 outline-none font-mono text-sm uppercase"
+                        />
+                        <div className="w-32 relative">
+                            <input
+                                type="number"
+                                placeholder="0"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                className="w-full bg-slate-900/50 border border-amber-900/50 rounded px-3 py-3 text-amber-400 placeholder-amber-900/50 focus:border-amber-500/50 outline-none font-mono text-right text-sm"
+                            />
+                            <span className="absolute left-2 top-3.5 text-[10px] text-amber-600 font-bold uppercase flex items-center gap-1">
+                                <Coins size={10} /> CREDITS
+                            </span>
+                        </div>
+                    </div>
+                    <button
+                        disabled={!amount}
+                        type="submit"
+                        className="w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded uppercase font-bold text-xs tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Authorize Transfer <ArrowRightLeft size={14} />
+                    </button>
+                </form>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-48 touch-pan-y overscroll-none">
+                <div className="px-2 py-2 text-[10px] font-mono text-amber-500/40 uppercase border-b border-white/5 mb-1">Recent Activity Log</div>
+                <div className="space-y-1">
+                    {recentTransactions.length === 0 ? (
+                        <div className="text-center py-8 text-amber-900/30 italic text-xs">No transactions recorded.</div>
+                    ) : (
+                        recentTransactions.map((tx) => (
+                            <div key={tx.id} className="flex items-center justify-between p-2 rounded hover:bg-white/5 border border-transparent hover:border-white/5 transition-colors group">
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-amber-100/80">{tx.description}</span>
+                                    <span className="text-[9px] font-mono text-gray-600">{tx.dateLabel} • {tx.timeLabel}</span>
+                                </div>
+                                <div className={clsx(
+                                    "font-mono text-xs font-bold px-2 py-1 rounded border flex items-center gap-1",
+                                    tx.type === 'earned'
+                                        ? "text-emerald-300 bg-emerald-900/10 border-emerald-900/20 group-hover:border-emerald-500/30"
+                                        : "text-red-400 bg-red-900/10 border-red-900/20 group-hover:border-red-500/30"
+                                )}>
+                                    <Coins size={10} /> {tx.type === 'earned' ? '+' : '-'}{tx.amount}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+});
 
 const BudgetView = () => {
     const {
@@ -907,7 +1264,7 @@ const BudgetView = () => {
         totalGroceryEstimated,
         goldToUsdRatio, setGoldToUsdRatio
     } = useBudget();
-    const { stats, spendCoins, addGold } = useGame();
+    const { stats, spendCoins, addGold, coinHistory } = useGame();
 
     const [activeTab, setActiveTab] = useState(TAB_LEDGER);
     const [showSettings, setShowSettings] = useState(false);
@@ -919,27 +1276,27 @@ const BudgetView = () => {
     // The UI (BudgetView) displays values in "Credits" (Gold), based on the exchange rate.
 
     // Display: USD -> Credits
-    const toCreditValue = (usdAmount) => {
+    const toCreditValue = useCallback((usdAmount) => {
         return Number((Number(usdAmount || 0) * goldToUsdRatio).toFixed(0));
-    };
+    }, [goldToUsdRatio]);
 
-    const toCredits = (usdAmount) => {
+    const toCredits = useCallback((usdAmount) => {
         return toCreditValue(usdAmount).toString();
-    };
+    }, [toCreditValue]);
 
     // Input: Credits -> USD
-    const fromCredits = (creditAmount) => {
+    const fromCredits = useCallback((creditAmount) => {
         if (!creditAmount) return 0;
         return Number(creditAmount) / goldToUsdRatio;
-    };
+    }, [goldToUsdRatio]);
 
-    const formatCredits = (usdAmount) => {
+    const formatCredits = useCallback((usdAmount) => {
         return toCreditValue(usdAmount).toLocaleString();
-    };
+    }, [toCreditValue]);
 
-    const resetStipendAnchor = () => {
+    const resetStipendAnchor = useCallback(() => {
         setStipendPaidThrough(getTodayISO());
-    };
+    }, [setStipendPaidThrough]);
 
 
 
@@ -947,48 +1304,24 @@ const BudgetView = () => {
 
 
 
-    const VaultHeader = () => (
-        <div className="shrink-0 grid grid-cols-3 gap-2 p-2 pt-12 bg-black/40 border-b border-amber-900/50 backdrop-blur-md z-20" style={{ touchAction: 'none' }}>
-            <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
-                <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Budget</span>
-                <div className="flex items-center gap-1">
-                    <Coins size={14} className="text-amber-500" />
-                    <span className="text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{formatCredits(totalMonthlyBudget)}</span>
-                </div>
-            </div>
-            <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
-                <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Stipend</span>
-                <div className="flex items-center gap-1">
-                    <Coins size={14} className="text-amber-500" />
-                    <span className="text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{Number(stipendAmount || 0).toLocaleString()}</span>
-                </div>
-            </div>
-            <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
-                <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="text-[9px] font-bold text-amber-400/80 uppercase tracking-widest mb-0.5">Liquid Assets</span>
-                <div className="flex items-center gap-1">
-                    <Coins size={14} className="text-amber-400" />
-                    <span className="text-lg font-black font-game text-amber-400 leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">{stats.gold.toLocaleString()}</span>
-                </div>
-            </div>
-        </div>
-    );
-
-    const closeSettings = () => {
+    const closeSettings = useCallback(() => {
         setShowSettings(false);
         setSettingsOriginRect(null);
         setCoinResetSignal(prev => prev + 1);
-    };
+    }, []);
 
-    const openSettingsFromCoin = ({ event, rect }) => {
+    const openSettingsFromCoin = useCallback(({ event, rect }) => {
         if (event) event.stopPropagation();
         setSettingsOriginRect(rect);
         setShowSettings(true);
-    };
+    }, []);
 
-    const ProvisionsView = ({ groceryList, totalGroceryEstimated }) => {
+    const toggleActiveTab = useCallback((e) => {
+        if (e) e.stopPropagation();
+        setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS);
+    }, []);
+
+    const LegacyProvisionsView = ({ groceryList, totalGroceryEstimated }) => {
         const [itemName, setItemName] = useState('');
         const [itemQuantity, setItemQuantity] = useState('1');
         const [itemPriceCredits, setItemPriceCredits] = useState(''); // Store input as credits string
@@ -1213,7 +1546,7 @@ const BudgetView = () => {
         );
     };
 
-    const LedgerView = () => {
+    const LegacyLedgerView = () => {
         const { spendCoins, coinHistory } = useGame();
         const [desc, setDesc] = useState('');
         const [amount, setAmount] = useState('');
@@ -1303,6 +1636,9 @@ const BudgetView = () => {
         );
     };
 
+    void LegacyProvisionsView;
+    void LegacyLedgerView;
+
     // --- MAIN RENDER ---
 
     return (
@@ -1314,7 +1650,12 @@ const BudgetView = () => {
             </div>
 
             {/* 1. VAULT HEADER (Fixed) */}
-            <VaultHeader />
+            <VaultHeader
+                totalMonthlyBudget={totalMonthlyBudget}
+                stipendAmount={stipendAmount}
+                formatCredits={formatCredits}
+                liquidAssets={stats.gold}
+            />
 
             {/* 4. MAIN VIEWPORT (Swappable) */}
             <div className="flex-1 overflow-hidden relative">
@@ -1332,6 +1673,19 @@ const BudgetView = () => {
                             <ProvisionsView
                                 groceryList={groceryList}
                                 totalGroceryEstimated={totalGroceryEstimated}
+                                groceryPeriod={groceryPeriod}
+                                priceDatabase={priceDatabase}
+                                addGroceryItem={addGroceryItem}
+                                markGroceryItemCompleted={markGroceryItemCompleted}
+                                unmarkGroceryItemCompleted={unmarkGroceryItemCompleted}
+                                removeGroceryItem={removeGroceryItem}
+                                spendCoins={spendCoins}
+                                addGold={addGold}
+                                toCreditValue={toCreditValue}
+                                toCredits={toCredits}
+                                fromCredits={fromCredits}
+                                formatCredits={formatCredits}
+                                updatePrice={updatePrice}
                             />
                         </motion.div>
                     ) : (
@@ -1344,7 +1698,7 @@ const BudgetView = () => {
                             transition={{ duration: 0.4, ease: "backOut" }}
                             style={{ perspective: 1000 }}
                         >
-                            <LedgerView />
+                            <LedgerView spendCoins={spendCoins} coinHistory={coinHistory} />
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -1356,10 +1710,7 @@ const BudgetView = () => {
             {/* 7. COIN SWITCH (Decoupled & Fixed) */}
             <div className="fixed bottom-52 left-1/2 -translate-x-1/2 z-[100] pointer-events-auto filter drop-shadow-2xl">
                 <CoinSwitch
-                    onClick={(e) => {
-                        if (e) e.stopPropagation();
-                        setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS);
-                    }}
+                    onClick={toggleActiveTab}
                     onHoldComplete={openSettingsFromCoin}
                     resetSignal={coinResetSignal}
                 />

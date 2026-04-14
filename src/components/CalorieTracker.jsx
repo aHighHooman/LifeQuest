@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGame } from '../context/GameContext';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
@@ -20,7 +20,6 @@ import {
 import clsx from 'clsx';
 import { getTodayISO } from '../utils/dateUtils';
 
-const QUICK_PRESETS = [100, 250, 500];
 const GENERIC_ENTRY_LABELS = new Set(['Manual Entry']);
 const EMPTY_LIST = [];
 const WHEEL_SEGMENTS = [
@@ -44,6 +43,8 @@ const createBubbles = () => Array.from({ length: 8 }).map((_, i) => ({
 
 const getSafeTarget = (target) => Math.max(1, Number(target) || 1);
 const normalizeCalories = (value) => Math.max(0, Math.round(Number(value) || 0));
+const getEntryTimestamp = (entry) => Date.parse(entry?.timestamp || 0) || 0;
+const getFoodTimestamp = (food) => Date.parse(food?.updatedAt || food?.createdAt || 0) || 0;
 
 const formatTime = (value) => {
     if (!value) return '--:--';
@@ -124,183 +125,25 @@ const getWheelPosition = (angle, radius) => {
 const groupEntriesByDay = (history) => {
     const groups = new Map();
 
-    [...(history || [])]
-        .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
-        .forEach((entry) => {
-            const dateKey = entry.dateKey || getTodayISO();
-            if (!groups.has(dateKey)) {
-                groups.set(dateKey, []);
-            }
-            groups.get(dateKey).push(entry);
+    (history || []).forEach((entry) => {
+        const dateKey = entry.dateKey || getTodayISO();
+        if (!groups.has(dateKey)) {
+            groups.set(dateKey, []);
+        }
+        groups.get(dateKey).push(entry);
+    });
+
+    return Array.from(groups.keys())
+        .sort((a, b) => b.localeCompare(a))
+        .map((dateKey) => {
+            const entries = [...groups.get(dateKey)].sort((a, b) => getEntryTimestamp(b) - getEntryTimestamp(a));
+
+            return {
+                dateKey,
+                entries,
+                total: entries.reduce((sum, entry) => sum + Number(entry.calories || 0), 0)
+            };
         });
-
-    return Array.from(groups.entries()).map(([dateKey, entries]) => ({
-        dateKey,
-        entries,
-        total: entries.reduce((sum, entry) => sum + Number(entry.calories || 0), 0)
-    }));
-};
-
-const ReactorCore = ({ current, target }) => {
-    const safeTarget = getSafeTarget(target);
-    const percentage = Math.min((Number(current || 0) / safeTarget) * 100, 100);
-    const isOverload = Number(current || 0) > safeTarget;
-    const [bubbles] = useState(createBubbles);
-
-    return (
-        <div className="relative w-full h-full flex items-center justify-center p-6 sm:p-8">
-            <div className="relative w-[240px] h-[240px] sm:w-[300px] sm:h-[300px] lg:w-[340px] lg:h-[340px]">
-                <div className="absolute inset-0 rounded-full border-[8px] border-slate-800 shadow-[0_0_50px_rgba(0,0,0,0.55)] bg-black/60 backdrop-blur-sm z-10 flex items-center justify-center">
-                    <svg className="absolute inset-0 w-full h-full animate-spin-slow opacity-30 pointer-events-none" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="48" fill="none" stroke="#be123c" strokeWidth="0.5" strokeDasharray="4 2" />
-                        <circle cx="50" cy="50" r="40" fill="none" stroke="#be123c" strokeWidth="0.2" strokeDasharray="10 10" />
-                    </svg>
-                </div>
-
-                <div className="absolute inset-4 rounded-full overflow-hidden z-0 bg-slate-900 border border-rose-900/30">
-                    <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(244,63,94,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(244,63,94,0.1)_1px,transparent_1px)] bg-[size:20px_20px]" />
-
-                    <Motion.div
-                        className={clsx(
-                            'absolute bottom-0 left-0 right-0 w-full transition-colors duration-700',
-                            isOverload
-                                ? 'bg-gradient-to-t from-red-950 via-red-600 to-orange-400'
-                                : 'bg-gradient-to-t from-rose-950 via-rose-600 to-rose-300'
-                        )}
-                        initial={{ height: '0%' }}
-                        animate={{ height: `${percentage}%` }}
-                        transition={{ type: 'spring', stiffness: 55, damping: 22 }}
-                    >
-                        <div className="absolute top-0 left-0 right-0 h-4 bg-white/20 blur-sm -translate-y-1/2" />
-
-                        {bubbles.map((bubble) => (
-                            <Motion.div
-                                key={bubble.id}
-                                className="absolute bg-rose-200/20 rounded-full blur-[1px]"
-                                style={{ width: bubble.size, height: bubble.size, left: `${bubble.x}%` }}
-                                animate={{ y: [-20, -300], opacity: [0, 1, 0] }}
-                                transition={{
-                                    repeat: Infinity,
-                                    duration: bubble.duration,
-                                    delay: bubble.delay,
-                                    ease: 'linear'
-                                }}
-                            />
-                        ))}
-                    </Motion.div>
-                </div>
-
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
-                    <div className="text-center drop-shadow-md">
-                        <Motion.div
-                            key={current}
-                            initial={{ scale: 1.15, opacity: 0.55 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="text-4xl sm:text-5xl lg:text-6xl font-black font-mono text-white tracking-tighter"
-                        >
-                            {current}
-                        </Motion.div>
-                        <div className="text-[10px] sm:text-xs font-bold text-rose-200 uppercase tracking-[0.3em] opacity-80 mt-1">
-                            kCal Today
-                        </div>
-                    </div>
-
-                    <div
-                        className={clsx(
-                            'mt-4 px-3 py-1 rounded-full border backdrop-blur-md flex items-center gap-2 transition-colors',
-                            isOverload
-                                ? 'bg-red-950/80 border-red-500/50 text-red-400'
-                                : 'bg-black/40 border-rose-500/30 text-rose-300'
-                        )}
-                    >
-                        {isOverload ? <AlertTriangle size={12} /> : <Activity size={12} />}
-                        <span className="text-[10px] font-mono font-bold uppercase">
-                            {isOverload ? 'Over Target' : 'Stable Intake'}
-                        </span>
-                    </div>
-                </div>
-
-                <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-30" />
-            </div>
-        </div>
-    );
-};
-
-const ArcCard = ({ className, eyebrow, title, value, accent = 'rose', compact = false, children }) => {
-    const accentStyles = {
-        rose: 'border-rose-500/25 text-rose-100',
-        amber: 'border-amber-400/25 text-amber-100',
-        slate: 'border-slate-500/25 text-slate-100'
-    };
-
-    return (
-        <div
-            className={clsx(
-                'rounded-2xl border bg-black/45 backdrop-blur-md shadow-[0_0_30px_rgba(0,0,0,0.25)]',
-                compact ? 'px-3 py-2.5' : 'px-4 py-3',
-                accentStyles[accent],
-                className
-            )}
-        >
-            <div className={clsx('uppercase tracking-[0.3em] text-rose-400/65', compact ? 'text-[8px]' : 'text-[9px]')}>{eyebrow}</div>
-            <div className={clsx('mt-2 font-game font-semibold uppercase tracking-[0.08em]', compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base')}>{title}</div>
-            <div className={clsx('mt-1 font-mono font-bold', compact ? 'text-base sm:text-lg' : 'text-lg sm:text-xl')}>{value}</div>
-            {children && <div className={clsx('mt-2 text-slate-300/80', compact ? 'text-[11px]' : 'text-xs')}>{children}</div>}
-        </div>
-    );
-};
-
-const FoodChip = ({ label, calories, onClick, icon, accent = 'rose' }) => {
-    const accentStyles = {
-        rose: 'border-rose-500/30 bg-rose-950/30 text-rose-100 hover:border-rose-400 hover:bg-rose-900/35',
-        amber: 'border-amber-400/30 bg-amber-950/20 text-amber-50 hover:border-amber-300 hover:bg-amber-900/30',
-        slate: 'border-slate-600/40 bg-slate-900/60 text-slate-100 hover:border-slate-400 hover:bg-slate-800'
-    };
-
-    return (
-                    <Motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={onClick}
-            className={clsx(
-                'shrink-0 min-w-[132px] rounded-2xl border px-4 py-3 text-left transition-colors',
-                accentStyles[accent]
-            )}
-        >
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <div className="truncate text-xs uppercase tracking-[0.25em] text-rose-300/55">Quick Add</div>
-                    <div className="mt-1 truncate font-game text-sm font-semibold uppercase tracking-[0.08em]">
-                        {label}
-                    </div>
-                </div>
-                <div className="shrink-0 text-rose-300/70">{icon}</div>
-            </div>
-            <div className="mt-3 font-mono text-lg font-bold">{calories}</div>
-        </Motion.button>
-    );
-};
-
-const ActionOrb = ({ icon, label, onClick, accent = 'rose', className }) => {
-    const accentStyles = {
-        rose: 'border-rose-500/35 bg-rose-950/30 text-rose-100 hover:border-rose-400 hover:bg-rose-900/35',
-        slate: 'border-slate-700/60 bg-slate-900/80 text-slate-100 hover:border-slate-500 hover:bg-slate-800',
-        amber: 'border-amber-400/35 bg-amber-950/20 text-amber-50 hover:border-amber-300 hover:bg-amber-900/30'
-    };
-
-    return (
-        <Motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={onClick}
-            className={clsx(
-                'flex h-16 w-16 sm:h-20 sm:w-20 flex-col items-center justify-center rounded-full border backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.2)] transition-colors',
-                accentStyles[accent],
-                className
-            )}
-        >
-            {icon}
-            <span className="mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.22em]">{label}</span>
-        </Motion.button>
-    );
 };
 
 const ManualEntryPanel = ({ onSubmit, onClose }) => {
@@ -570,7 +413,7 @@ const SavedFoodEditor = ({ food, onSave, onCancel }) => {
     );
 };
 
-const HistoryVaultModal = ({
+const HistoryVaultModal = memo(({
     entriesByDay,
     todayKey,
     savedFoods,
@@ -662,7 +505,11 @@ const HistoryVaultModal = ({
                                 const isToday = group.dateKey === todayKey;
 
                                 return (
-                                    <div key={group.dateKey} className="rounded-[28px] border border-rose-500/15 bg-black/35 p-4">
+                                    <div
+                                        key={group.dateKey}
+                                        className="rounded-[28px] border border-rose-500/15 bg-black/35 p-4"
+                                        style={{ contentVisibility: 'auto', containIntrinsicSize: '420px' }}
+                                    >
                                         <div className="flex items-center justify-between gap-4">
                                             <div>
                                                 <div className="text-[10px] uppercase tracking-[0.28em] text-rose-400/65">
@@ -780,7 +627,11 @@ const HistoryVaultModal = ({
                             )}
 
                             {savedFoods.map((food) => (
-                                <div key={food.id} className="rounded-[28px] border border-rose-500/15 bg-black/35 p-4">
+                                <div
+                                    key={food.id}
+                                    className="rounded-[28px] border border-rose-500/15 bg-black/35 p-4"
+                                    style={{ contentVisibility: 'auto', containIntrinsicSize: '120px' }}
+                                >
                                     {editingFoodId === food.id ? (
                                         <SavedFoodEditor
                                             food={food}
@@ -833,9 +684,9 @@ const HistoryVaultModal = ({
             </Motion.div>
         </div>
     );
-};
+});
 
-const GoalSettingModal = ({ current, onConfirm, onClose }) => {
+const GoalSettingModal = memo(({ current, onConfirm, onClose }) => {
     const [value, setValue] = useState(current);
 
     return (
@@ -880,9 +731,9 @@ const GoalSettingModal = ({ current, onConfirm, onClose }) => {
             </Motion.div>
         </div>
     );
-};
+});
 
-const RadialHub = ({ current, target, onClick }) => {
+const RadialHub = memo(({ current, target, onClick }) => {
     const safeTarget = getSafeTarget(target);
     const percentage = Math.min((Number(current || 0) / safeTarget) * 100, 100);
     const isOverload = Number(current || 0) > safeTarget;
@@ -970,9 +821,9 @@ const RadialHub = ({ current, target, onClick }) => {
             <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
         </Motion.button>
     );
-};
+});
 
-const MemoryTile = ({ label, calories, subtitle, icon, tone = 'rose', onClick }) => {
+const MemoryTile = memo(({ label, calories, subtitle, icon, tone = 'rose', onClick }) => {
     const toneStyles = {
         rose: 'border-rose-500/30 bg-rose-950/25 text-rose-100 hover:border-rose-400 hover:bg-rose-900/35',
         amber: 'border-amber-400/30 bg-amber-950/20 text-amber-50 hover:border-amber-300 hover:bg-amber-900/30',
@@ -1000,9 +851,9 @@ const MemoryTile = ({ label, calories, subtitle, icon, tone = 'rose', onClick })
             <div className="mt-3 font-mono text-lg font-bold">{calories}</div>
         </button>
     );
-};
+});
 
-const FoodsTray = ({
+const FoodsTray = memo(({
     savedFoods,
     recentItems,
     onClose,
@@ -1100,9 +951,9 @@ const FoodsTray = ({
             </div>
         </div>
     </Motion.div>
-);
+));
 
-const WheelSectorContent = ({ segment }) => (
+const WheelSectorContent = memo(({ segment }) => (
     <div
         className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center"
         style={{ ...getWheelPosition(segment.center, segment.radius), width: `${segment.width}%` }}
@@ -1140,9 +991,9 @@ const WheelSectorContent = ({ segment }) => (
             )}
         </div>
     </div>
-);
+));
 
-const SegmentedWheel = ({
+const SegmentedWheel = memo(({
     current,
     target,
     lastEntry,
@@ -1164,7 +1015,7 @@ const SegmentedWheel = ({
     const latestLabel = lastEntry ? shortenLabel(lastEntry.label, 8) : 'Idle';
     const summaryStatus = isOverload ? `+${overBy}` : `-${remaining}`;
 
-    const segments = [
+    const segments = useMemo(() => ([
         {
             ...WHEEL_SEGMENTS[0],
             interactive: false,
@@ -1236,7 +1087,20 @@ const SegmentedWheel = ({
             secondary: 'Inject',
             onClick: onPreset100
         }
-    ];
+    ]), [
+        isOverload,
+        latestLabel,
+        latestTime,
+        onFoods,
+        onHistory,
+        onManual,
+        onPreset100,
+        onPreset250,
+        percentToGoal,
+        savedFoodsCount,
+        summaryStatus,
+        todayEntryCount
+    ]);
 
     const getSegmentColors = (segment) => {
         const isActive = activeSector === segment.id;
@@ -1346,7 +1210,7 @@ const SegmentedWheel = ({
             </div>
         </Motion.div>
     );
-};
+});
 
 const CalorieTracker = () => {
     const {
@@ -1366,29 +1230,80 @@ const CalorieTracker = () => {
     const history = Array.isArray(calories?.history) ? calories.history : EMPTY_LIST;
     const rawSavedFoods = Array.isArray(calories?.savedFoods) ? calories.savedFoods : EMPTY_LIST;
     const recentFoodIds = Array.isArray(calories?.recentFoodIds) ? calories.recentFoodIds : EMPTY_LIST;
-    const savedFoods = useMemo(
-        () => [...rawSavedFoods].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)),
-        [rawSavedFoods]
-    );
+    const savedFoodsCount = rawSavedFoods.length;
     const isOverload = currentCalories > safeTarget;
     const remaining = Math.max(safeTarget - currentCalories, 0);
     const overBy = Math.max(currentCalories - safeTarget, 0);
-    const todayEntries = useMemo(
-        () => history.filter((entry) => entry.dateKey === todayKey).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)),
-        [history, todayKey]
-    );
-    const entriesByDay = useMemo(() => groupEntriesByDay(history), [history]);
-    const lastEntry = todayEntries[0] || history[history.length - 1] || null;
 
-    const savedFoodsById = useMemo(() => {
-        return new Map(savedFoods.map((food) => [food.id, food]));
-    }, [savedFoods]);
+    const [showGoalModal, setShowGoalModal] = useState(false);
+    const [showVault, setShowVault] = useState(false);
+    const [vaultTab, setVaultTab] = useState('entries');
+    const [activeSheet, setActiveSheet] = useState(null);
 
-    const recentManualItems = useMemo(() => {
+    const isFoodsTrayOpen = activeSheet === 'foods';
+    const shouldPrepareSavedFoods = showVault || isFoodsTrayOpen;
+
+    const { todayEntries, lastEntry } = useMemo(() => {
+        if (!history.length) {
+            return {
+                todayEntries: EMPTY_LIST,
+                lastEntry: null
+            };
+        }
+
+        let latestEntry = history[history.length - 1] || null;
+        let latestTimestamp = getEntryTimestamp(latestEntry);
+        const nextTodayEntries = [];
+
+        history.forEach((entry) => {
+            const timestamp = getEntryTimestamp(entry);
+            if (timestamp >= latestTimestamp) {
+                latestTimestamp = timestamp;
+                latestEntry = entry;
+            }
+
+            if (entry.dateKey === todayKey) {
+                nextTodayEntries.push(entry);
+            }
+        });
+
+        nextTodayEntries.sort((a, b) => getEntryTimestamp(b) - getEntryTimestamp(a));
+
+        return {
+            todayEntries: nextTodayEntries,
+            lastEntry: nextTodayEntries[0] || latestEntry
+        };
+    }, [history, todayKey]);
+
+    const savedFoods = useMemo(() => {
+        if (!shouldPrepareSavedFoods) return EMPTY_LIST;
+        return [...rawSavedFoods].sort((a, b) => getFoodTimestamp(b) - getFoodTimestamp(a));
+    }, [rawSavedFoods, shouldPrepareSavedFoods]);
+
+    const entriesByDay = useMemo(() => {
+        if (!showVault) return EMPTY_LIST;
+        return groupEntriesByDay(history);
+    }, [history, showVault]);
+
+    const recentItems = useMemo(() => {
+        if (!isFoodsTrayOpen) return EMPTY_LIST;
+
+        const savedFoodsById = new Map(rawSavedFoods.map((food) => [food.id, food]));
+        const recentSavedFoods = recentFoodIds
+            .map((foodId) => savedFoodsById.get(foodId))
+            .filter(Boolean)
+            .slice(0, 5)
+            .map((food) => ({
+                key: `recent-food-${food.id}`,
+                kind: 'food',
+                label: food.name,
+                calories: food.calories,
+                food
+            }));
+
         const seen = new Set();
-
-        return [...history]
-            .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+        const recentManualItems = [...history]
+            .sort((a, b) => getEntryTimestamp(b) - getEntryTimestamp(a))
             .filter((entry) => entry.source !== 'saved-food')
             .filter((entry) => {
                 const label = `${entry.label || ''}`.trim();
@@ -1405,39 +1320,20 @@ const CalorieTracker = () => {
                 label: entry.label,
                 calories: entry.calories
             }));
-    }, [history]);
 
-    const recentSavedFoods = useMemo(() => {
-        return recentFoodIds
-            .map((foodId) => savedFoodsById.get(foodId))
-            .filter(Boolean)
-            .slice(0, 5)
-            .map((food) => ({
-                key: `recent-food-${food.id}`,
-                kind: 'food',
-                label: food.name,
-                calories: food.calories,
-                food
-            }));
-    }, [recentFoodIds, savedFoodsById]);
+        return [...recentSavedFoods, ...recentManualItems].slice(0, 8);
+    }, [history, isFoodsTrayOpen, rawSavedFoods, recentFoodIds]);
 
-    const recentItems = [...recentSavedFoods, ...recentManualItems].slice(0, 8);
-
-    const [showGoalModal, setShowGoalModal] = useState(false);
-    const [showVault, setShowVault] = useState(false);
-    const [vaultTab, setVaultTab] = useState('entries');
-    const [activeSheet, setActiveSheet] = useState(null);
-
-    const handleQuickPreset = (amount) => {
+    const handleQuickPreset = useCallback((amount) => {
         setActiveSheet(null);
         logCalories({
             calories: amount,
             label: `Quick Add ${amount}`,
             source: 'preset'
         });
-    };
+    }, [logCalories]);
 
-    const handleQuickFood = (food) => {
+    const handleQuickFood = useCallback((food) => {
         setActiveSheet(null);
         logCalories({
             calories: food.calories,
@@ -1445,9 +1341,9 @@ const CalorieTracker = () => {
             source: 'saved-food',
             foodId: food.id
         });
-    };
+    }, [logCalories]);
 
-    const handleRecentSelection = (item) => {
+    const handleRecentSelection = useCallback((item) => {
         if (item.food) {
             handleQuickFood(item.food);
             return;
@@ -1459,9 +1355,9 @@ const CalorieTracker = () => {
             label: item.label,
             source: 'manual'
         });
-    };
+    }, [handleQuickFood, logCalories]);
 
-    const handleManualSubmit = ({ calories: amount, label }) => {
+    const handleManualSubmit = useCallback(({ calories: amount, label }) => {
         if (`${label}`.trim()) {
             const food = createSavedFood({
                 name: label,
@@ -1482,23 +1378,52 @@ const CalorieTracker = () => {
             label: label || 'Manual Entry',
             source: 'manual'
         });
-    };
+    }, [createSavedFood, logCalories]);
 
-    const toggleSheet = (sheetId) => {
-        setActiveSheet((current) => current === sheetId ? null : sheetId);
-    };
+    const toggleSheet = useCallback((sheetId) => {
+        startTransition(() => {
+            setActiveSheet((current) => current === sheetId ? null : sheetId);
+        });
+    }, []);
 
-    const openHistory = () => {
+    const openHistory = useCallback(() => {
         setActiveSheet(null);
         setVaultTab('entries');
-        setShowVault(true);
-    };
+        startTransition(() => {
+            setShowVault(true);
+        });
+    }, []);
 
-    const openFoodManager = () => {
+    const openFoodManager = useCallback(() => {
         setActiveSheet(null);
         setVaultTab('foods');
-        setShowVault(true);
-    };
+        startTransition(() => {
+            setShowVault(true);
+        });
+    }, []);
+
+    const openGoalModal = useCallback(() => {
+        setActiveSheet(null);
+        startTransition(() => {
+            setShowGoalModal(true);
+        });
+    }, []);
+
+    const handleQuickPreset100 = useCallback(() => {
+        handleQuickPreset(100);
+    }, [handleQuickPreset]);
+
+    const handleQuickPreset250 = useCallback(() => {
+        handleQuickPreset(250);
+    }, [handleQuickPreset]);
+
+    const openManualSheet = useCallback(() => {
+        toggleSheet('manual');
+    }, [toggleSheet]);
+
+    const openFoodsSheet = useCallback(() => {
+        toggleSheet('foods');
+    }, [toggleSheet]);
 
     const sheetPortal = typeof document !== 'undefined'
         ? createPortal(
@@ -1555,19 +1480,16 @@ const CalorieTracker = () => {
                         target={safeTarget}
                         lastEntry={lastEntry}
                         todayEntryCount={todayEntries.length}
-                        savedFoodsCount={savedFoods.length}
+                        savedFoodsCount={savedFoodsCount}
                         remaining={remaining}
                         overBy={overBy}
                         isOverload={isOverload}
                         activeSector={showVault ? 'history' : activeSheet}
-                        onGoal={() => {
-                            setActiveSheet(null);
-                            setShowGoalModal(true);
-                        }}
-                        onPreset100={() => handleQuickPreset(100)}
-                        onPreset250={() => handleQuickPreset(250)}
-                        onManual={() => toggleSheet('manual')}
-                        onFoods={() => toggleSheet('foods')}
+                        onGoal={openGoalModal}
+                        onPreset100={handleQuickPreset100}
+                        onPreset250={handleQuickPreset250}
+                        onManual={openManualSheet}
+                        onFoods={openFoodsSheet}
                         onHistory={openHistory}
                     />
                 </div>

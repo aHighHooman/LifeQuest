@@ -1,5 +1,5 @@
 import React, { Profiler, useCallback, useEffect, useRef, useState } from 'react';
-import { GameProvider, useGame } from './context/GameContext';
+import { GameProvider } from './context/GameContext';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
@@ -48,7 +48,6 @@ class AppErrorBoundary extends React.Component {
 }
 
 function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
-  const context = useGame();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -62,14 +61,6 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
     endTrackedSpan('tab-switch', { currentTab });
     pendingTabSwitchRef.current = null;
   }, [currentTab, pendingTabSwitchRef]);
-
-  if (!context) {
-    return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        <p>Initialization Error: GameContext not found.</p>
-      </div>
-    );
-  }
 
   return (
     <AppErrorBoundary>
