@@ -1,6 +1,6 @@
 import React, { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useGame } from '../context/GameContext';
+import { useGameCalories } from '../context/GameContext';
 import { AnimatePresence, motion as Motion, useDragControls } from 'framer-motion';
 import {
     Activity,
@@ -43,12 +43,70 @@ const createBubbles = () => Array.from({ length: 8 }).map((_, i) => ({
 const getSafeTarget = (target) => Math.max(1, Number(target) || 1);
 const normalizeCalories = (value) => Math.max(0, Math.round(Number(value) || 0));
 const normalizeSignedCalories = (value) => Math.round(Number(value) || 0);
-const getEntryTimestamp = (entry) => Date.parse(entry?.timestamp || 0) || 0;
 const getFoodTimestamp = (food) => Date.parse(food?.updatedAt || food?.createdAt || 0) || 0;
 const preventNumberStepperKeys = (event) => {
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
         event.preventDefault();
     }
+};
+
+let bodyScrollLockCount = 0;
+let lockedScrollY = 0;
+let previousBodyScrollStyles = null;
+let previousDocumentScrollStyles = null;
+
+const useBodyScrollLock = (isLocked = true) => {
+    useEffect(() => {
+        if (!isLocked || typeof document === 'undefined') return undefined;
+
+        const { body, documentElement } = document;
+
+        if (bodyScrollLockCount === 0) {
+            lockedScrollY = window.scrollY;
+            previousBodyScrollStyles = {
+                overflow: body.style.overflow,
+                position: body.style.position,
+                top: body.style.top,
+                left: body.style.left,
+                right: body.style.right,
+                width: body.style.width,
+                overscrollBehavior: body.style.overscrollBehavior
+            };
+            previousDocumentScrollStyles = {
+                overflow: documentElement.style.overflow,
+                overscrollBehavior: documentElement.style.overscrollBehavior
+            };
+
+            body.style.overflow = 'hidden';
+            body.style.position = 'fixed';
+            body.style.top = `-${lockedScrollY}px`;
+            body.style.left = '0';
+            body.style.right = '0';
+            body.style.width = '100%';
+            body.style.overscrollBehavior = 'none';
+            documentElement.style.overflow = 'hidden';
+            documentElement.style.overscrollBehavior = 'none';
+        }
+
+        bodyScrollLockCount += 1;
+
+        return () => {
+            bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1);
+
+            if (bodyScrollLockCount === 0) {
+                body.style.overflow = previousBodyScrollStyles?.overflow || '';
+                body.style.position = previousBodyScrollStyles?.position || '';
+                body.style.top = previousBodyScrollStyles?.top || '';
+                body.style.left = previousBodyScrollStyles?.left || '';
+                body.style.right = previousBodyScrollStyles?.right || '';
+                body.style.width = previousBodyScrollStyles?.width || '';
+                body.style.overscrollBehavior = previousBodyScrollStyles?.overscrollBehavior || '';
+                documentElement.style.overflow = previousDocumentScrollStyles?.overflow || '';
+                documentElement.style.overscrollBehavior = previousDocumentScrollStyles?.overscrollBehavior || '';
+                window.scrollTo(0, lockedScrollY);
+            }
+        };
+    }, [isLocked]);
 };
 
 const formatTime = (value) => {
@@ -128,27 +186,84 @@ const getWheelPosition = (angle, radius) => {
 };
 
 const groupEntriesByDay = (history) => {
-    const groups = new Map();
+    if (!history?.length) return EMPTY_LIST;
 
-    (history || []).forEach((entry) => {
+    const groups = [];
+    const groupsByDate = new Map();
+
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+        const entry = history[index];
         const dateKey = entry.dateKey || getTodayISO();
-        if (!groups.has(dateKey)) {
-            groups.set(dateKey, []);
-        }
-        groups.get(dateKey).push(entry);
-    });
+        let group = groupsByDate.get(dateKey);
 
-    return Array.from(groups.keys())
-        .sort((a, b) => b.localeCompare(a))
-        .map((dateKey) => {
-            const entries = [...groups.get(dateKey)].sort((a, b) => getEntryTimestamp(b) - getEntryTimestamp(a));
-
-            return {
+        if (!group) {
+            group = {
                 dateKey,
-                entries,
-                total: entries.reduce((sum, entry) => sum + Number(entry.calories || 0), 0)
+                entries: [],
+                total: 0
             };
+            groupsByDate.set(dateKey, group);
+            groups.push(group);
+        }
+
+        group.entries.push(entry);
+        group.total += Number(entry.calories || 0);
+    }
+
+    return groups;
+};
+
+const getTodayEntriesSnapshot = (history, todayKey) => {
+    if (!history.length) {
+        return {
+            todayEntries: EMPTY_LIST,
+            lastEntry: null
+        };
+    }
+
+    const nextTodayEntries = [];
+    const latestEntry = history[history.length - 1] || null;
+
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+        const entry = history[index];
+        if (entry.dateKey === todayKey) {
+            nextTodayEntries.push(entry);
+        }
+    }
+
+    return {
+        todayEntries: nextTodayEntries,
+        lastEntry: nextTodayEntries[0] || latestEntry
+    };
+};
+
+const buildRecentManualItems = (history, limit = 5) => {
+    if (!history.length) return EMPTY_LIST;
+
+    const seen = new Set();
+    const items = [];
+
+    for (let index = history.length - 1; index >= 0 && items.length < limit; index -= 1) {
+        const entry = history[index];
+
+        if (entry.source === 'saved-food') continue;
+
+        const label = `${entry.label || ''}`.trim();
+        if (!label || GENERIC_ENTRY_LABELS.has(label) || label.startsWith('Quick Add')) continue;
+
+        const key = `${label.toLowerCase()}-${entry.calories}`;
+        if (seen.has(key)) continue;
+
+        seen.add(key);
+        items.push({
+            key: `recent-manual-${entry.id}`,
+            kind: 'manual',
+            label: entry.label,
+            calories: entry.calories
         });
+    }
+
+    return items;
 };
 
 const ManualEntryPanel = ({ onSubmit, onClose }) => {
@@ -307,7 +422,6 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
                         autoFocus
                         type="number"
                         step="1"
-                        inputMode="numeric"
                         value={calories}
                         onChange={(event) => setCalories(event.target.value)}
                         onKeyDown={preventNumberStepperKeys}
@@ -446,6 +560,8 @@ const HistoryVaultModal = memo(({
     const dragControls = useDragControls();
     const scrollRef = useRef(null);
 
+    useBodyScrollLock(true);
+
     useEffect(() => {
         setTab(initialTab);
     }, [initialTab]);
@@ -531,7 +647,7 @@ const HistoryVaultModal = memo(({
 
                 <div
                     ref={scrollRef}
-                    className="min-h-0 flex-1 overflow-y-auto px-5 py-5 custom-scrollbar space-y-4"
+                    className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 space-y-4"
                     data-no-swipe="true"
                 >
                     {tab === 'entries' && (
@@ -884,6 +1000,8 @@ const FoodsTray = memo(({
     const dragControls = useDragControls();
     const scrollRef = useRef(null);
 
+    useBodyScrollLock(true);
+
     return (
         <Motion.div
             initial={{ y: '100%' }}
@@ -931,7 +1049,7 @@ const FoodsTray = memo(({
 
             <div
                 ref={scrollRef}
-                className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-1 sm:px-5"
+                className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-1 sm:px-5"
                 data-no-swipe="true"
             >
                 <div>
@@ -1261,7 +1379,7 @@ const CalorieTracker = () => {
         updateSavedFood,
         deleteSavedFood,
         setCalorieGoal
-    } = useGame();
+    } = useGameCalories();
 
     const todayKey = getTodayISO();
     const safeTarget = getSafeTarget(calories?.target);
@@ -1280,54 +1398,24 @@ const CalorieTracker = () => {
     const [activeSheet, setActiveSheet] = useState(null);
 
     const isFoodsTrayOpen = activeSheet === 'foods';
-    const shouldPrepareSavedFoods = showVault || isFoodsTrayOpen;
 
-    const { todayEntries, lastEntry } = useMemo(() => {
-        if (!history.length) {
-            return {
-                todayEntries: EMPTY_LIST,
-                lastEntry: null
-            };
-        }
-
-        let latestEntry = history[history.length - 1] || null;
-        let latestTimestamp = getEntryTimestamp(latestEntry);
-        const nextTodayEntries = [];
-
-        history.forEach((entry) => {
-            const timestamp = getEntryTimestamp(entry);
-            if (timestamp >= latestTimestamp) {
-                latestTimestamp = timestamp;
-                latestEntry = entry;
-            }
-
-            if (entry.dateKey === todayKey) {
-                nextTodayEntries.push(entry);
-            }
-        });
-
-        nextTodayEntries.sort((a, b) => getEntryTimestamp(b) - getEntryTimestamp(a));
-
-        return {
-            todayEntries: nextTodayEntries,
-            lastEntry: nextTodayEntries[0] || latestEntry
-        };
-    }, [history, todayKey]);
+    const { todayEntries, lastEntry } = useMemo(() => getTodayEntriesSnapshot(history, todayKey), [history, todayKey]);
 
     const savedFoods = useMemo(() => {
-        if (!shouldPrepareSavedFoods) return EMPTY_LIST;
         return [...rawSavedFoods].sort((a, b) => getFoodTimestamp(b) - getFoodTimestamp(a));
-    }, [rawSavedFoods, shouldPrepareSavedFoods]);
+    }, [rawSavedFoods]);
 
     const entriesByDay = useMemo(() => {
         if (!showVault) return EMPTY_LIST;
         return groupEntriesByDay(history);
     }, [history, showVault]);
 
+    const savedFoodsById = useMemo(() => new Map(rawSavedFoods.map((food) => [food.id, food])), [rawSavedFoods]);
+    const recentManualItems = useMemo(() => buildRecentManualItems(history), [history]);
+
     const recentItems = useMemo(() => {
         if (!isFoodsTrayOpen) return EMPTY_LIST;
 
-        const savedFoodsById = new Map(rawSavedFoods.map((food) => [food.id, food]));
         const recentSavedFoods = recentFoodIds
             .map((foodId) => savedFoodsById.get(foodId))
             .filter(Boolean)
@@ -1340,28 +1428,8 @@ const CalorieTracker = () => {
                 food
             }));
 
-        const seen = new Set();
-        const recentManualItems = [...history]
-            .sort((a, b) => getEntryTimestamp(b) - getEntryTimestamp(a))
-            .filter((entry) => entry.source !== 'saved-food')
-            .filter((entry) => {
-                const label = `${entry.label || ''}`.trim();
-                if (!label || GENERIC_ENTRY_LABELS.has(label) || label.startsWith('Quick Add')) return false;
-                const key = `${label.toLowerCase()}-${entry.calories}`;
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            })
-            .slice(0, 5)
-            .map((entry) => ({
-                key: `recent-manual-${entry.id}`,
-                kind: 'manual',
-                label: entry.label,
-                calories: entry.calories
-            }));
-
         return [...recentSavedFoods, ...recentManualItems].slice(0, 8);
-    }, [history, isFoodsTrayOpen, rawSavedFoods, recentFoodIds]);
+    }, [isFoodsTrayOpen, recentFoodIds, recentManualItems, savedFoodsById]);
 
     const handleQuickPreset = useCallback((amount) => {
         setActiveSheet(null);

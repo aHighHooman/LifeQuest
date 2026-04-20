@@ -779,6 +779,7 @@ const HabitTracker = () => {
     const handleSkip = (id) => {
         setSlideDirection(-1); // Left
         setDismissedHabits(prev => [...prev, id]);
+        checkHabit(id, 'skip');
     };
 
     const handleCycleNext = (id) => {

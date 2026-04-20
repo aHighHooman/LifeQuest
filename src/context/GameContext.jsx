@@ -6,9 +6,9 @@ import {
     addDaysToDateKey,
     getDaysUntilDue,
     getHabitCycleState,
+    getLatestHabitCycleAnchorDateKey,
     getHabitDueDateKey,
     getHabitPassivePayoutDateKeys,
-    getLatestHabitCompletionDateKey,
 } from '../utils/gameLogic';
 import { getTodayISO, isWithinDays, toLocalDateKey } from '../utils/dateUtils';
 import {
@@ -19,8 +19,10 @@ import {
 } from '../utils/portableState.js';
 
 const GameContext = createContext();
+const CalorieContext = createContext();
 
 export const useGame = () => useContext(GameContext);
+export const useGameCalories = () => useContext(CalorieContext);
 
 const INITIAL_STATS = {
     level: 1,
@@ -196,6 +198,59 @@ const normalizeCaloriesForImport = (calories = {}) => {
     };
 };
 
+const isNormalizedCalorieHistoryEntry = (entry) => {
+    if (!entry || typeof entry !== 'object') return false;
+    if (typeof entry.id !== 'string' || !entry.id) return false;
+    if (typeof entry.timestamp !== 'string' || !entry.timestamp) return false;
+    if (typeof entry.dateKey !== 'string' || !entry.dateKey) return false;
+    if (typeof entry.label !== 'string' || !entry.label.trim()) return false;
+    if (typeof entry.source !== 'string' || !entry.source) return false;
+    if (!Number.isInteger(Number(entry.calories))) return false;
+
+    return Object.prototype.hasOwnProperty.call(entry, 'foodId');
+};
+
+const isNormalizedSavedFood = (food) => {
+    if (!food || typeof food !== 'object') return false;
+    if (typeof food.id !== 'string' || !food.id) return false;
+    if (typeof food.name !== 'string' || !food.name.trim()) return false;
+    if (!Number.isInteger(Number(food.calories)) || Number(food.calories) <= 0) return false;
+    if (typeof food.createdAt !== 'string' || !food.createdAt) return false;
+    if (typeof food.updatedAt !== 'string' || !food.updatedAt) return false;
+
+    return true;
+};
+
+const isCaloriesStateNormalized = (calories = {}) => {
+    if (!calories || typeof calories !== 'object') return false;
+    if (!Array.isArray(calories.history) || !Array.isArray(calories.savedFoods) || !Array.isArray(calories.recentFoodIds)) {
+        return false;
+    }
+
+    if (Math.max(1, normalizeCalorieNumber(calories.target || INITIAL_CALORIES.target)) !== Number(calories.target)) {
+        return false;
+    }
+
+    if (recomputeCalorieCurrent(calories.history) !== Number(calories.current || 0)) {
+        return false;
+    }
+
+    if (!calories.history.every(isNormalizedCalorieHistoryEntry)) {
+        return false;
+    }
+
+    if (!calories.savedFoods.every(isNormalizedSavedFood)) {
+        return false;
+    }
+
+    const savedFoodIds = new Set(calories.savedFoods.map((food) => food.id));
+    if (calories.recentFoodIds.length > 10 || !calories.recentFoodIds.every((id) => savedFoodIds.has(id))) {
+        return false;
+    }
+
+    return true;
+};
+
 const normalizeBudgetForImport = (budget = {}) => ({
     ...INITIAL_BUDGET_TRANSFER,
     ...budget,
@@ -234,11 +289,11 @@ const createCoinHistoryEntry = ({ amount, description, type = 'earned', date = n
 });
 
 const getDefaultPassivePaidThrough = (habit, todayKey) => {
-    const latestCompletionDateKey = getLatestHabitCompletionDateKey(habit);
-    if (!latestCompletionDateKey) return null;
+    const latestCycleAnchorDateKey = getLatestHabitCycleAnchorDateKey(habit);
+    if (!latestCycleAnchorDateKey) return null;
 
     const dueDateKey = getHabitDueDateKey(habit);
-    if (!dueDateKey) return latestCompletionDateKey;
+    if (!dueDateKey) return latestCycleAnchorDateKey;
 
     return todayKey < dueDateKey ? todayKey : dueDateKey;
 };
@@ -272,6 +327,14 @@ const normalizeHabitRecord = (habit, protocolReward, todayKey) => {
         nextHabit = {
             ...nextHabit,
             passivePaidThrough: getDefaultPassivePaidThrough(nextHabit, todayKey)
+        };
+        didChange = true;
+    }
+
+    if (nextHabit.lastCycleResetDateKey === undefined) {
+        nextHabit = {
+            ...nextHabit,
+            lastCycleResetDateKey: null
         };
         didChange = true;
     }
@@ -407,11 +470,8 @@ export const GameProvider = ({ children }) => {
     const [coinHistory, setCoinHistory] = usePersistentState('lq_coin_history', INITIAL_COIN_HISTORY);
 
     useEffect(() => {
-        const normalizedCalories = normalizeCaloriesForImport(calories);
-        if (JSON.stringify(normalizedCalories) !== JSON.stringify(calories)) {
-            setCalories(normalizedCalories);
-        }
-    }, [calories, setCalories]);
+        setCalories((prev) => (isCaloriesStateNormalized(prev) ? prev : normalizeCaloriesForImport(prev)));
+    }, [setCalories]);
 
     const updateStats = useCallback((newStats) => {
         setStats(prev => ({ ...prev, ...newStats }));
@@ -829,6 +889,7 @@ export const GameProvider = ({ children }) => {
             completionReward: Number(rewardConfig.completionReward ?? settings.protocolReward) || 0,
             passiveReward: Number(rewardConfig.passiveReward ?? 0) || 0,
             passivePaidThrough: null,
+            lastCycleResetDateKey: null,
             createdAt: new Date().toISOString(),
         };
 
@@ -890,6 +951,24 @@ export const GameProvider = ({ children }) => {
                     isActive: true,
                     isToday: false,
                     passivePaidThrough: today,
+                    lastCycleResetDateKey: today,
+                    completionReward: Number(h.completionReward ?? settings.protocolReward) || 0,
+                    passiveReward: Number(h.passiveReward || 0) || 0
+                };
+            }));
+            return;
+        }
+
+        if (direction === 'skip') {
+            setHabits(prev => prev.map(h => {
+                if (h.id !== id) return h;
+
+                return {
+                    ...h,
+                    isActive: true,
+                    isToday: false,
+                    passivePaidThrough: today,
+                    lastCycleResetDateKey: today,
                     completionReward: Number(h.completionReward ?? settings.protocolReward) || 0,
                     passiveReward: Number(h.passiveReward || 0) || 0
                 };
@@ -1048,25 +1127,47 @@ export const GameProvider = ({ children }) => {
         ));
     }, [quests, setQuests]);
 
+    const calorieContextValue = useMemo(() => ({
+        calories,
+        addCalories,
+        logCalories,
+        updateCalorieEntry,
+        deleteCalorieEntry,
+        createSavedFood,
+        updateSavedFood,
+        deleteSavedFood,
+        setCalorieGoal
+    }), [
+        calories,
+        addCalories,
+        logCalories,
+        updateCalorieEntry,
+        deleteCalorieEntry,
+        createSavedFood,
+        updateSavedFood,
+        deleteSavedFood,
+        setCalorieGoal
+    ]);
+
     const contextValue = useMemo(() => ({
-        stats, quests, habits, settings, calories, coinHistory,
+        stats, quests, habits, settings, coinHistory,
         addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
         addHabit, checkHabit, deleteHabit, toggleHabitActivation, updateHabitRewards,
-        updateStats, updateSettings, addCalories, logCalories, updateCalorieEntry, deleteCalorieEntry,
-        createSavedFood, updateSavedFood, deleteSavedFood, setCalorieGoal, spendCoins, addGold,
+        updateStats, updateSettings, spendCoins, addGold,
         toggleToday, exportAppState, importAppState
     }), [
-        stats, quests, habits, settings, calories, coinHistory,
+        stats, quests, habits, settings, coinHistory,
         addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
         addHabit, checkHabit, deleteHabit, toggleHabitActivation, updateHabitRewards,
-        updateStats, updateSettings, addCalories, logCalories, updateCalorieEntry, deleteCalorieEntry,
-        createSavedFood, updateSavedFood, deleteSavedFood, setCalorieGoal, spendCoins, addGold,
+        updateStats, updateSettings, spendCoins, addGold,
         toggleToday, exportAppState, importAppState
     ]);
 
     return (
         <GameContext.Provider value={contextValue}>
-            {children}
+            <CalorieContext.Provider value={calorieContextValue}>
+                {children}
+            </CalorieContext.Provider>
         </GameContext.Provider>
     );
 };

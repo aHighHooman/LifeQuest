@@ -1,7 +1,63 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export const APP_VERSION = '1.4.0'; // Incrementing for this update
 export const VERSION_KEY = 'lq_version';
+const PERSISTENCE_DEBOUNCE_MS = 180;
+const pendingWrites = new Map();
+const scheduledWrites = new Map();
+
+const supportsIdleCallback = () => typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function';
+
+const cancelScheduledWrite = (key) => {
+    const scheduled = scheduledWrites.get(key);
+    if (!scheduled) return;
+
+    if (scheduled.type === 'idle' && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(scheduled.handle);
+    } else {
+        clearTimeout(scheduled.handle);
+    }
+
+    scheduledWrites.delete(key);
+};
+
+const flushPendingWrite = (key) => {
+    if (!pendingWrites.has(key)) return;
+
+    const value = pendingWrites.get(key);
+    pendingWrites.delete(key);
+    cancelScheduledWrite(key);
+    safeSet(key, value);
+};
+
+const flushAllPendingWrites = () => {
+    [...pendingWrites.keys()].forEach(flushPendingWrite);
+};
+
+const scheduleSafeSet = (key, value) => {
+    pendingWrites.set(key, value);
+    cancelScheduledWrite(key);
+
+    if (supportsIdleCallback()) {
+        const handle = window.requestIdleCallback(() => {
+            flushPendingWrite(key);
+        }, { timeout: PERSISTENCE_DEBOUNCE_MS * 2 });
+
+        scheduledWrites.set(key, { type: 'idle', handle });
+        return;
+    }
+
+    const handle = window.setTimeout(() => {
+        flushPendingWrite(key);
+    }, PERSISTENCE_DEBOUNCE_MS);
+
+    scheduledWrites.set(key, { type: 'timeout', handle });
+};
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushAllPendingWrites);
+    window.addEventListener('beforeunload', flushAllPendingWrites);
+}
 
 /**
  * Safely retrieves an item from localStorage.
@@ -53,8 +109,14 @@ export const usePersistentState = (key, initialValue) => {
     // Let's stick to standard behavior: write whenever state changes.
 
     useEffect(() => {
-        safeSet(key, state);
+        scheduleSafeSet(key, state);
     }, [key, state]);
+
+    useEffect(() => {
+        return () => {
+            flushPendingWrite(key);
+        };
+    }, [key]);
 
     return [state, setState];
 };

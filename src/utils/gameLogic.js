@@ -58,16 +58,28 @@ export const getLatestHabitCompletionDateKey = (habit) => {
         .pop() || null;
 };
 
-export const getHabitDueDateKey = (habit) => {
+export const getLatestHabitCycleAnchorDateKey = (habit) => {
     const lastCompletedDateKey = getLatestHabitCompletionDateKey(habit);
-    if (!lastCompletedDateKey) return null;
+    const lastCycleResetDateKey = habit?.lastCycleResetDateKey || null;
 
-    return addDaysToDateKey(lastCompletedDateKey, getHabitIntervalDays(habit));
+    if (!lastCompletedDateKey) return lastCycleResetDateKey;
+    if (!lastCycleResetDateKey) return lastCompletedDateKey;
+
+    return lastCompletedDateKey > lastCycleResetDateKey
+        ? lastCompletedDateKey
+        : lastCycleResetDateKey;
+};
+
+export const getHabitDueDateKey = (habit) => {
+    const anchorDateKey = getLatestHabitCycleAnchorDateKey(habit);
+    if (!anchorDateKey) return null;
+
+    return addDaysToDateKey(anchorDateKey, getHabitIntervalDays(habit));
 };
 
 export const getHabitPassiveWindow = (habit) => {
-    const lastCompletedDateKey = getLatestHabitCompletionDateKey(habit);
-    if (!lastCompletedDateKey) {
+    const anchorDateKey = getLatestHabitCycleAnchorDateKey(habit);
+    if (!anchorDateKey) {
         return {
             anchorDateKey: null,
             startDateKey: null,
@@ -78,8 +90,8 @@ export const getHabitPassiveWindow = (habit) => {
     const dueDateKey = getHabitDueDateKey(habit);
 
     return {
-        anchorDateKey: lastCompletedDateKey,
-        startDateKey: addDaysToDateKey(lastCompletedDateKey, 1),
+        anchorDateKey,
+        startDateKey: addDaysToDateKey(anchorDateKey, 1),
         endDateKey: dueDateKey
     };
 };
@@ -119,12 +131,14 @@ export const getDaysUntilDue = (habit, referenceDate = new Date()) => {
 export const getHabitCycleState = (habit, referenceDate = new Date()) => {
     const todayKey = toDateKey(referenceDate);
     const lastCompletedDateKey = getLatestHabitCompletionDateKey(habit);
+    const cycleAnchorDateKey = getLatestHabitCycleAnchorDateKey(habit);
     const dueDateKey = getHabitDueDateKey(habit);
     const daysUntilDue = dueDateKey ? diffDateKeys(dueDateKey, todayKey) : 0;
 
     return {
         todayKey,
         lastCompletedDateKey,
+        cycleAnchorDateKey,
         dueDateKey,
         daysUntilDue,
         isDueToday: dueDateKey ? daysUntilDue === 0 : true,

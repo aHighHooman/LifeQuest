@@ -1,12 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { motion, useDragControls } from 'framer-motion';
+import { motion as Motion, useDragControls } from 'framer-motion';
 import {
     Activity,
     Calendar,
     Coins,
     Flame,
-    GripHorizontal,
     Heart,
     Target,
     TrendingUp,
@@ -25,7 +24,7 @@ import {
     XAxis,
     YAxis
 } from 'recharts';
-import { useGame } from '../context/GameContext';
+import { useGame, useGameCalories } from '../context/GameContext';
 import { toLocalDateKey } from '../utils/dateUtils';
 
 const TAB_CONFIG = {
@@ -120,7 +119,7 @@ const truncateLabel = (label, maxLength = 14) =>
     label.length > maxLength ? `${label.slice(0, maxLength - 1)}...` : label;
 
 const EmptyChartState = ({ title, body }) => (
-    <div className="flex h-full min-h-[180px] items-center justify-center rounded-[1.5rem] border border-dashed border-slate-700/90 bg-black/35 px-6 text-center shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)]">
+    <div className="flex h-full min-h-[140px] items-center justify-center rounded-[1.25rem] border border-dashed border-slate-700/90 bg-black/35 px-5 text-center shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)] sm:min-h-[180px]">
         <div>
             <p className="font-game text-sm font-semibold uppercase tracking-[0.28em] text-slate-400">{title}</p>
             <p className="mt-2 text-sm text-slate-500">{body}</p>
@@ -128,33 +127,33 @@ const EmptyChartState = ({ title, body }) => (
     </div>
 );
 
-const SummaryCard = ({ icon, label, value, helper, tone = 'blue' }) => {
+const SummaryCard = ({ icon, label, value, helper, tone = 'blue', className = '' }) => {
     const IconComponent = icon;
     const toneStyles = TONE_STYLES[tone] || TONE_STYLES.blue;
 
     return (
-        <div className={`relative overflow-hidden rounded-[1.5rem] border p-4 text-left shadow-[0_18px_40px_rgba(0,0,0,0.34)] ${toneStyles.card}`}>
+        <div className={`relative overflow-hidden rounded-[1.35rem] border px-3.5 py-3 text-left shadow-[0_18px_40px_rgba(0,0,0,0.34)] sm:px-4 sm:py-4 ${toneStyles.card} ${className}`}>
             <div className={`pointer-events-none absolute inset-x-4 top-0 h-px ${toneStyles.line}`} />
             <div className={`pointer-events-none absolute -right-8 top-0 h-24 w-24 bg-gradient-to-bl blur-2xl ${toneStyles.glow}`} />
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <p className="font-game text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
-                    <p className={`mt-2 font-game text-[1.7rem] font-semibold uppercase tracking-[0.06em] ${toneStyles.value}`}>{value}</p>
+            <div className="flex items-start justify-between gap-2.5">
+                <div className="min-w-0 flex-1">
+                    <p className="font-game text-[9px] font-semibold uppercase tracking-[0.24em] text-slate-500 sm:text-[10px] sm:tracking-[0.28em]">{label}</p>
+                    <p className={`mt-1 font-game text-[1.45rem] font-semibold uppercase tracking-[0.04em] sm:mt-2 sm:text-[1.7rem] sm:tracking-[0.06em] ${toneStyles.value}`}>{value}</p>
+                    <p className={`mt-1.5 text-[11px] leading-4 sm:mt-3 sm:text-xs sm:leading-relaxed ${toneStyles.helper}`}>{helper}</p>
                 </div>
-                <div className={`rounded-full p-2.5 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] ${toneStyles.icon}`}>
-                    <IconComponent size={18} strokeWidth={2.2} />
+                <div className={`shrink-0 rounded-full p-2 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] sm:p-2.5 ${toneStyles.icon}`}>
+                    <IconComponent size={16} strokeWidth={2.2} className="sm:h-[18px] sm:w-[18px]" />
                 </div>
             </div>
-            <p className={`mt-3 text-xs leading-relaxed ${toneStyles.helper}`}>{helper}</p>
         </div>
     );
 };
 
 const SectionCard = ({ title, eyebrow, icon: Icon, children }) => (
-    <section className="relative overflow-hidden rounded-[1.7rem] border border-slate-700/90 bg-slate-950/78 p-4 shadow-[0_24px_50px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+    <section className="relative overflow-hidden rounded-[1.55rem] border border-slate-700/90 bg-slate-950/78 p-3.5 shadow-[0_24px_50px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:rounded-[1.7rem] sm:p-4">
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/70 to-transparent" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.05] [background-image:linear-gradient(rgba(148,163,184,0.9)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.9)_1px,transparent_1px)] [background-size:24px_24px]" />
-        <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
             <div>
                 {eyebrow && (
                     <p className="font-game text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-500">{eyebrow}</p>
@@ -188,7 +187,8 @@ const ChartTooltip = ({ active, payload, label, formatLabel = (value) => value }
 };
 
 const StatsView = ({ isOpen, onClose }) => {
-    const { stats, quests, habits, coinHistory, calories } = useGame();
+    const { stats, quests, habits, coinHistory } = useGame();
+    const { calories } = useGameCalories();
     const [activeTab, setActiveTab] = useState('overview');
     const dragControls = useDragControls();
     const scrollRef = useRef(null);
@@ -372,6 +372,11 @@ const StatsView = ({ isOpen, onClose }) => {
         stats.level
     ]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    }, [activeTab, isOpen]);
+
     if (!isOpen) return null;
 
     const handleDragEnd = (_, info) => {
@@ -406,16 +411,22 @@ const StatsView = ({ isOpen, onClose }) => {
     };
 
     const renderOverview = () => (
-        <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {summaryCards.map((card) => (
-                    <SummaryCard key={card.label} {...card} />
+        <div className="space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+                {summaryCards.map((card, index) => (
+                    <SummaryCard
+                        key={card.label}
+                        {...card}
+                        className={index === summaryCards.length - 1 && summaryCards.length % 2 !== 0
+                            ? 'col-span-2 sm:col-span-1'
+                            : ''}
+                    />
                 ))}
             </div>
 
             <SectionCard title="Quest Completion Velocity" eyebrow="Mission Pulse" icon={Calendar}>
                 {questData.some((item) => item.count > 0) ? (
-                    <div className="h-52 w-full">
+                    <div className="h-44 w-full sm:h-52">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={questData} barGap={8}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
@@ -449,7 +460,7 @@ const StatsView = ({ isOpen, onClose }) => {
 
             <SectionCard title="Protocol Consistency" eyebrow="Behavior Scan" icon={Activity}>
                 {protocolData.some((item) => item.hits > 0) ? (
-                    <div className="h-56 w-full">
+                    <div className="h-48 w-full sm:h-56">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={protocolData} layout="vertical" margin={{ left: 8, right: 8 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
@@ -486,16 +497,22 @@ const StatsView = ({ isOpen, onClose }) => {
     );
 
     const renderFinance = () => (
-        <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {summaryCards.map((card) => (
-                    <SummaryCard key={card.label} {...card} />
+        <div className="space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+                {summaryCards.map((card, index) => (
+                    <SummaryCard
+                        key={card.label}
+                        {...card}
+                        className={index === summaryCards.length - 1 && summaryCards.length % 2 !== 0
+                            ? 'col-span-2 sm:col-span-1'
+                            : ''}
+                    />
                 ))}
             </div>
 
             <SectionCard title="Coin Balance Trend" eyebrow="Economy Feed" icon={Coins}>
                 {coinData.some((item) => item.balance !== 0 || item.change !== 0) ? (
-                    <div className="h-56 w-full">
+                    <div className="h-48 w-full sm:h-56">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={coinData} margin={{ left: 0, right: 8 }}>
                                 <defs>
@@ -588,16 +605,22 @@ const StatsView = ({ isOpen, onClose }) => {
     );
 
     const renderHealth = () => (
-        <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {summaryCards.map((card) => (
-                    <SummaryCard key={card.label} {...card} />
+        <div className="space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+                {summaryCards.map((card, index) => (
+                    <SummaryCard
+                        key={card.label}
+                        {...card}
+                        className={index === summaryCards.length - 1 && summaryCards.length % 2 !== 0
+                            ? 'col-span-2 sm:col-span-1'
+                            : ''}
+                    />
                 ))}
             </div>
 
             <SectionCard title="Calorie Intake vs Target" eyebrow="Body Systems" icon={Heart}>
                 {(calorieData.some((item) => item.calories > 0) || Number(calories.current || 0) > 0) ? (
-                    <div className="h-56 w-full">
+                    <div className="h-48 w-full sm:h-56">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={calorieData} margin={{ left: 0, right: 8 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
@@ -646,13 +669,13 @@ const StatsView = ({ isOpen, onClose }) => {
             </SectionCard>
 
             <SectionCard title="Today at a Glance" eyebrow="Immediate Read" icon={Flame}>
-                <div className="rounded-[1.4rem] border border-slate-800/90 bg-black/35 p-4 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)]">
+                <div className="rounded-[1.25rem] border border-slate-800/90 bg-black/35 p-3.5 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)] sm:rounded-[1.4rem] sm:p-4">
                     <div className="flex items-end justify-between gap-4">
                         <div className="text-left">
                             <p className="font-game text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
                                 Current Progress
                             </p>
-                            <p className="mt-2 font-game text-3xl font-semibold uppercase tracking-[0.08em] text-rose-100">
+                            <p className="mt-2 font-game text-[1.7rem] font-semibold uppercase tracking-[0.08em] text-rose-100 sm:text-3xl">
                                 {calories.current || 0}
                             </p>
                         </div>
@@ -684,7 +707,7 @@ const StatsView = ({ isOpen, onClose }) => {
             className="fixed inset-0 z-[100] flex items-start justify-center bg-black/82 backdrop-blur-md"
             data-no-swipe="true"
         >
-            <motion.div
+            <Motion.div
                 initial={{ y: '-100%' }}
                 animate={{ y: 0 }}
                 exit={{ y: '-100%' }}
@@ -750,17 +773,17 @@ const StatsView = ({ isOpen, onClose }) => {
                 </div>
 
                 <div
-                    className="relative z-10 shrink-0 border-t border-slate-800/90 bg-slate-950/55 px-4 pt-5"
+                    className="relative z-10 shrink-0 border-t border-slate-800/90 bg-slate-950/55 px-4 pt-4"
                     style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)' }}
                 >
                     <div
-                        className="mx-auto flex w-16 cursor-grab justify-center rounded-full border border-slate-800/80 bg-black/35 px-1.5 py-1.5 text-slate-500 active:cursor-grabbing"
+                        className="mx-auto flex h-8 w-20 cursor-grab items-center justify-center active:cursor-grabbing"
                         onPointerDown={(event) => dragControls.start(event)}
                     >
-                        <GripHorizontal size={16} />
+                        <div className="h-1 w-10 rounded-full bg-slate-300/35 shadow-[0_0_14px_rgba(148,163,184,0.18)]" />
                     </div>
                 </div>
-            </motion.div>
+            </Motion.div>
         </div>,
         document.body
     );

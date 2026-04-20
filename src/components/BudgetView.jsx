@@ -730,8 +730,16 @@ const CoinSwitch = memo(({ onClick, onHoldComplete, resetSignal }) => {
                 }}
                 onPointerLeave={() => endHold(null, { resetCharge: true })}
                 onPointerCancel={() => endHold(null, { resetCharge: true })}
-                style={{ pointerEvents: 'auto', perspective: '1000px' }}
-                className="relative w-28 h-28 group"
+                onContextMenu={(e) => e.preventDefault()}
+                style={{
+                    pointerEvents: 'auto',
+                    perspective: '1000px',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    WebkitTouchCallout: 'none',
+                    WebkitTapHighlightColor: 'transparent'
+                }}
+                className="relative w-28 h-28 group select-none"
             >
                 <div
                     className="absolute inset-[-28px] rounded-full pointer-events-none"
