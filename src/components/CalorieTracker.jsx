@@ -1,7 +1,7 @@
 import React, { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGameCalories } from '../context/GameContext';
-import { AnimatePresence, motion as Motion, useDragControls } from 'framer-motion';
+import { AnimatePresence, motion as Motion, useDragControls, useReducedMotion } from 'framer-motion';
 import {
     Activity,
     AlertTriangle,
@@ -107,6 +107,32 @@ const useBodyScrollLock = (isLocked = true) => {
             }
         };
     }, [isLocked]);
+};
+
+const useMobileLiteMode = () => {
+    const prefersReducedMotion = useReducedMotion();
+    const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+
+        const pointerQuery = window.matchMedia('(pointer: coarse)');
+        const viewportQuery = window.matchMedia('(max-width: 767px)');
+        const updateMode = () => {
+            setIsCoarsePointer(pointerQuery.matches || viewportQuery.matches);
+        };
+
+        updateMode();
+        pointerQuery.addEventListener('change', updateMode);
+        viewportQuery.addEventListener('change', updateMode);
+
+        return () => {
+            pointerQuery.removeEventListener('change', updateMode);
+            viewportQuery.removeEventListener('change', updateMode);
+        };
+    }, []);
+
+    return prefersReducedMotion || isCoarsePointer;
 };
 
 const formatTime = (value) => {
@@ -266,7 +292,7 @@ const buildRecentManualItems = (history, limit = 5) => {
     return items;
 };
 
-const ManualEntryPanel = ({ onSubmit, onClose }) => {
+const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
     const [calories, setCalories] = useState('');
     const [label, setLabel] = useState('');
     const [bubbles] = useState(() => createBubbles().slice(0, 5));
@@ -309,28 +335,35 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
 
     return (
         <Motion.form
-            initial={{ opacity: 0, scale: 0.88, y: 18 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 18 }}
-            transition={{ type: 'spring', stiffness: 240, damping: 24 }}
+            initial={liteMode ? { opacity: 0, y: 10 } : { opacity: 0, scale: 0.88, y: 18 }}
+            animate={liteMode ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={liteMode ? { opacity: 0, y: 10 } : { opacity: 0, scale: 0.92, y: 18 }}
+            transition={liteMode ? { duration: 0.18, ease: 'easeOut' } : { type: 'spring', stiffness: 240, damping: 24 }}
             onSubmit={handleSubmit}
             onClick={(event) => event.stopPropagation()}
-            className="relative aspect-square w-[min(92vw,34rem)] max-w-[34rem] overflow-hidden rounded-full bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.98)_0%,rgba(2,6,23,0.99)_56%,rgba(0,0,0,1)_100%)] shadow-[0_28px_80px_rgba(0,0,0,0.52)] backdrop-blur-xl"
+            className={clsx(
+                'relative aspect-square w-[min(92vw,34rem)] max-w-[34rem] overflow-hidden rounded-full bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.98)_0%,rgba(2,6,23,0.99)_56%,rgba(0,0,0,1)_100%)] shadow-[0_28px_80px_rgba(0,0,0,0.52)]',
+                liteMode ? '' : 'backdrop-blur-xl'
+            )}
         >
             <div className="absolute inset-0 rounded-full" />
             <div className="absolute inset-[4.5%] rounded-full" />
             <div className="absolute inset-[11%] rounded-full shadow-[inset_0_0_40px_rgba(15,23,42,0.8)]" />
             <div className="absolute inset-[8%] rounded-full opacity-[0.14] bg-[linear-gradient(rgba(244,63,94,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(244,63,94,0.16)_1px,transparent_1px)] bg-[size:18px_18px]" />
-            <Motion.div
-                className="absolute inset-[16%] rounded-full bg-white/[0.02]"
-                animate={{ scale: [1, 1.025, 1], opacity: [0.28, 0.42, 0.28] }}
-                transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <Motion.div
-                className="absolute inset-[23%] rounded-full bg-white/[0.015]"
-                animate={{ scale: [1.02, 0.985, 1.02], opacity: [0.16, 0.28, 0.16] }}
-                transition={{ duration: 5.6, repeat: Infinity, ease: 'easeInOut' }}
-            />
+            {!liteMode && (
+                <>
+                    <Motion.div
+                        className="absolute inset-[16%] rounded-full bg-white/[0.02]"
+                        animate={{ scale: [1, 1.025, 1], opacity: [0.28, 0.42, 0.28] }}
+                        transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    <Motion.div
+                        className="absolute inset-[23%] rounded-full bg-white/[0.015]"
+                        animate={{ scale: [1.02, 0.985, 1.02], opacity: [0.16, 0.28, 0.16] }}
+                        transition={{ duration: 5.6, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                </>
+            )}
 
             <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
                 <defs>
@@ -397,7 +430,7 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
                 <div className="absolute inset-[10%] rounded-full bg-white/[0.03]" />
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:22px_22px] opacity-[0.08]" />
 
-                {bubbles.map((bubble) => (
+                {!liteMode && bubbles.map((bubble) => (
                     <Motion.div
                         key={bubble.id}
                         className="absolute bottom-6 rounded-full bg-rose-200/15 blur-[1px]"
@@ -550,7 +583,8 @@ const HistoryVaultModal = memo(({
     onQuickAddFood,
     onCreateFood,
     onUpdateFood,
-    onDeleteFood
+    onDeleteFood,
+    liteMode = false
 }) => {
     const [tab, setTab] = useState(initialTab);
     const [editingEntryId, setEditingEntryId] = useState(null);
@@ -579,7 +613,7 @@ const HistoryVaultModal = memo(({
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[260] flex items-end justify-center bg-black/82 backdrop-blur-md"
+            className={clsx('fixed inset-0 z-[260] flex items-end justify-center bg-black/82', liteMode ? '' : 'backdrop-blur-md')}
             onClick={onClose}
             data-no-swipe="true"
         >
@@ -587,7 +621,7 @@ const HistoryVaultModal = memo(({
                 initial={{ y: '100%' }}
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
-                transition={{ type: 'spring', stiffness: 240, damping: 28 }}
+                transition={liteMode ? { duration: 0.2, ease: 'easeOut' } : { type: 'spring', stiffness: 240, damping: 28 }}
                 drag="y"
                 dragListener={false}
                 dragControls={dragControls}
@@ -844,15 +878,16 @@ const HistoryVaultModal = memo(({
     );
 });
 
-const GoalSettingModal = memo(({ current, onConfirm, onClose }) => {
+const GoalSettingModal = memo(({ current, onConfirm, onClose, liteMode = false }) => {
     const [value, setValue] = useState(current);
 
     return (
-        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
+        <div className={clsx('fixed inset-0 z-[170] flex items-center justify-center bg-black/80 p-4', liteMode ? '' : 'backdrop-blur-sm')} onClick={onClose}>
             <Motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 12 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                initial={liteMode ? { opacity: 0, y: 8 } : { opacity: 0, scale: 0.95, y: 12 }}
+                animate={liteMode ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 }}
+                exit={liteMode ? { opacity: 0, y: 8 } : { opacity: 0, scale: 0.95, y: 12 }}
+                transition={liteMode ? { duration: 0.16, ease: 'easeOut' } : undefined}
                 onClick={(event) => event.stopPropagation()}
                 className="w-full max-w-sm rounded-[28px] border border-rose-500/25 bg-slate-950 p-6 shadow-[0_0_50px_rgba(0,0,0,0.45)]"
             >
@@ -892,7 +927,7 @@ const GoalSettingModal = memo(({ current, onConfirm, onClose }) => {
     );
 });
 
-const RadialHub = memo(({ current, target, onClick }) => {
+const RadialHub = memo(({ current, target, onClick, liteMode = false }) => {
     const safeTarget = getSafeTarget(target);
     const percentage = Math.min((Number(current || 0) / safeTarget) * 100, 100);
     const isOverload = Number(current || 0) > safeTarget;
@@ -900,7 +935,7 @@ const RadialHub = memo(({ current, target, onClick }) => {
     return (
         <Motion.button
             type="button"
-            whileTap={{ scale: 0.985 }}
+            whileTap={liteMode ? undefined : { scale: 0.985 }}
             onClick={onClick}
             className="group relative h-full w-full rounded-full"
             aria-label="Edit calorie goal"
@@ -917,24 +952,30 @@ const RadialHub = memo(({ current, target, onClick }) => {
                             ? 'bg-gradient-to-t from-[#180003] via-[#5a0812] to-[#c1273d]'
                             : 'bg-gradient-to-t from-[#120002] via-[#4f0915] to-[#b91c32]'
                     )}
-                    initial={{ height: '0%' }}
+                    initial={liteMode ? false : { height: '0%' }}
                     animate={{ height: `${percentage}%` }}
-                    transition={{ type: 'spring', stiffness: 50, damping: 20 }}
+                    transition={liteMode ? { duration: 0.14, ease: 'easeOut' } : { type: 'spring', stiffness: 50, damping: 20 }}
                 >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,82,82,0.26)_0%,rgba(255,82,82,0.08)_28%,transparent_62%)] mix-blend-screen" />
-                    <div className="absolute top-0 left-0 right-0 h-4 -translate-y-1/2 bg-red-200/30 blur-sm" />
+                    {!liteMode && <div className="absolute top-0 left-0 right-0 h-4 -translate-y-1/2 bg-red-200/30 blur-sm" />}
                 </Motion.div>
             </div>
 
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center px-4 text-center">
-                <Motion.div
-                    key={current}
-                    initial={{ scale: 1.2, opacity: 0.5 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="font-mono text-5xl font-black tracking-tighter text-white"
-                >
-                    {current}
-                </Motion.div>
+                {liteMode ? (
+                    <div className="font-mono text-5xl font-black tracking-tighter text-white">
+                        {current}
+                    </div>
+                ) : (
+                    <Motion.div
+                        key={current}
+                        initial={{ scale: 1.2, opacity: 0.5 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="font-mono text-5xl font-black tracking-tighter text-white"
+                    >
+                        {current}
+                    </Motion.div>
+                )}
                 <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.3em] text-rose-200/80">
                     kCal Today
                 </div>
@@ -995,7 +1036,8 @@ const FoodsTray = memo(({
     onClose,
     onQuickAddFood,
     onSelectRecent,
-    onOpenManager
+    onOpenManager,
+    liteMode = false
 }) => {
     const dragControls = useDragControls();
     const scrollRef = useRef(null);
@@ -1007,7 +1049,7 @@ const FoodsTray = memo(({
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 240, damping: 28 }}
+            transition={liteMode ? { duration: 0.2, ease: 'easeOut' } : { type: 'spring', stiffness: 240, damping: 28 }}
             drag="y"
             dragListener={false}
             dragControls={dragControls}
@@ -1020,7 +1062,10 @@ const FoodsTray = memo(({
                     onClose();
                 }
             }}
-            className="flex h-[min(76svh,42rem)] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] border border-rose-500/20 bg-black/82 shadow-[0_0_40px_rgba(0,0,0,0.35)] backdrop-blur-xl md:mb-6 md:h-[min(80vh,44rem)] md:rounded-[28px]"
+            className={clsx(
+                'flex h-[min(76svh,42rem)] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] border border-rose-500/20 bg-black/82 shadow-[0_0_40px_rgba(0,0,0,0.35)] md:mb-6 md:h-[min(80vh,44rem)] md:rounded-[28px]',
+                liteMode ? '' : 'backdrop-blur-xl'
+            )}
             data-no-swipe="true"
         >
             <div
@@ -1165,7 +1210,8 @@ const SegmentedWheel = memo(({
     onPreset250,
     onManual,
     onFoods,
-    onHistory
+    onHistory,
+    liteMode = false
 }) => {
     const percentToGoal = Math.min(Math.round((current / getSafeTarget(target)) * 100), 999);
     const latestTime = lastEntry ? formatTime(lastEntry.timestamp) : '--:--';
@@ -1319,14 +1365,15 @@ const SegmentedWheel = memo(({
 
     return (
         <Motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
+            initial={liteMode ? false : { opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
+            transition={liteMode ? { duration: 0.12 } : undefined}
             className="relative aspect-square w-full max-w-[34rem] sm:max-w-[38rem]"
         >
-            <div className="absolute -inset-[18%] rounded-full bg-[radial-gradient(circle_at_center,rgba(190,24,93,0.18)_0%,rgba(127,29,29,0.12)_16%,rgba(30,15,23,0.07)_32%,transparent_58%)] blur-[72px]" />
-            <div className="absolute -inset-[8%] rounded-full bg-[radial-gradient(circle_at_center,rgba(127,29,29,0.24)_0%,rgba(136,19,55,0.12)_18%,rgba(30,15,23,0.08)_32%,rgba(2,6,23,0.02)_52%,transparent_72%)] blur-3xl" />
+            {!liteMode && <div className="absolute -inset-[18%] rounded-full bg-[radial-gradient(circle_at_center,rgba(190,24,93,0.18)_0%,rgba(127,29,29,0.12)_16%,rgba(30,15,23,0.07)_32%,transparent_58%)] blur-[72px]" />}
+            {!liteMode && <div className="absolute -inset-[8%] rounded-full bg-[radial-gradient(circle_at_center,rgba(127,29,29,0.24)_0%,rgba(136,19,55,0.12)_18%,rgba(30,15,23,0.08)_32%,rgba(2,6,23,0.02)_52%,transparent_72%)] blur-3xl" />}
 
-            <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full drop-shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+            <svg viewBox="0 0 100 100" className={clsx('absolute inset-0 h-full w-full', liteMode ? '' : 'drop-shadow-[0_30px_80px_rgba(0,0,0,0.45)]')}>
                 <circle cx="50" cy="50" r="49.2" fill="rgba(2,6,23,0.97)" stroke="rgba(15,23,42,0.92)" strokeWidth="1.4" />
 
                 {segments.map((segment) => {
@@ -1363,7 +1410,7 @@ const SegmentedWheel = memo(({
             ))}
 
             <div className="absolute inset-[25.5%] z-20 sm:inset-[26%]">
-                <RadialHub current={current} target={target} onClick={onGoal} />
+                <RadialHub current={current} target={target} onClick={onGoal} liteMode={liteMode} />
             </div>
         </Motion.div>
     );
@@ -1396,14 +1443,17 @@ const CalorieTracker = () => {
     const [showVault, setShowVault] = useState(false);
     const [vaultTab, setVaultTab] = useState('entries');
     const [activeSheet, setActiveSheet] = useState(null);
+    const liteMode = useMobileLiteMode();
 
     const isFoodsTrayOpen = activeSheet === 'foods';
+    const shouldPrepareSavedFoods = showVault || isFoodsTrayOpen;
 
     const { todayEntries, lastEntry } = useMemo(() => getTodayEntriesSnapshot(history, todayKey), [history, todayKey]);
 
     const savedFoods = useMemo(() => {
+        if (!shouldPrepareSavedFoods) return EMPTY_LIST;
         return [...rawSavedFoods].sort((a, b) => getFoodTimestamp(b) - getFoodTimestamp(a));
-    }, [rawSavedFoods]);
+    }, [rawSavedFoods, shouldPrepareSavedFoods]);
 
     const entriesByDay = useMemo(() => {
         if (!showVault) return EMPTY_LIST;
@@ -1537,11 +1587,12 @@ const CalorieTracker = () => {
             <AnimatePresence>
                 {activeSheet === 'manual' && (
                     <div
-                        className="fixed inset-0 z-[220] flex items-center justify-center bg-black/55 px-3 py-4 backdrop-blur-[3px] sm:px-4"
+                        className={clsx('fixed inset-0 z-[220] flex items-center justify-center bg-black/55 px-3 py-4 sm:px-4', liteMode ? '' : 'backdrop-blur-[3px]')}
                         onClick={() => setActiveSheet(null)}
                         data-no-swipe="true"
                     >
                         <ManualEntryPanel
+                            liteMode={liteMode}
                             onClose={() => setActiveSheet(null)}
                             onSubmit={handleManualSubmit}
                         />
@@ -1550,12 +1601,13 @@ const CalorieTracker = () => {
 
                 {activeSheet === 'foods' && (
                     <div
-                        className="fixed inset-0 z-[240] flex items-end justify-center bg-black/45 backdrop-blur-[3px] px-0 sm:px-4"
+                        className={clsx('fixed inset-0 z-[240] flex items-end justify-center bg-black/45 px-0 sm:px-4', liteMode ? '' : 'backdrop-blur-[3px]')}
                         onClick={() => setActiveSheet(null)}
                         data-no-swipe="true"
                     >
                         <div className="w-full" onClick={(event) => event.stopPropagation()}>
                             <FoodsTray
+                                liteMode={liteMode}
                                 savedFoods={savedFoods}
                                 recentItems={recentItems}
                                 onClose={() => setActiveSheet(null)}
@@ -1576,7 +1628,7 @@ const CalorieTracker = () => {
             <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-black text-rose-50">
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute inset-0 bg-black" />
-                <div className="absolute inset-[-12%] bg-[radial-gradient(circle_at_center,rgba(190,24,93,0.18)_0%,rgba(136,19,55,0.12)_14%,rgba(88,28,45,0.07)_24%,transparent_46%)] blur-[90px]" />
+                {!liteMode && <div className="absolute inset-[-12%] bg-[radial-gradient(circle_at_center,rgba(190,24,93,0.18)_0%,rgba(136,19,55,0.12)_14%,rgba(88,28,45,0.07)_24%,transparent_46%)] blur-[90px]" />}
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(88,28,45,0.2)_0%,rgba(30,15,23,0.12)_16%,rgba(2,6,23,0.3)_30%,rgba(2,6,23,0.74)_50%,#000_76%)]" />
                 <div className="absolute inset-0 opacity-[0.08] bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:50px_50px]" />
             </div>
@@ -1584,6 +1636,7 @@ const CalorieTracker = () => {
             <div className="relative z-10 flex flex-1 items-center justify-center px-3 py-5 sm:px-5 sm:py-7">
                 <div className="relative flex w-full max-w-5xl flex-1 items-center justify-center pb-20 sm:pb-24">
                     <SegmentedWheel
+                        liteMode={liteMode}
                         current={currentCalories}
                         target={safeTarget}
                         lastEntry={lastEntry}
@@ -1606,6 +1659,7 @@ const CalorieTracker = () => {
             <AnimatePresence>
                 {showGoalModal && (
                     <GoalSettingModal
+                        liteMode={liteMode}
                         current={safeTarget}
                         onClose={() => setShowGoalModal(false)}
                         onConfirm={(value) => {
@@ -1617,6 +1671,7 @@ const CalorieTracker = () => {
 
                 {showVault && (
                     <HistoryVaultModal
+                        liteMode={liteMode}
                         entriesByDay={entriesByDay}
                         todayKey={todayKey}
                         savedFoods={savedFoods}
