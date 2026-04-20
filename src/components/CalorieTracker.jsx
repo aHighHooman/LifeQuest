@@ -12,7 +12,6 @@ import {
     History,
     Plus,
     Save,
-    Target,
     Trash2,
     Zap
 } from 'lucide-react';
@@ -295,11 +294,14 @@ const buildRecentManualItems = (history, limit = 5) => {
 const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
     const [calories, setCalories] = useState('');
     const [label, setLabel] = useState('');
+    const [coinCost, setCoinCost] = useState('');
     const [bubbles] = useState(() => createBubbles().slice(0, 5));
     const [labelFocused, setLabelFocused] = useState(false);
+    const [coinFocused, setCoinFocused] = useState(false);
     const labelInputRef = useRef(null);
     const manualArcId = useId();
     const labelArcId = useId();
+    const costArcId = useId();
     const injectArcId = useId();
 
     const signedCalories = normalizeSignedCalories(calories);
@@ -318,6 +320,8 @@ const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
     };
     const labelDisplay = `${label}`.trim() ? shortenLabel(label, 16).toUpperCase() : 'LABEL';
     const labelActive = labelFocused || Boolean(`${label}`.trim());
+    const coinDisplay = normalizeCalories(coinCost) > 0 ? `${normalizeCalories(coinCost)} COINS` : 'COINS';
+    const coinActive = coinFocused || normalizeCalories(coinCost) > 0;
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -325,11 +329,13 @@ const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
 
         onSubmit({
             calories: signedCalories,
-            label: `${label}`.trim()
+            label: `${label}`.trim(),
+            coinCost: normalizeCalories(coinCost)
         });
 
         setCalories('');
         setLabel('');
+        setCoinCost('');
         onClose();
     };
 
@@ -369,12 +375,17 @@ const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
                 <defs>
                     <path id={manualArcId} d={describeOpenArc(50, 50, 43.7, orbGeometry.topStart, orbGeometry.topEnd, 1)} />
                     <path id={labelArcId} d={describeOpenArc(50, 50, 33.1, orbGeometry.topStart, orbGeometry.topEnd, 1)} />
+                    <path id={costArcId} d={describeOpenArc(50, 50, 33.1, 240, 300, 1)} />
                     <path id={injectArcId} d={describeOpenArc(50, 50, 33.4, orbGeometry.bottomEnd, orbGeometry.bottomStart, 0)} />
                 </defs>
 
                 <path
                     d={describeDonutSlice(50, 50, orbGeometry.innerInner, orbGeometry.innerOuter, orbGeometry.topStart, orbGeometry.topEnd)}
                     fill={labelFocused ? 'rgba(29, 16, 29, 0.94)' : label ? 'rgba(13, 17, 31, 0.95)' : 'rgba(7, 12, 24, 0.9)'}
+                />
+                <path
+                    d={describeDonutSlice(50, 50, orbGeometry.innerInner, orbGeometry.innerOuter, 240, 300)}
+                    fill={coinActive ? 'rgba(46, 30, 12, 0.94)' : 'rgba(10, 15, 26, 0.92)'}
                 />
                 <path
                     d={describeDonutSlice(50, 50, orbGeometry.innerInner, orbGeometry.innerOuter, orbGeometry.bottomStart, orbGeometry.bottomEnd)}
@@ -395,6 +406,16 @@ const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
                 >
                     <textPath href={`#${labelArcId}`} startOffset="50%" textAnchor="middle">
                         {labelDisplay}
+                    </textPath>
+                </text>
+                <text
+                    fill={coinActive ? 'rgba(253,230,138,0.95)' : 'rgba(148,163,184,0.68)'}
+                    fontSize="2.6"
+                    fontWeight="700"
+                    letterSpacing="0.1em"
+                >
+                    <textPath href={`#${costArcId}`} startOffset="50%" textAnchor="middle">
+                        {coinDisplay}
                     </textPath>
                 </text>
                 <text
@@ -423,6 +444,23 @@ const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
                     placeholder="LABEL"
                     aria-label="Label"
                     maxLength={32}
+                />
+            </label>
+
+            <label className="absolute left-[8%] top-1/2 z-20 block h-[20%] w-[24%] -translate-y-1/2 cursor-text">
+                <span className="sr-only">Coin cost</span>
+                <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={coinCost}
+                    onChange={(event) => setCoinCost(event.target.value)}
+                    onFocus={() => setCoinFocused(true)}
+                    onBlur={() => setCoinFocused(false)}
+                    onKeyDown={preventNumberStepperKeys}
+                    className="h-full w-full cursor-text rounded-[999px] bg-transparent opacity-0 outline-none"
+                    placeholder="0"
+                    aria-label="Coin cost"
                 />
             </label>
 
@@ -528,12 +566,13 @@ const EntryEditor = ({ entry, onSave, onCancel }) => {
 const SavedFoodEditor = ({ food, onSave, onCancel }) => {
     const [name, setName] = useState(food?.name || '');
     const [calories, setCalories] = useState(food?.calories || '');
+    const [coinCost, setCoinCost] = useState(food?.coinCost || '');
 
     const canSave = `${name}`.trim().length > 0 && normalizeCalories(calories) > 0;
 
     return (
         <div className="rounded-2xl border border-rose-500/20 bg-black/40 p-3">
-            <div className="grid gap-3 sm:grid-cols-[1.4fr_0.8fr]">
+            <div className="grid gap-3 sm:grid-cols-[1.4fr_0.8fr_0.8fr]">
                 <input
                     type="text"
                     value={name}
@@ -550,6 +589,15 @@ const SavedFoodEditor = ({ food, onSave, onCancel }) => {
                     onKeyDown={preventNumberStepperKeys}
                     className="no-number-spinner rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-rose-400"
                 />
+                <input
+                    type="number"
+                    min="0"
+                    value={coinCost}
+                    onChange={(event) => setCoinCost(event.target.value)}
+                    placeholder="Coins"
+                    onKeyDown={preventNumberStepperKeys}
+                    className="no-number-spinner rounded-xl border border-amber-500/20 bg-slate-950/70 px-3 py-2 text-sm text-amber-100 outline-none transition-colors focus:border-amber-300"
+                />
             </div>
             <div className="mt-3 flex gap-2">
                 <button
@@ -562,7 +610,7 @@ const SavedFoodEditor = ({ food, onSave, onCancel }) => {
                 <button
                     type="button"
                     disabled={!canSave}
-                    onClick={() => onSave({ name, calories: normalizeCalories(calories) })}
+                    onClick={() => onSave({ name, calories: normalizeCalories(calories), coinCost: normalizeCalories(coinCost) })}
                     className="flex-1 rounded-xl bg-rose-500 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-black disabled:cursor-not-allowed disabled:bg-rose-900/60 disabled:text-rose-200/50"
                 >
                     Save
@@ -576,44 +624,48 @@ const HistoryVaultModal = memo(({
     entriesByDay,
     todayKey,
     savedFoods,
-    initialTab = 'entries',
+    mode = 'entries',
+    selectionMode = null,
     onClose,
     onUpdateEntry,
     onDeleteEntry,
     onQuickAddFood,
+    onSelectFood,
     onCreateFood,
     onUpdateFood,
     onDeleteFood,
     liteMode = false
 }) => {
-    const [tab, setTab] = useState(initialTab);
     const [editingEntryId, setEditingEntryId] = useState(null);
     const [editingFoodId, setEditingFoodId] = useState(null);
     const [newFoodName, setNewFoodName] = useState('');
     const [newFoodCalories, setNewFoodCalories] = useState('');
+    const [newFoodCoinCost, setNewFoodCoinCost] = useState('');
     const dragControls = useDragControls();
     const scrollRef = useRef(null);
+    const isFoodSelectionMode = mode === 'foods' && selectionMode?.startsWith('assign-');
 
     useBodyScrollLock(true);
-
-    useEffect(() => {
-        setTab(initialTab);
-    }, [initialTab]);
 
     const canCreateFood = `${newFoodName}`.trim().length > 0 && normalizeCalories(newFoodCalories) > 0;
 
     const handleCreateFood = () => {
         if (!canCreateFood) return;
-        onCreateFood({ name: newFoodName, calories: normalizeCalories(newFoodCalories) });
+        onCreateFood({
+            name: newFoodName,
+            calories: normalizeCalories(newFoodCalories),
+            coinCost: normalizeCalories(newFoodCoinCost)
+        });
         setNewFoodName('');
         setNewFoodCalories('');
+        setNewFoodCoinCost('');
     };
 
     if (typeof document === 'undefined') return null;
 
     return createPortal(
         <div
-            className={clsx('fixed inset-0 z-[260] flex items-end justify-center bg-black/82', liteMode ? '' : 'backdrop-blur-md')}
+            className={clsx('fixed inset-0 z-[260] flex items-end justify-center bg-black/50', liteMode ? '' : 'backdrop-blur-[3px]')}
             onClick={onClose}
             data-no-swipe="true"
         >
@@ -634,22 +686,25 @@ const HistoryVaultModal = memo(({
                         onClose();
                     }
                 }}
-                className="flex h-[min(86svh,48rem)] w-full max-w-3xl flex-col overflow-hidden rounded-t-[30px] border border-rose-500/20 bg-slate-950 shadow-[0_0_60px_rgba(0,0,0,0.45)] md:mb-6 md:h-[min(88vh,50rem)] md:rounded-[30px]"
+                className={clsx(
+                    'flex h-[min(76svh,42rem)] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] border border-rose-500/20 bg-black/82 shadow-[0_0_40px_rgba(0,0,0,0.35)] md:mb-6 md:h-[min(80vh,44rem)] md:rounded-[28px]',
+                    liteMode ? '' : 'backdrop-blur-xl'
+                )}
                 onClick={(event) => event.stopPropagation()}
                 data-no-swipe="true"
             >
                 <div
-                    className="flex cursor-grab justify-center border-b border-rose-500/12 bg-black/35 px-5 pb-3 pt-3 active:cursor-grabbing"
+                    className="flex cursor-grab justify-center border-b border-rose-500/12 px-4 pb-3 pt-3 active:cursor-grabbing"
                     onPointerDown={(event) => dragControls.start(event)}
                 >
                     <div className="h-1.5 w-24 rounded-full bg-rose-400/30" />
                 </div>
 
-                <div className="border-b border-rose-500/15 bg-black/40 px-5 pb-4 pt-3">
+                <div className="border-b border-rose-500/15 bg-black/28 px-4 pb-4 pt-3 sm:px-5">
                     <div>
                         <div className="text-[10px] uppercase tracking-[0.3em] text-rose-400/65">Archive Console</div>
                         <div className="mt-1 font-game text-xl font-semibold uppercase tracking-[0.08em] text-rose-50">
-                            Calorie Vault
+                            {mode === 'foods' ? 'Food Vault' : 'Calorie Vault'}
                         </div>
                         <div className="mt-2 text-[10px] uppercase tracking-[0.24em] text-slate-500">
                             Drag the handle down to close
@@ -657,34 +712,12 @@ const HistoryVaultModal = memo(({
                     </div>
                 </div>
 
-                <div className="flex gap-2 border-b border-rose-500/15 px-5 py-3" data-no-swipe="true">
-                    {[
-                        { id: 'entries', label: 'Entries', icon: <History size={14} /> },
-                        { id: 'foods', label: 'Foods', icon: <BookOpen size={14} /> }
-                    ].map((item) => (
-                        <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => setTab(item.id)}
-                            className={clsx(
-                                'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] transition-colors',
-                                tab === item.id
-                                    ? 'border-rose-400/50 bg-rose-500/10 text-rose-100'
-                                    : 'border-slate-700/60 bg-slate-900/60 text-slate-400 hover:text-white'
-                            )}
-                        >
-                            {item.icon}
-                            {item.label}
-                        </button>
-                    ))}
-                </div>
-
                 <div
                     ref={scrollRef}
-                    className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 space-y-4"
+                    className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 space-y-4 sm:px-5"
                     data-no-swipe="true"
                 >
-                    {tab === 'entries' && (
+                    {mode === 'entries' && (
                         <div className="space-y-4">
                             {entriesByDay.length === 0 && (
                                 <div className="rounded-3xl border border-dashed border-slate-700/60 bg-slate-900/40 px-6 py-12 text-center text-slate-400">
@@ -717,7 +750,7 @@ const HistoryVaultModal = memo(({
 
                                         <div className="mt-4 space-y-3">
                                             {group.entries.map((entry) => (
-                                                <div key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-950/55 p-3">
+                                                <div key={entry.id} className="rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0">
                                                             <div className="text-[10px] uppercase tracking-[0.24em] text-rose-400/55">
@@ -776,15 +809,20 @@ const HistoryVaultModal = memo(({
                         </div>
                     )}
 
-                    {tab === 'foods' && (
+                    {mode === 'foods' && (
                         <div className="space-y-4">
                             <div className="rounded-[28px] border border-rose-500/15 bg-black/35 p-4">
                                 <div className="text-[10px] uppercase tracking-[0.28em] text-rose-400/65">Food Library</div>
                                 <div className="mt-1 font-game text-lg font-semibold uppercase tracking-[0.08em] text-rose-50">
                                     Add Remembered Foods
                                 </div>
+                                {isFoodSelectionMode && (
+                                    <div className="mt-2 text-[10px] uppercase tracking-[0.22em] text-slate-400">
+                                        Tap any saved food below to bind it to the quick slot.
+                                    </div>
+                                )}
 
-                                <div className="mt-4 grid gap-3 sm:grid-cols-[1.4fr_0.8fr_auto]">
+                                <div className="mt-4 grid gap-3 sm:grid-cols-[1.4fr_0.8fr_0.8fr_auto]">
                                     <input
                                         type="text"
                                         value={newFoodName}
@@ -799,6 +837,15 @@ const HistoryVaultModal = memo(({
                                         onChange={(event) => setNewFoodCalories(event.target.value)}
                                         placeholder="420"
                                         className="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors focus:border-rose-400"
+                                    />
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={newFoodCoinCost}
+                                        onChange={(event) => setNewFoodCoinCost(event.target.value)}
+                                        placeholder="Coins"
+                                        onKeyDown={preventNumberStepperKeys}
+                                        className="rounded-2xl border border-amber-500/20 bg-slate-950/70 px-4 py-3 text-sm text-amber-100 outline-none transition-colors focus:border-amber-300"
                                     />
                                     <button
                                         type="button"
@@ -834,13 +881,27 @@ const HistoryVaultModal = memo(({
                                         />
                                     ) : (
                                         <div className="flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
+                                            <button
+                                                type="button"
+                                                onClick={isFoodSelectionMode ? () => onSelectFood?.(food) : undefined}
+                                                className={clsx(
+                                                    'min-w-0 flex-1 text-left',
+                                                    isFoodSelectionMode && 'transition-opacity hover:opacity-90'
+                                                )}
+                                            >
                                                 <div className="text-[10px] uppercase tracking-[0.24em] text-rose-400/55">Remembered Food</div>
                                                 <div className="mt-1 truncate font-game text-base font-semibold uppercase tracking-[0.08em] text-slate-100">
                                                     {food.name}
                                                 </div>
-                                                <div className="mt-2 text-xs text-slate-400">{food.calories} kcal</div>
-                                            </div>
+                                                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                                    <span>{food.calories} kcal</span>
+                                                    {normalizeCalories(food.coinCost) > 0 && (
+                                                        <span className="rounded-full border border-amber-500/20 bg-amber-950/25 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.12em] text-amber-200">
+                                                            {food.coinCost} coins
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </button>
 
                                             <div className="flex items-center gap-2">
                                                 <button
@@ -878,71 +939,45 @@ const HistoryVaultModal = memo(({
     );
 });
 
-const GoalSettingModal = memo(({ current, onConfirm, onClose, liteMode = false }) => {
-    const [value, setValue] = useState(current);
-
-    return (
-        <div className={clsx('fixed inset-0 z-[170] flex items-center justify-center bg-black/80 p-4', liteMode ? '' : 'backdrop-blur-sm')} onClick={onClose}>
-            <Motion.div
-                initial={liteMode ? { opacity: 0, y: 8 } : { opacity: 0, scale: 0.95, y: 12 }}
-                animate={liteMode ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 }}
-                exit={liteMode ? { opacity: 0, y: 8 } : { opacity: 0, scale: 0.95, y: 12 }}
-                transition={liteMode ? { duration: 0.16, ease: 'easeOut' } : undefined}
-                onClick={(event) => event.stopPropagation()}
-                className="w-full max-w-sm rounded-[28px] border border-rose-500/25 bg-slate-950 p-6 shadow-[0_0_50px_rgba(0,0,0,0.45)]"
-            >
-                <div className="text-[10px] uppercase tracking-[0.3em] text-rose-400/65">Target Configuration</div>
-                <div className="mt-1 font-game text-xl font-semibold uppercase tracking-[0.08em] text-rose-50">
-                    Daily Calorie Goal
-                </div>
-
-                <input
-                    autoFocus
-                    type="number"
-                    min="1"
-                    value={value}
-                    onChange={(event) => setValue(event.target.value)}
-                    onKeyDown={preventNumberStepperKeys}
-                    className="no-number-spinner mt-5 w-full rounded-2xl border border-rose-500/25 bg-black px-4 py-3 text-xl font-mono text-rose-50 outline-none transition-colors focus:border-rose-400"
-                />
-
-                <div className="mt-4 flex gap-3">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex-1 rounded-2xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-300 transition-colors hover:text-white"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onConfirm(Math.max(1, normalizeCalories(value)))}
-                        className="flex-1 rounded-2xl bg-rose-500 px-4 py-3 text-xs font-bold uppercase tracking-[0.2em] text-black transition-colors hover:bg-rose-400"
-                    >
-                        Confirm
-                    </button>
-                </div>
-            </Motion.div>
-        </div>
-    );
-});
-
-const RadialHub = memo(({ current, target, onClick, liteMode = false }) => {
+const RadialHub = memo(({
+    current,
+    target,
+    onClick,
+    isEditing = false,
+    editValue = '',
+    onEditValueChange,
+    onEditSubmit,
+    liteMode = false
+}) => {
     const safeTarget = getSafeTarget(target);
     const percentage = Math.min((Number(current || 0) / safeTarget) * 100, 100);
     const isOverload = Number(current || 0) > safeTarget;
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+        if (!isEditing) return;
+        inputRef.current?.focus();
+        inputRef.current?.select();
+    }, [isEditing]);
 
     return (
-        <Motion.button
-            type="button"
+        <Motion.div
             whileTap={liteMode ? undefined : { scale: 0.985 }}
-            onClick={onClick}
+            onClick={() => onClick?.()}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onClick?.();
+                }
+            }}
             className="group relative h-full w-full rounded-full"
-            aria-label="Edit calorie goal"
+            role="button"
+            tabIndex={0}
+            aria-label={isEditing ? 'Editing calorie goal' : 'Edit calorie goal'}
         >
-            <div className="absolute inset-0 rounded-full border-[3px] border-slate-800/90 bg-black/60 shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
+            <div className="absolute inset-0 rounded-full border-[2px] border-slate-800/80 bg-black/50 shadow-[0_0_40px_rgba(0,0,0,0.42)]" />
 
-            <div className="absolute inset-2 overflow-hidden rounded-full border border-rose-900/30 bg-slate-900">
+            <div className="absolute inset-[5px] overflow-hidden rounded-full border border-rose-900/30 bg-slate-900">
                 <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(244,63,94,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(244,63,94,0.1)_1px,transparent_1px)] bg-[size:20px_20px]" />
 
                 <Motion.div
@@ -962,41 +997,75 @@ const RadialHub = memo(({ current, target, onClick, liteMode = false }) => {
             </div>
 
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center px-4 text-center">
-                {liteMode ? (
-                    <div className="font-mono text-5xl font-black tracking-tighter text-white">
-                        {current}
+                {isEditing ? (
+                    <div
+                        className="flex w-full max-w-[10rem] flex-col items-center"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <input
+                            ref={inputRef}
+                            type="number"
+                            min="1"
+                            value={editValue}
+                            onChange={(event) => onEditValueChange?.(event.target.value)}
+                            onKeyDown={(event) => {
+                                preventNumberStepperKeys(event);
+
+                                if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    onEditSubmit?.();
+                                }
+
+                                if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    inputRef.current?.blur();
+                                }
+                            }}
+                            className="no-number-spinner w-full bg-transparent px-0 py-0 text-center font-mono text-5xl font-black tracking-tighter text-white outline-none"
+                        />
+                        <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.3em] text-rose-200/80">
+                            Target kCal
+                        </div>
                     </div>
                 ) : (
-                    <Motion.div
-                        key={current}
-                        initial={{ scale: 1.2, opacity: 0.5 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="font-mono text-5xl font-black tracking-tighter text-white"
-                    >
-                        {current}
-                    </Motion.div>
-                )}
-                <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.3em] text-rose-200/80">
-                    kCal Today
-                </div>
+                    <>
+                        {liteMode ? (
+                            <div className="font-mono text-5xl font-black tracking-tighter text-white">
+                                {current}
+                            </div>
+                        ) : (
+                            <Motion.div
+                                key={current}
+                                initial={{ scale: 1.2, opacity: 0.5 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="font-mono text-5xl font-black tracking-tighter text-white"
+                            >
+                                {current}
+                            </Motion.div>
+                        )}
+                        <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.3em] text-rose-200/80">
+                            kCal Today
+                        </div>
 
-                <div
-                    className={clsx(
-                        'mt-4 inline-flex items-center gap-2 px-1 py-1 transition-colors drop-shadow-[0_0_14px_rgba(2,6,23,0.95)]',
-                        isOverload
-                            ? 'text-red-300'
-                            : 'text-rose-200'
-                    )}
-                >
-                    {isOverload ? <AlertTriangle size={12} /> : <Activity size={12} />}
-                    <span className="text-[10px] font-mono font-bold uppercase">
-                        {isOverload ? 'CRITICAL LOAD' : 'SYSTEM STABLE'}
-                    </span>
-                </div>
+                        <div
+                            className={clsx(
+                                'mt-4 inline-flex items-center gap-2 px-1 py-1 transition-colors drop-shadow-[0_0_14px_rgba(2,6,23,0.95)]',
+                                isOverload
+                                    ? 'text-red-300'
+                                    : 'text-rose-200'
+                            )}
+                        >
+                            {isOverload ? <AlertTriangle size={12} /> : <Activity size={12} />}
+                            <span className="text-[10px] font-mono font-bold uppercase">
+                                {isOverload ? 'CRITICAL LOAD' : 'SYSTEM STABLE'}
+                            </span>
+                        </div>
+                    </>
+                )}
             </div>
 
             <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
-        </Motion.button>
+        </Motion.div>
     );
 });
 
@@ -1037,10 +1106,13 @@ const FoodsTray = memo(({
     onQuickAddFood,
     onSelectRecent,
     onOpenManager,
+    selectionMode = null,
+    onSelectFood,
     liteMode = false
 }) => {
     const dragControls = useDragControls();
     const scrollRef = useRef(null);
+    const isFoodSelectionMode = selectionMode?.startsWith('assign-');
 
     useBodyScrollLock(true);
 
@@ -1077,10 +1149,17 @@ const FoodsTray = memo(({
 
             <div className="flex items-start justify-between gap-3 px-4 pb-4 pt-3 sm:px-5">
                 <div>
-                    <div className="text-[10px] uppercase tracking-[0.28em] text-rose-400/65">Foods Sector</div>
-                    <div className="mt-1 font-game text-lg font-semibold uppercase tracking-[0.08em] text-rose-50">
-                        Quick Add by Memory
+                    <div className="text-[10px] uppercase tracking-[0.28em] text-rose-400/65">
+                        {isFoodSelectionMode ? 'Quick Slot Link' : 'Foods Sector'}
                     </div>
+                    <div className="mt-1 font-game text-lg font-semibold uppercase tracking-[0.08em] text-rose-50">
+                        {isFoodSelectionMode ? 'Bind a Saved Meal' : 'Quick Add by Memory'}
+                    </div>
+                    {isFoodSelectionMode && (
+                        <div className="mt-2 text-[10px] uppercase tracking-[0.22em] text-slate-400">
+                            Pick a saved food for this quick slot.
+                        </div>
+                    )}
                 </div>
 
                 <button
@@ -1117,7 +1196,14 @@ const FoodsTray = memo(({
                                     subtitle="Remembered Food"
                                     icon={<BookOpen size={15} />}
                                     tone="rose"
-                                    onClick={() => onQuickAddFood(food)}
+                                    onClick={() => {
+                                        if (isFoodSelectionMode) {
+                                            onSelectFood?.(food);
+                                            return;
+                                        }
+
+                                        onQuickAddFood(food);
+                                    }}
                                 />
                             ))}
                         </div>
@@ -1155,9 +1241,13 @@ const FoodsTray = memo(({
     );
 });
 
-const WheelSectorContent = memo(({ segment }) => (
+const WheelSectorContent = memo(({ segment, hidden = false }) => (
     <div
-        className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center"
+        className={clsx(
+            'pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center transition-opacity duration-200',
+            hidden ? 'opacity-0' : 'opacity-100'
+        )}
+        aria-hidden={hidden}
         style={{ ...getWheelPosition(segment.center, segment.radius), width: `${segment.width}%` }}
     >
         <div className={clsx('flex flex-col items-center', segment.compact ? 'gap-0.5' : 'gap-1', segment.interactive ? 'text-slate-100' : 'text-slate-200')}>
@@ -1176,6 +1266,8 @@ const WheelSectorContent = memo(({ segment }) => (
                     'leading-none max-w-full truncate',
                     segment.kind === 'preset'
                         ? 'font-mono text-base font-black sm:text-lg'
+                        : segment.kind === 'food-slot'
+                            ? 'font-game text-[10px] font-semibold uppercase tracking-[0.06em] sm:text-[11px]'
                         : 'font-game text-[11px] font-semibold uppercase tracking-[0.08em] sm:text-xs'
                 )}
             >
@@ -1199,24 +1291,28 @@ const SegmentedWheel = memo(({
     current,
     target,
     lastEntry,
-    todayEntryCount,
     savedFoodsCount,
-    remaining,
-    overBy,
-    isOverload,
+    preset100Food = null,
+    preset250Food = null,
+    preset400Food = null,
+    preset550Food = null,
     activeSector,
     onGoal,
+    isHeroEditing = false,
+    heroEditValue = '',
+    onHeroEditValueChange,
+    onHeroEditSubmit,
     onPreset100,
     onPreset250,
+    onPreset400,
+    onPreset550,
     onManual,
-    onFoods,
-    onHistory,
+    onFoodsMenu,
+    onHistoryMenu,
     liteMode = false
 }) => {
-    const percentToGoal = Math.min(Math.round((current / getSafeTarget(target)) * 100), 999);
     const latestTime = lastEntry ? formatTime(lastEntry.timestamp) : '--:--';
     const latestLabel = lastEntry ? shortenLabel(lastEntry.label, 8) : 'Idle';
-    const summaryStatus = isOverload ? `+${overBy}` : `-${remaining}`;
 
     const segments = useMemo(() => ([
         {
@@ -1229,37 +1325,43 @@ const SegmentedWheel = memo(({
         },
         {
             ...WHEEL_SEGMENTS[1],
-            interactive: false,
-            tone: 'slate',
-            icon: isOverload ? <AlertTriangle size={12} /> : <Activity size={12} />,
-            primary: `${percentToGoal}%`,
-            secondary: 'Target'
-        },
-        {
-            ...WHEEL_SEGMENTS[2],
-            interactive: false,
-            tone: 'slate',
-            icon: <Flame size={12} />,
-            primary: `${todayEntryCount} Log`,
-            secondary: summaryStatus
-        },
-        {
-            ...WHEEL_SEGMENTS[3],
-            interactive: true,
-            tone: 'slate',
-            icon: <History size={15} />,
-            primary: 'History',
-            secondary: 'Archive',
-            onClick: onHistory
-        },
-        {
-            ...WHEEL_SEGMENTS[4],
             interactive: true,
             tone: 'slate',
             icon: <BookOpen size={15} />,
             primary: 'Foods',
             secondary: `${savedFoodsCount} saved`,
-            onClick: onFoods
+            onClick: onFoodsMenu
+        },
+        {
+            ...WHEEL_SEGMENTS[2],
+            interactive: true,
+            tone: 'slate',
+            icon: <History size={15} />,
+            primary: 'History',
+            secondary: 'Archive',
+            onClick: onHistoryMenu
+        },
+        {
+            ...WHEEL_SEGMENTS[3],
+            interactive: true,
+            tone: 'rose',
+            kind: preset400Food ? 'food-slot' : 'preset',
+            icon: <Flame size={15} />,
+            primary: preset400Food ? shortenLabel(preset400Food.name, 9) : '400',
+            secondary: 'Inject',
+            editInteractive: true,
+            onClick: onPreset400
+        },
+        {
+            ...WHEEL_SEGMENTS[4],
+            interactive: true,
+            tone: 'rose',
+            kind: preset550Food ? 'food-slot' : 'preset',
+            icon: <Plus size={15} />,
+            primary: preset550Food ? shortenLabel(preset550Food.name, 9) : '550',
+            secondary: 'Inject',
+            editInteractive: true,
+            onClick: onPreset550
         },
         {
             ...WHEEL_SEGMENTS[5],
@@ -1274,41 +1376,47 @@ const SegmentedWheel = memo(({
             ...WHEEL_SEGMENTS[6],
             interactive: true,
             tone: 'rose',
-            kind: 'preset',
+            kind: preset250Food ? 'food-slot' : 'preset',
             icon: <Flame size={15} />,
-            primary: '250',
+            primary: preset250Food ? shortenLabel(preset250Food.name, 9) : '250',
             secondary: 'Inject',
+            editInteractive: true,
             onClick: onPreset250
         },
         {
             ...WHEEL_SEGMENTS[7],
             interactive: true,
             tone: 'rose',
-            kind: 'preset',
+            kind: preset100Food ? 'food-slot' : 'preset',
             icon: <Plus size={15} />,
-            primary: '100',
+            primary: preset100Food ? shortenLabel(preset100Food.name, 9) : '100',
             secondary: 'Inject',
+            editInteractive: true,
             onClick: onPreset100
         }
     ]), [
-        isOverload,
         latestLabel,
         latestTime,
-        onFoods,
-        onHistory,
         onManual,
         onPreset100,
         onPreset250,
-        percentToGoal,
-        savedFoodsCount,
-        summaryStatus,
-        todayEntryCount
+        onPreset400,
+        onPreset550,
+        onFoodsMenu,
+        onHistoryMenu,
+        preset100Food,
+        preset250Food,
+        preset400Food,
+        preset550Food,
+        savedFoodsCount
     ]);
 
     const getSegmentColors = (segment) => {
         const isActive = activeSector === segment.id;
 
-        if (!segment.interactive) {
+        const keepQuickSlotTone = segment.editInteractive;
+
+        if (!segment.interactive || (isHeroEditing && !keepQuickSlotTone)) {
             return {
                 fill: 'rgba(8, 13, 22, 0.94)',
                 stroke: 'rgba(51, 65, 85, 0.22)'
@@ -1377,26 +1485,24 @@ const SegmentedWheel = memo(({
                 <circle cx="50" cy="50" r="49.2" fill="rgba(2,6,23,0.97)" stroke="rgba(15,23,42,0.92)" strokeWidth="1.4" />
 
                 {segments.map((segment) => {
-                    const visualStart = segment.start + 1.2;
-                    const visualEnd = segment.end - 1.2;
                     const { fill, stroke } = getSegmentColors(segment);
 
                     return (
                         <path
                             key={segment.id}
-                            d={describeDonutSlice(50, 50, 27.8, 47.6, visualStart, visualEnd)}
+                            d={describeDonutSlice(50, 50, 27.8, 47.6, segment.start, segment.end)}
                             fill={fill}
                             stroke={stroke}
                             strokeWidth={segment.interactive && activeSector === segment.id ? 1.2 : 0.7}
                             className={clsx(
-                                segment.interactive && 'cursor-pointer transition-[fill,stroke,filter] focus:outline-none focus-visible:outline-none focus-visible:stroke-rose-300 focus-visible:[filter:drop-shadow(0_0_6px_rgba(251,113,133,0.45))]'
+                                segment.interactive && (!isHeroEditing || segment.editInteractive) && 'cursor-pointer transition-[fill,stroke,filter] focus:outline-none focus-visible:outline-none focus-visible:stroke-rose-300 focus-visible:[filter:drop-shadow(0_0_6px_rgba(251,113,133,0.45))]'
                             )}
-                            onClick={segment.interactive ? segment.onClick : undefined}
-                            onMouseDown={segment.interactive ? (event) => event.preventDefault() : undefined}
-                            onKeyDown={segment.interactive ? (event) => handleSectorKeyDown(event, segment.onClick) : undefined}
-                            role={segment.interactive ? 'button' : undefined}
-                            tabIndex={segment.interactive ? 0 : undefined}
-                            aria-label={segment.interactive ? segment.primary : undefined}
+                            onClick={segment.interactive && (!isHeroEditing || segment.editInteractive) ? segment.onClick : undefined}
+                            onMouseDown={segment.interactive && (!isHeroEditing || segment.editInteractive) ? (event) => event.preventDefault() : undefined}
+                            onKeyDown={segment.interactive && (!isHeroEditing || segment.editInteractive) ? (event) => handleSectorKeyDown(event, segment.onClick) : undefined}
+                            role={segment.interactive && (!isHeroEditing || segment.editInteractive) ? 'button' : undefined}
+                            tabIndex={segment.interactive && (!isHeroEditing || segment.editInteractive) ? 0 : undefined}
+                            aria-label={segment.interactive && (!isHeroEditing || segment.editInteractive) ? segment.primary : undefined}
                         />
                     );
                 })}
@@ -1406,11 +1512,20 @@ const SegmentedWheel = memo(({
             </svg>
 
             {segments.map((segment) => (
-                <WheelSectorContent key={`${segment.id}-content`} segment={segment} />
+                <WheelSectorContent key={`${segment.id}-content`} segment={segment} hidden={isHeroEditing} />
             ))}
 
-            <div className="absolute inset-[25.5%] z-20 sm:inset-[26%]">
-                <RadialHub current={current} target={target} onClick={onGoal} liteMode={liteMode} />
+            <div className="absolute inset-[23.9%] z-20 sm:inset-[24.4%]">
+                <RadialHub
+                    current={current}
+                    target={target}
+                    onClick={onGoal}
+                    isEditing={isHeroEditing}
+                    editValue={heroEditValue}
+                    onEditValueChange={onHeroEditValueChange}
+                    onEditSubmit={onHeroEditSubmit}
+                    liteMode={liteMode}
+                />
             </div>
         </Motion.div>
     );
@@ -1425,7 +1540,9 @@ const CalorieTracker = () => {
         createSavedFood,
         updateSavedFood,
         deleteSavedFood,
-        setCalorieGoal
+        setCalorieGoal,
+        assignQuickSlotFood,
+        spendCoins
     } = useGameCalories();
 
     const todayKey = getTodayISO();
@@ -1439,16 +1556,18 @@ const CalorieTracker = () => {
     const remaining = Math.max(safeTarget - currentCalories, 0);
     const overBy = Math.max(currentCalories - safeTarget, 0);
 
-    const [showGoalModal, setShowGoalModal] = useState(false);
     const [showVault, setShowVault] = useState(false);
     const [vaultTab, setVaultTab] = useState('entries');
     const [activeSheet, setActiveSheet] = useState(null);
+    const [isHeroEditing, setIsHeroEditing] = useState(false);
+    const [heroEditValue, setHeroEditValue] = useState(() => `${safeTarget}`);
+    const [foodPickerTarget, setFoodPickerTarget] = useState(null);
     const liteMode = useMobileLiteMode();
 
     const isFoodsTrayOpen = activeSheet === 'foods';
     const shouldPrepareSavedFoods = showVault || isFoodsTrayOpen;
 
-    const { todayEntries, lastEntry } = useMemo(() => getTodayEntriesSnapshot(history, todayKey), [history, todayKey]);
+    const { lastEntry } = useMemo(() => getTodayEntriesSnapshot(history, todayKey), [history, todayKey]);
 
     const savedFoods = useMemo(() => {
         if (!shouldPrepareSavedFoods) return EMPTY_LIST;
@@ -1461,6 +1580,10 @@ const CalorieTracker = () => {
     }, [history, showVault]);
 
     const savedFoodsById = useMemo(() => new Map(rawSavedFoods.map((food) => [food.id, food])), [rawSavedFoods]);
+    const preset100Food = calories?.preset100FoodId ? savedFoodsById.get(calories.preset100FoodId) || null : null;
+    const preset250Food = calories?.preset250FoodId ? savedFoodsById.get(calories.preset250FoodId) || null : null;
+    const preset400Food = calories?.preset400FoodId ? savedFoodsById.get(calories.preset400FoodId) || null : null;
+    const preset550Food = calories?.preset550FoodId ? savedFoodsById.get(calories.preset550FoodId) || null : null;
     const recentManualItems = useMemo(() => buildRecentManualItems(history), [history]);
 
     const recentItems = useMemo(() => {
@@ -1492,13 +1615,38 @@ const CalorieTracker = () => {
 
     const handleQuickFood = useCallback((food) => {
         setActiveSheet(null);
+        if (normalizeCalories(food?.coinCost) > 0) {
+            spendCoins(normalizeCalories(food.coinCost), `Food inject: ${food.name}`);
+        }
         logCalories({
             calories: food.calories,
             label: food.name,
             source: 'saved-food',
             foodId: food.id
         });
-    }, [logCalories]);
+    }, [logCalories, spendCoins]);
+
+    const handleQuickSlotFoodSelect = useCallback((food) => {
+        if (foodPickerTarget === 'preset100') {
+            assignQuickSlotFood('preset100', food.id);
+        }
+
+        if (foodPickerTarget === 'preset250') {
+            assignQuickSlotFood('preset250', food.id);
+        }
+
+        if (foodPickerTarget === 'preset400') {
+            assignQuickSlotFood('preset400', food.id);
+        }
+
+        if (foodPickerTarget === 'preset550') {
+            assignQuickSlotFood('preset550', food.id);
+        }
+
+        setActiveSheet(null);
+        setShowVault(false);
+        setFoodPickerTarget(null);
+    }, [assignQuickSlotFood, foodPickerTarget]);
 
     const handleRecentSelection = useCallback((item) => {
         if (item.food) {
@@ -1514,13 +1662,17 @@ const CalorieTracker = () => {
         });
     }, [handleQuickFood, logCalories]);
 
-    const handleManualSubmit = useCallback(({ calories: amount, label }) => {
+    const handleManualSubmit = useCallback(({ calories: amount, label, coinCost = 0 }) => {
         if (`${label}`.trim() && amount > 0) {
             const food = createSavedFood({
                 name: label,
-                calories: amount
+                calories: amount,
+                coinCost
             });
 
+            if (normalizeCalories(food.coinCost) > 0) {
+                spendCoins(normalizeCalories(food.coinCost), `Food inject: ${food.name}`);
+            }
             logCalories({
                 calories: food.calories,
                 label: food.name,
@@ -1530,12 +1682,15 @@ const CalorieTracker = () => {
             return;
         }
 
+        if (normalizeCalories(coinCost) > 0 && amount > 0) {
+            spendCoins(normalizeCalories(coinCost), `Manual inject: ${label || 'Unnamed item'}`);
+        }
         logCalories({
             calories: amount,
             label: label || (amount < 0 ? 'Exercise Burn' : 'Manual Entry'),
             source: 'manual'
         });
-    }, [createSavedFood, logCalories]);
+    }, [createSavedFood, logCalories, spendCoins]);
 
     const toggleSheet = useCallback((sheetId) => {
         startTransition(() => {
@@ -1545,42 +1700,120 @@ const CalorieTracker = () => {
 
     const openHistory = useCallback(() => {
         setActiveSheet(null);
+        setFoodPickerTarget(null);
         setVaultTab('entries');
         startTransition(() => {
             setShowVault(true);
         });
     }, []);
 
+    const handleQuickPreset400 = useCallback(() => {
+        if (isHeroEditing) {
+            setFoodPickerTarget('preset400');
+            setActiveSheet('foods');
+            return;
+        }
+
+        if (preset400Food) {
+            handleQuickFood(preset400Food);
+            return;
+        }
+
+        handleQuickPreset(400);
+    }, [handleQuickFood, handleQuickPreset, isHeroEditing, preset400Food]);
+
     const openFoodManager = useCallback(() => {
+        if (isHeroEditing && !foodPickerTarget) return;
         setActiveSheet(null);
         setVaultTab('foods');
         startTransition(() => {
             setShowVault(true);
         });
-    }, []);
+    }, [foodPickerTarget, isHeroEditing]);
 
-    const openGoalModal = useCallback(() => {
+    const handleHeroPress = useCallback(() => {
+        if (isHeroEditing) {
+            const nextGoal = Math.max(1, normalizeCalories(heroEditValue));
+            setCalorieGoal(nextGoal);
+            setHeroEditValue(`${nextGoal}`);
+            setActiveSheet(null);
+            setShowVault(false);
+            setFoodPickerTarget(null);
+            setIsHeroEditing(false);
+            return;
+        }
+
         setActiveSheet(null);
+        setShowVault(false);
+        setFoodPickerTarget(null);
+        setHeroEditValue(`${safeTarget}`);
         startTransition(() => {
-            setShowGoalModal(true);
+            setIsHeroEditing(true);
         });
-    }, []);
+    }, [heroEditValue, isHeroEditing, safeTarget, setCalorieGoal]);
+
+    const submitHeroEdit = useCallback(() => {
+        const nextGoal = Math.max(1, normalizeCalories(heroEditValue));
+        setCalorieGoal(nextGoal);
+        setHeroEditValue(`${nextGoal}`);
+        setFoodPickerTarget(null);
+        setIsHeroEditing(false);
+    }, [heroEditValue, setCalorieGoal]);
 
     const handleQuickPreset100 = useCallback(() => {
+        if (isHeroEditing) {
+            setFoodPickerTarget('preset100');
+            setActiveSheet('foods');
+            return;
+        }
+
+        if (preset100Food) {
+            handleQuickFood(preset100Food);
+            return;
+        }
+
         handleQuickPreset(100);
-    }, [handleQuickPreset]);
+    }, [handleQuickFood, handleQuickPreset, isHeroEditing, preset100Food]);
 
     const handleQuickPreset250 = useCallback(() => {
+        if (isHeroEditing) {
+            setFoodPickerTarget('preset250');
+            setActiveSheet('foods');
+            return;
+        }
+
+        if (preset250Food) {
+            handleQuickFood(preset250Food);
+            return;
+        }
+
         handleQuickPreset(250);
-    }, [handleQuickPreset]);
+    }, [handleQuickFood, handleQuickPreset, isHeroEditing, preset250Food]);
 
     const openManualSheet = useCallback(() => {
+        if (isHeroEditing) return;
         toggleSheet('manual');
-    }, [toggleSheet]);
+    }, [isHeroEditing, toggleSheet]);
 
     const openFoodsSheet = useCallback(() => {
+        setFoodPickerTarget(null);
         toggleSheet('foods');
     }, [toggleSheet]);
+
+    const handleQuickPreset550 = useCallback(() => {
+        if (isHeroEditing) {
+            setFoodPickerTarget('preset550');
+            setActiveSheet('foods');
+            return;
+        }
+
+        if (preset550Food) {
+            handleQuickFood(preset550Food);
+            return;
+        }
+
+        handleQuickPreset(550);
+    }, [handleQuickFood, handleQuickPreset, isHeroEditing, preset550Food]);
 
     const sheetPortal = typeof document !== 'undefined'
         ? createPortal(
@@ -1614,6 +1847,8 @@ const CalorieTracker = () => {
                                 onQuickAddFood={handleQuickFood}
                                 onSelectRecent={handleRecentSelection}
                                 onOpenManager={openFoodManager}
+                                selectionMode={foodPickerTarget ? `assign-${foodPickerTarget}` : null}
+                                onSelectFood={handleQuickSlotFoodSelect}
                             />
                         </div>
                     </div>
@@ -1640,46 +1875,65 @@ const CalorieTracker = () => {
                         current={currentCalories}
                         target={safeTarget}
                         lastEntry={lastEntry}
-                        todayEntryCount={todayEntries.length}
                         savedFoodsCount={savedFoodsCount}
+                        preset100Food={preset100Food}
+                        preset250Food={preset250Food}
+                        preset400Food={preset400Food}
+                        preset550Food={preset550Food}
                         remaining={remaining}
                         overBy={overBy}
                         isOverload={isOverload}
-                        activeSector={showVault ? 'history' : activeSheet}
-                        onGoal={openGoalModal}
+                        activeSector={
+                            isHeroEditing
+                                ? (
+                                    foodPickerTarget === 'preset100'
+                                        ? 'preset-100'
+                                        : foodPickerTarget === 'preset250'
+                                            ? 'preset-250'
+                                            : foodPickerTarget === 'preset400'
+                                                ? 'history'
+                                                : foodPickerTarget === 'preset550'
+                                                    ? 'foods'
+                                            : null
+                                )
+                                : (
+                                    showVault
+                                        ? (vaultTab === 'foods' ? 'progress' : 'summary')
+                                        : activeSheet === 'foods'
+                                            ? 'progress'
+                                            : activeSheet
+                                )
+                        }
+                        onGoal={handleHeroPress}
+                        isHeroEditing={isHeroEditing}
+                        heroEditValue={heroEditValue}
+                        onHeroEditValueChange={setHeroEditValue}
+                        onHeroEditSubmit={submitHeroEdit}
                         onPreset100={handleQuickPreset100}
                         onPreset250={handleQuickPreset250}
+                        onPreset400={handleQuickPreset400}
+                        onPreset550={handleQuickPreset550}
                         onManual={openManualSheet}
-                        onFoods={openFoodsSheet}
-                        onHistory={openHistory}
+                        onFoodsMenu={openFoodsSheet}
+                        onHistoryMenu={openHistory}
                     />
                 </div>
             </div>
 
             <AnimatePresence>
-                {showGoalModal && (
-                    <GoalSettingModal
-                        liteMode={liteMode}
-                        current={safeTarget}
-                        onClose={() => setShowGoalModal(false)}
-                        onConfirm={(value) => {
-                            setCalorieGoal(value);
-                            setShowGoalModal(false);
-                        }}
-                    />
-                )}
-
                 {showVault && (
                     <HistoryVaultModal
                         liteMode={liteMode}
                         entriesByDay={entriesByDay}
                         todayKey={todayKey}
                         savedFoods={savedFoods}
-                        initialTab={vaultTab}
+                        mode={vaultTab}
                         onClose={() => setShowVault(false)}
+                        selectionMode={foodPickerTarget ? `assign-${foodPickerTarget}` : null}
                         onUpdateEntry={updateCalorieEntry}
                         onDeleteEntry={deleteCalorieEntry}
                         onQuickAddFood={handleQuickFood}
+                        onSelectFood={handleQuickSlotFoodSelect}
                         onCreateFood={createSavedFood}
                         onUpdateFood={updateSavedFood}
                         onDeleteFood={deleteSavedFood}

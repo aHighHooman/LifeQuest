@@ -46,7 +46,17 @@ const INITIAL_SETTINGS = {
     }
 };
 
-const INITIAL_CALORIES = { current: 0, target: 2000, history: [], savedFoods: [], recentFoodIds: [] };
+const INITIAL_CALORIES = {
+    current: 0,
+    target: 2000,
+    history: [],
+    savedFoods: [],
+    recentFoodIds: [],
+    preset100FoodId: null,
+    preset250FoodId: null,
+    preset400FoodId: null,
+    preset550FoodId: null
+};
 const INITIAL_COIN_HISTORY = [];
 const INITIAL_BUDGET_TRANSFER = {
     totalMonthlyBudget: 0,
@@ -128,12 +138,14 @@ const createSavedFoodRecord = ({
     id = createId('food'),
     name,
     calories,
+    coinCost = 0,
     createdAt = new Date().toISOString(),
     updatedAt = createdAt
 }) => ({
     id,
     name: normalizeCalorieLabel(name, 'Untitled Food'),
     calories: Math.max(1, normalizeCalorieNumber(calories)),
+    coinCost: Math.max(0, normalizeCalorieNumber(coinCost)),
     createdAt,
     updatedAt
 });
@@ -163,9 +175,15 @@ const normalizeSavedFood = (food, index) => createSavedFoodRecord({
     id: food?.id || createId(`food-${index}`),
     name: food?.name,
     calories: food?.calories,
+    coinCost: food?.coinCost,
     createdAt: food?.createdAt || new Date().toISOString(),
     updatedAt: food?.updatedAt || food?.createdAt || new Date().toISOString()
 });
+
+const normalizeQuickSlotFoodId = (foodId, savedFoodIds) => {
+    if (typeof foodId !== 'string' || !foodId) return null;
+    return savedFoodIds.has(foodId) ? foodId : null;
+};
 
 const recomputeCalorieCurrent = (history, todayKey = getTodayISO()) => {
     return (history || []).reduce((sum, entry) => {
@@ -194,7 +212,11 @@ const normalizeCaloriesForImport = (calories = {}) => {
         target,
         history,
         savedFoods,
-        recentFoodIds
+        recentFoodIds,
+        preset100FoodId: normalizeQuickSlotFoodId(calories.preset100FoodId, savedFoodIds),
+        preset250FoodId: normalizeQuickSlotFoodId(calories.preset250FoodId, savedFoodIds),
+        preset400FoodId: normalizeQuickSlotFoodId(calories.preset400FoodId, savedFoodIds),
+        preset550FoodId: normalizeQuickSlotFoodId(calories.preset550FoodId, savedFoodIds)
     };
 };
 
@@ -215,6 +237,7 @@ const isNormalizedSavedFood = (food) => {
     if (typeof food.id !== 'string' || !food.id) return false;
     if (typeof food.name !== 'string' || !food.name.trim()) return false;
     if (!Number.isInteger(Number(food.calories)) || Number(food.calories) <= 0) return false;
+    if (!Number.isInteger(Number(food.coinCost)) || Number(food.coinCost) < 0) return false;
     if (typeof food.createdAt !== 'string' || !food.createdAt) return false;
     if (typeof food.updatedAt !== 'string' || !food.updatedAt) return false;
 
@@ -223,7 +246,11 @@ const isNormalizedSavedFood = (food) => {
 
 const isCaloriesStateNormalized = (calories = {}) => {
     if (!calories || typeof calories !== 'object') return false;
-    if (!Array.isArray(calories.history) || !Array.isArray(calories.savedFoods) || !Array.isArray(calories.recentFoodIds)) {
+    if (
+        !Array.isArray(calories.history)
+        || !Array.isArray(calories.savedFoods)
+        || !Array.isArray(calories.recentFoodIds)
+    ) {
         return false;
     }
 
@@ -245,6 +272,22 @@ const isCaloriesStateNormalized = (calories = {}) => {
 
     const savedFoodIds = new Set(calories.savedFoods.map((food) => food.id));
     if (calories.recentFoodIds.length > 10 || !calories.recentFoodIds.every((id) => savedFoodIds.has(id))) {
+        return false;
+    }
+
+    if (calories.preset100FoodId !== null && !savedFoodIds.has(calories.preset100FoodId)) {
+        return false;
+    }
+
+    if (calories.preset250FoodId !== null && !savedFoodIds.has(calories.preset250FoodId)) {
+        return false;
+    }
+
+    if (calories.preset400FoodId !== null && !savedFoodIds.has(calories.preset400FoodId)) {
+        return false;
+    }
+
+    if (calories.preset550FoodId !== null && !savedFoodIds.has(calories.preset550FoodId)) {
         return false;
     }
 
@@ -661,8 +704,8 @@ export const GameProvider = ({ children }) => {
         });
     }, [setCalories]);
 
-    const createSavedFood = useCallback(({ name, calories }) => {
-        const nextFood = createSavedFoodRecord({ name, calories });
+    const createSavedFood = useCallback(({ name, calories, coinCost = 0 }) => {
+        const nextFood = createSavedFoodRecord({ name, calories, coinCost });
 
         setCalories(prev => ({
             ...prev,
@@ -693,13 +736,40 @@ export const GameProvider = ({ children }) => {
         setCalories(prev => ({
             ...prev,
             savedFoods: (prev.savedFoods || []).filter((food) => food.id !== foodId),
-            recentFoodIds: (prev.recentFoodIds || []).filter((id) => id !== foodId)
+            recentFoodIds: (prev.recentFoodIds || []).filter((id) => id !== foodId),
+            preset100FoodId: prev.preset100FoodId === foodId ? null : prev.preset100FoodId,
+            preset250FoodId: prev.preset250FoodId === foodId ? null : prev.preset250FoodId,
+            preset400FoodId: prev.preset400FoodId === foodId ? null : prev.preset400FoodId,
+            preset550FoodId: prev.preset550FoodId === foodId ? null : prev.preset550FoodId
         }));
     }, [setCalories]);
 
     const setCalorieGoal = useCallback((amount) => {
         const safeGoal = Math.max(1, normalizeCalorieNumber(amount));
         setCalories(prev => ({ ...prev, target: safeGoal }));
+    }, [setCalories]);
+
+    const assignQuickSlotFood = useCallback((slotId, foodId = null) => {
+        if (!['preset100', 'preset250', 'preset400', 'preset550'].includes(slotId)) return;
+
+        setCalories(prev => {
+            const savedFoodIds = new Set((prev.savedFoods || []).map((food) => food.id));
+            const safeFoodId = foodId && savedFoodIds.has(foodId) ? foodId : null;
+
+            if (slotId === 'preset100') {
+                return { ...prev, preset100FoodId: safeFoodId };
+            }
+
+            if (slotId === 'preset250') {
+                return { ...prev, preset250FoodId: safeFoodId };
+            }
+
+            if (slotId === 'preset400') {
+                return { ...prev, preset400FoodId: safeFoodId };
+            }
+
+            return { ...prev, preset550FoodId: safeFoodId };
+        });
     }, [setCalories]);
 
     const appendCoinHistoryEntries = useCallback((entries) => {
@@ -1136,7 +1206,9 @@ export const GameProvider = ({ children }) => {
         createSavedFood,
         updateSavedFood,
         deleteSavedFood,
-        setCalorieGoal
+        setCalorieGoal,
+        assignQuickSlotFood,
+        spendCoins
     }), [
         calories,
         addCalories,
@@ -1146,7 +1218,9 @@ export const GameProvider = ({ children }) => {
         createSavedFood,
         updateSavedFood,
         deleteSavedFood,
-        setCalorieGoal
+        setCalorieGoal,
+        assignQuickSlotFood,
+        spendCoins
     ]);
 
     const contextValue = useMemo(() => ({
