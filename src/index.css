@@ -33,6 +33,17 @@
     scrollbar-width: none;
   }
 
+  .no-number-spinner {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .no-number-spinner::-webkit-outer-spin-button,
+  .no-number-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
   .perspective-1000 {
     perspective: 1000px;
   }

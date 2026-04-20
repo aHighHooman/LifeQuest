@@ -85,6 +85,8 @@ const normalizeCalorieNumber = (value) => {
     return Math.max(0, parsed);
 };
 
+const normalizeSignedCalorieNumber = (value) => Math.round(Number(value) || 0);
+
 const normalizeCalorieLabel = (label, fallback = 'Manual Entry') => {
     const trimmed = `${label ?? ''}`.trim();
     return trimmed || fallback;
@@ -100,7 +102,7 @@ const createCalorieHistoryEntry = ({
     foodId = null
 }) => {
     const safeTimestamp = timestamp || new Date().toISOString();
-    const safeCalories = normalizeCalorieNumber(calories);
+    const safeCalories = normalizeSignedCalorieNumber(calories);
     const safeSource = source || 'manual';
     return {
         id,
@@ -109,7 +111,11 @@ const createCalorieHistoryEntry = ({
         calories: safeCalories,
         label: normalizeCalorieLabel(
             label,
-            safeSource === 'preset' ? `Quick Add ${safeCalories}` : 'Manual Entry'
+            safeSource === 'preset'
+                ? `Quick Add ${Math.abs(safeCalories)}`
+                : safeCalories < 0
+                    ? 'Exercise Burn'
+                    : 'Manual Entry'
         ),
         source: safeSource,
         foodId: foodId || null
@@ -135,8 +141,10 @@ const normalizeCalorieHistoryEntry = (entry, index) => {
     const calories = entry?.calories ?? entry?.amount ?? 0;
     const source = entry?.source || 'manual';
     const fallbackLabel = source === 'preset'
-        ? `Quick Add ${normalizeCalorieNumber(calories)}`
-        : 'Manual Entry';
+        ? `Quick Add ${Math.abs(normalizeSignedCalorieNumber(calories))}`
+        : normalizeSignedCalorieNumber(calories) < 0
+            ? 'Exercise Burn'
+            : 'Manual Entry';
 
     return createCalorieHistoryEntry({
         id: entry?.id || createId(`cal-${index}`),
@@ -160,7 +168,7 @@ const normalizeSavedFood = (food, index) => createSavedFoodRecord({
 const recomputeCalorieCurrent = (history, todayKey = getTodayISO()) => {
     return (history || []).reduce((sum, entry) => {
         if (entry.dateKey !== todayKey) return sum;
-        return sum + normalizeCalorieNumber(entry.calories);
+        return sum + normalizeSignedCalorieNumber(entry.calories);
     }, 0);
 };
 
@@ -505,8 +513,8 @@ export const GameProvider = ({ children }) => {
         source = 'manual',
         foodId = null
     }) => {
-        const safeCalories = normalizeCalorieNumber(amount);
-        if (safeCalories <= 0) return false;
+        const safeCalories = normalizeSignedCalorieNumber(amount);
+        if (safeCalories === 0) return false;
 
         const now = new Date().toISOString();
         const nextEntry = createCalorieHistoryEntry({
@@ -550,7 +558,10 @@ export const GameProvider = ({ children }) => {
 
                 const nextCalories = updates.calories === undefined
                     ? entry.calories
-                    : Math.max(1, normalizeCalorieNumber(updates.calories));
+                    : (() => {
+                        const parsedCalories = normalizeSignedCalorieNumber(updates.calories);
+                        return parsedCalories === 0 ? entry.calories : parsedCalories;
+                    })();
                 const nextLabel = updates.label === undefined
                     ? entry.label
                     : normalizeCalorieLabel(updates.label, entry.label);

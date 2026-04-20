@@ -1,7 +1,7 @@
 import React, { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGame } from '../context/GameContext';
-import { AnimatePresence, motion as Motion } from 'framer-motion';
+import { AnimatePresence, motion as Motion, useDragControls } from 'framer-motion';
 import {
     Activity,
     AlertTriangle,
@@ -14,7 +14,6 @@ import {
     Save,
     Target,
     Trash2,
-    X,
     Zap
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -43,8 +42,14 @@ const createBubbles = () => Array.from({ length: 8 }).map((_, i) => ({
 
 const getSafeTarget = (target) => Math.max(1, Number(target) || 1);
 const normalizeCalories = (value) => Math.max(0, Math.round(Number(value) || 0));
+const normalizeSignedCalories = (value) => Math.round(Number(value) || 0);
 const getEntryTimestamp = (entry) => Date.parse(entry?.timestamp || 0) || 0;
 const getFoodTimestamp = (food) => Date.parse(food?.updatedAt || food?.createdAt || 0) || 0;
+const preventNumberStepperKeys = (event) => {
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+    }
+};
 
 const formatTime = (value) => {
     if (!value) return '--:--';
@@ -156,7 +161,9 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
     const labelArcId = useId();
     const injectArcId = useId();
 
-    const canSubmit = normalizeCalories(calories) > 0;
+    const signedCalories = normalizeSignedCalories(calories);
+    const canSubmit = signedCalories !== 0;
+    const isExtracting = signedCalories < 0;
     const orbGeometry = {
         outerInner: 39.2,
         outerOuter: 46.4,
@@ -176,7 +183,7 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
         if (!canSubmit) return;
 
         onSubmit({
-            calories: normalizeCalories(calories),
+            calories: signedCalories,
             label: `${label}`.trim()
         });
 
@@ -250,7 +257,7 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
                     dy="0"
                 >
                     <textPath href={`#${injectArcId}`} startOffset="50%" textAnchor="middle">
-                        INJECT ENTRY
+                        {isExtracting ? 'EXTRACT ENTRY' : 'INJECT ENTRY'}
                     </textPath>
                 </text>
             </svg>
@@ -299,15 +306,18 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
                     <input
                         autoFocus
                         type="number"
-                        min="1"
+                        step="1"
                         inputMode="numeric"
                         value={calories}
                         onChange={(event) => setCalories(event.target.value)}
-                        className="mt-2 w-full bg-transparent text-center font-mono text-[clamp(2.8rem,8vw,4.3rem)] font-black tracking-[-0.08em] text-rose-50 outline-none placeholder:text-rose-200/20"
+                        onKeyDown={preventNumberStepperKeys}
+                        className="no-number-spinner mt-2 w-full bg-transparent text-center font-mono text-[clamp(2.8rem,8vw,4.3rem)] font-black tracking-[-0.08em] text-rose-50 outline-none placeholder:text-rose-200/20"
                         placeholder="240"
                         aria-label="Calories"
                     />
-                    <div className="mt-1 text-[9px] uppercase tracking-[0.24em] text-slate-500">Inject into today</div>
+                    <div className="mt-1 text-[9px] uppercase tracking-[0.24em] text-slate-500">
+                        {isExtracting ? 'Extract from today' : 'Inject into today'}
+                    </div>
                 </div>
             </div>
 
@@ -318,9 +328,9 @@ const ManualEntryPanel = ({ onSubmit, onClose }) => {
                     'absolute inset-x-[16%] bottom-[14%] z-20 h-[26%] focus:outline-none disabled:cursor-not-allowed',
                     canSubmit ? 'cursor-pointer' : 'cursor-not-allowed'
                 )}
-                aria-label="Inject entry"
+                aria-label={isExtracting ? 'Extract entry' : 'Inject entry'}
             >
-                <span className="sr-only">Inject entry</span>
+                <span className="sr-only">{isExtracting ? 'Extract entry' : 'Inject entry'}</span>
             </button>
         </Motion.form>
     );
@@ -341,10 +351,11 @@ const EntryEditor = ({ entry, onSave, onCancel }) => {
                 />
                 <input
                     type="number"
-                    min="1"
+                    step="1"
                     value={calories}
                     onChange={(event) => setCalories(event.target.value)}
-                    className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-rose-400"
+                    onKeyDown={preventNumberStepperKeys}
+                    className="no-number-spinner rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-rose-400"
                 />
             </div>
             <div className="mt-3 flex gap-2">
@@ -357,7 +368,7 @@ const EntryEditor = ({ entry, onSave, onCancel }) => {
                 </button>
                 <button
                     type="button"
-                    onClick={() => onSave({ label, calories: normalizeCalories(calories) })}
+                    onClick={() => onSave({ label, calories: normalizeSignedCalories(calories) })}
                     className="flex-1 rounded-xl bg-rose-500 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-black"
                 >
                     Save
@@ -389,7 +400,8 @@ const SavedFoodEditor = ({ food, onSave, onCancel }) => {
                     value={calories}
                     onChange={(event) => setCalories(event.target.value)}
                     placeholder="Calories"
-                    className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-rose-400"
+                    onKeyDown={preventNumberStepperKeys}
+                    className="no-number-spinner rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-rose-400"
                 />
             </div>
             <div className="mt-3 flex gap-2">
@@ -431,6 +443,8 @@ const HistoryVaultModal = memo(({
     const [editingFoodId, setEditingFoodId] = useState(null);
     const [newFoodName, setNewFoodName] = useState('');
     const [newFoodCalories, setNewFoodCalories] = useState('');
+    const dragControls = useDragControls();
+    const scrollRef = useRef(null);
 
     useEffect(() => {
         setTab(initialTab);
@@ -445,32 +459,55 @@ const HistoryVaultModal = memo(({
         setNewFoodCalories('');
     };
 
-    return (
-        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
+    if (typeof document === 'undefined') return null;
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-[260] flex items-end justify-center bg-black/82 backdrop-blur-md"
+            onClick={onClose}
+            data-no-swipe="true"
+        >
             <Motion.div
-                initial={{ opacity: 0, scale: 0.96, y: 16 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: 16 }}
-                className="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-[30px] border border-rose-500/20 bg-slate-950 shadow-[0_0_60px_rgba(0,0,0,0.45)]"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 240, damping: 28 }}
+                drag="y"
+                dragListener={false}
+                dragControls={dragControls}
+                dragSnapToOrigin
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.18 }}
+                onDragEnd={(_, info) => {
+                    const isAtTop = (scrollRef.current?.scrollTop || 0) <= 0;
+                    if (info.offset.y > 90 && isAtTop) {
+                        onClose();
+                    }
+                }}
+                className="flex h-[min(86svh,48rem)] w-full max-w-3xl flex-col overflow-hidden rounded-t-[30px] border border-rose-500/20 bg-slate-950 shadow-[0_0_60px_rgba(0,0,0,0.45)] md:mb-6 md:h-[min(88vh,50rem)] md:rounded-[30px]"
                 onClick={(event) => event.stopPropagation()}
+                data-no-swipe="true"
             >
-                <div className="flex items-center justify-between gap-4 border-b border-rose-500/15 bg-black/40 px-5 py-4">
+                <div
+                    className="flex cursor-grab justify-center border-b border-rose-500/12 bg-black/35 px-5 pb-3 pt-3 active:cursor-grabbing"
+                    onPointerDown={(event) => dragControls.start(event)}
+                >
+                    <div className="h-1.5 w-24 rounded-full bg-rose-400/30" />
+                </div>
+
+                <div className="border-b border-rose-500/15 bg-black/40 px-5 pb-4 pt-3">
                     <div>
                         <div className="text-[10px] uppercase tracking-[0.3em] text-rose-400/65">Archive Console</div>
                         <div className="mt-1 font-game text-xl font-semibold uppercase tracking-[0.08em] text-rose-50">
                             Calorie Vault
                         </div>
+                        <div className="mt-2 text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                            Drag the handle down to close
+                        </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-full border border-slate-700/60 bg-slate-900/80 p-2 text-slate-400 transition-colors hover:text-white"
-                    >
-                        <X size={18} />
-                    </button>
                 </div>
 
-                <div className="flex gap-2 border-b border-rose-500/15 px-5 py-3">
+                <div className="flex gap-2 border-b border-rose-500/15 px-5 py-3" data-no-swipe="true">
                     {[
                         { id: 'entries', label: 'Entries', icon: <History size={14} /> },
                         { id: 'foods', label: 'Foods', icon: <BookOpen size={14} /> }
@@ -492,7 +529,11 @@ const HistoryVaultModal = memo(({
                     ))}
                 </div>
 
-                <div className="max-h-[calc(85vh-9rem)] overflow-y-auto px-5 py-5 custom-scrollbar space-y-4">
+                <div
+                    ref={scrollRef}
+                    className="min-h-0 flex-1 overflow-y-auto px-5 py-5 custom-scrollbar space-y-4"
+                    data-no-swipe="true"
+                >
                     {tab === 'entries' && (
                         <div className="space-y-4">
                             {entriesByDay.length === 0 && (
@@ -682,7 +723,8 @@ const HistoryVaultModal = memo(({
                     )}
                 </div>
             </Motion.div>
-        </div>
+        </div>,
+        document.body
     );
 });
 
@@ -709,7 +751,8 @@ const GoalSettingModal = memo(({ current, onConfirm, onClose }) => {
                     min="1"
                     value={value}
                     onChange={(event) => setValue(event.target.value)}
-                    className="mt-5 w-full rounded-2xl border border-rose-500/25 bg-black px-4 py-3 text-xl font-mono text-rose-50 outline-none transition-colors focus:border-rose-400"
+                    onKeyDown={preventNumberStepperKeys}
+                    className="no-number-spinner mt-5 w-full rounded-2xl border border-rose-500/25 bg-black px-4 py-3 text-xl font-mono text-rose-50 outline-none transition-colors focus:border-rose-400"
                 />
 
                 <div className="mt-4 flex gap-3">
@@ -737,7 +780,6 @@ const RadialHub = memo(({ current, target, onClick }) => {
     const safeTarget = getSafeTarget(target);
     const percentage = Math.min((Number(current || 0) / safeTarget) * 100, 100);
     const isOverload = Number(current || 0) > safeTarget;
-    const [bubbles] = useState(createBubbles);
 
     return (
         <Motion.button
@@ -747,46 +789,24 @@ const RadialHub = memo(({ current, target, onClick }) => {
             className="group relative h-full w-full rounded-full"
             aria-label="Edit calorie goal"
         >
-            <div className="absolute inset-0 rounded-full border-[8px] border-slate-800 bg-black/60 shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
+            <div className="absolute inset-0 rounded-full border-[3px] border-slate-800/90 bg-black/60 shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
 
-            <svg
-                className="absolute inset-0 h-full w-full animate-spin-slow opacity-30 pointer-events-none"
-                viewBox="0 0 100 100"
-            >
-                <circle cx="50" cy="50" r="48" fill="none" stroke="#be123c" strokeWidth="0.5" strokeDasharray="4 2" />
-                <circle cx="50" cy="50" r="40" fill="none" stroke="#be123c" strokeWidth="0.2" strokeDasharray="10 10" />
-            </svg>
-
-            <div className="absolute inset-4 overflow-hidden rounded-full border border-rose-900/30 bg-slate-900">
+            <div className="absolute inset-2 overflow-hidden rounded-full border border-rose-900/30 bg-slate-900">
                 <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(244,63,94,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(244,63,94,0.1)_1px,transparent_1px)] bg-[size:20px_20px]" />
 
                 <Motion.div
                     className={clsx(
                         'absolute bottom-0 left-0 right-0 w-full transition-colors duration-700 opacity-90',
                         isOverload
-                            ? 'bg-gradient-to-t from-red-950 via-red-700 to-orange-500'
-                            : 'bg-gradient-to-t from-rose-950 via-rose-700 to-rose-500'
+                            ? 'bg-gradient-to-t from-[#180003] via-[#5a0812] to-[#c1273d]'
+                            : 'bg-gradient-to-t from-[#120002] via-[#4f0915] to-[#b91c32]'
                     )}
                     initial={{ height: '0%' }}
                     animate={{ height: `${percentage}%` }}
                     transition={{ type: 'spring', stiffness: 50, damping: 20 }}
                 >
-                    <div className="absolute top-0 left-0 right-0 h-4 -translate-y-1/2 bg-white/20 blur-sm" />
-
-                    {bubbles.map((bubble) => (
-                        <Motion.div
-                            key={bubble.id}
-                            className="absolute rounded-full bg-rose-200/20 blur-[1px]"
-                            style={{ width: bubble.size, height: bubble.size, left: `${bubble.x}%` }}
-                            animate={{ y: [-20, -300], opacity: [0, 1, 0] }}
-                            transition={{
-                                repeat: Infinity,
-                                duration: bubble.duration,
-                                delay: bubble.delay,
-                                ease: 'linear'
-                            }}
-                        />
-                    ))}
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,82,82,0.26)_0%,rgba(255,82,82,0.08)_28%,transparent_62%)] mix-blend-screen" />
+                    <div className="absolute top-0 left-0 right-0 h-4 -translate-y-1/2 bg-red-200/30 blur-sm" />
                 </Motion.div>
             </div>
 
@@ -805,10 +825,10 @@ const RadialHub = memo(({ current, target, onClick }) => {
 
                 <div
                     className={clsx(
-                        'mt-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 backdrop-blur-md transition-colors',
+                        'mt-4 inline-flex items-center gap-2 px-1 py-1 transition-colors drop-shadow-[0_0_14px_rgba(2,6,23,0.95)]',
                         isOverload
-                            ? 'border-red-500/50 bg-red-950/80 text-red-500'
-                            : 'border-rose-500/30 bg-black/40 text-rose-400'
+                            ? 'text-red-300'
+                            : 'text-rose-200'
                     )}
                 >
                     {isOverload ? <AlertTriangle size={12} /> : <Activity size={12} />}
@@ -860,24 +880,46 @@ const FoodsTray = memo(({
     onQuickAddFood,
     onSelectRecent,
     onOpenManager
-}) => (
-    <Motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
-        className="w-full max-w-3xl rounded-[28px] border border-rose-500/20 bg-black/78 shadow-[0_0_40px_rgba(0,0,0,0.35)] backdrop-blur-xl"
-    >
-        <div className="mx-auto mt-2 h-1.5 w-20 rounded-full bg-rose-500/25" />
+}) => {
+    const dragControls = useDragControls();
+    const scrollRef = useRef(null);
 
-        <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
-            <div>
-                <div className="text-[10px] uppercase tracking-[0.28em] text-rose-400/65">Foods Sector</div>
-                <div className="mt-1 font-game text-lg font-semibold uppercase tracking-[0.08em] text-rose-50">
-                    Quick Add by Memory
-                </div>
+    return (
+        <Motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 240, damping: 28 }}
+            drag="y"
+            dragListener={false}
+            dragControls={dragControls}
+            dragSnapToOrigin
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.18 }}
+            onDragEnd={(_, info) => {
+                const isAtTop = (scrollRef.current?.scrollTop || 0) <= 0;
+                if (info.offset.y > 85 && isAtTop) {
+                    onClose();
+                }
+            }}
+            className="flex h-[min(76svh,42rem)] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] border border-rose-500/20 bg-black/82 shadow-[0_0_40px_rgba(0,0,0,0.35)] backdrop-blur-xl md:mb-6 md:h-[min(80vh,44rem)] md:rounded-[28px]"
+            data-no-swipe="true"
+        >
+            <div
+                className="flex cursor-grab justify-center border-b border-rose-500/12 px-4 pb-3 pt-3 active:cursor-grabbing"
+                onPointerDown={(event) => dragControls.start(event)}
+            >
+                <div className="h-1.5 w-24 rounded-full bg-rose-400/30" />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-start justify-between gap-3 px-4 pb-4 pt-3 sm:px-5">
+                <div>
+                    <div className="text-[10px] uppercase tracking-[0.28em] text-rose-400/65">Foods Sector</div>
+                    <div className="mt-1 font-game text-lg font-semibold uppercase tracking-[0.08em] text-rose-50">
+                        Quick Add by Memory
+                    </div>
+                </div>
+
                 <button
                     type="button"
                     onClick={onOpenManager}
@@ -885,73 +927,70 @@ const FoodsTray = memo(({
                 >
                     Manage
                 </button>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-full border border-slate-700/60 bg-slate-900/80 p-2 text-slate-400 transition-colors hover:text-white"
-                >
-                    <X size={16} />
-                </button>
             </div>
-        </div>
 
-        <div className="custom-scrollbar max-h-[60vh] overflow-y-auto px-4 pb-5 pt-4 sm:px-5">
-            <div>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="text-[10px] uppercase tracking-[0.24em] text-rose-300/55">Saved Foods</div>
-                    <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">{savedFoods.length} stored</div>
+            <div
+                ref={scrollRef}
+                className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-1 sm:px-5"
+                data-no-swipe="true"
+            >
+                <div>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-rose-300/55">Saved Foods</div>
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">{savedFoods.length} stored</div>
+                    </div>
+
+                    {savedFoods.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
+                            Save recurring foods from the manual injector or the food vault and they will land here.
+                        </div>
+                    ) : (
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {savedFoods.map((food) => (
+                                <MemoryTile
+                                    key={food.id}
+                                    label={food.name}
+                                    calories={food.calories}
+                                    subtitle="Remembered Food"
+                                    icon={<BookOpen size={15} />}
+                                    tone="rose"
+                                    onClick={() => onQuickAddFood(food)}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {savedFoods.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
-                        Save recurring foods from the manual injector or the food vault and they will land here.
+                <div className="mt-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-rose-300/55">Recents</div>
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Fast repeat logging</div>
                     </div>
-                ) : (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {savedFoods.map((food) => (
-                            <MemoryTile
-                                key={food.id}
-                                label={food.name}
-                                calories={food.calories}
-                                subtitle="Remembered Food"
-                                icon={<BookOpen size={15} />}
-                                tone="rose"
-                                onClick={() => onQuickAddFood(food)}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
 
-            <div className="mt-5">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="text-[10px] uppercase tracking-[0.24em] text-rose-300/55">Recents</div>
-                    <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Fast repeat logging</div>
+                    {recentItems.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
+                            Named manual entries and recently used foods will collect here automatically.
+                        </div>
+                    ) : (
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {recentItems.map((item) => (
+                                <MemoryTile
+                                    key={item.key}
+                                    label={item.label}
+                                    calories={item.calories}
+                                    subtitle={item.food ? 'Recent Food' : 'Recent Manual'}
+                                    icon={item.food ? <BookOpen size={15} /> : <Clock3 size={15} />}
+                                    tone={item.food ? 'slate' : 'amber'}
+                                    onClick={() => onSelectRecent(item)}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
-
-                {recentItems.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
-                        Named manual entries and recently used foods will collect here automatically.
-                    </div>
-                ) : (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {recentItems.map((item) => (
-                            <MemoryTile
-                                key={item.key}
-                                label={item.label}
-                                calories={item.calories}
-                                subtitle={item.food ? 'Recent Food' : 'Recent Manual'}
-                                icon={item.food ? <BookOpen size={15} /> : <Clock3 size={15} />}
-                                tone={item.food ? 'slate' : 'amber'}
-                                onClick={() => onSelectRecent(item)}
-                            />
-                        ))}
-                    </div>
-                )}
             </div>
-        </div>
-    </Motion.div>
-));
+        </Motion.div>
+    );
+});
 
 const WheelSectorContent = memo(({ segment }) => (
     <div
@@ -1205,7 +1244,7 @@ const SegmentedWheel = memo(({
                 <WheelSectorContent key={`${segment.id}-content`} segment={segment} />
             ))}
 
-            <div className="absolute inset-[27%] z-20">
+            <div className="absolute inset-[25.5%] z-20 sm:inset-[26%]">
                 <RadialHub current={current} target={target} onClick={onGoal} />
             </div>
         </Motion.div>
@@ -1358,7 +1397,7 @@ const CalorieTracker = () => {
     }, [handleQuickFood, logCalories]);
 
     const handleManualSubmit = useCallback(({ calories: amount, label }) => {
-        if (`${label}`.trim()) {
+        if (`${label}`.trim() && amount > 0) {
             const food = createSavedFood({
                 name: label,
                 calories: amount
@@ -1375,7 +1414,7 @@ const CalorieTracker = () => {
 
         logCalories({
             calories: amount,
-            label: label || 'Manual Entry',
+            label: label || (amount < 0 ? 'Exercise Burn' : 'Manual Entry'),
             source: 'manual'
         });
     }, [createSavedFood, logCalories]);
@@ -1443,10 +1482,11 @@ const CalorieTracker = () => {
 
                 {activeSheet === 'foods' && (
                     <div
-                        className="pointer-events-none fixed inset-x-0 bottom-24 z-[220] flex justify-center px-3 sm:bottom-28 sm:px-4"
+                        className="fixed inset-0 z-[240] flex items-end justify-center bg-black/45 backdrop-blur-[3px] px-0 sm:px-4"
+                        onClick={() => setActiveSheet(null)}
                         data-no-swipe="true"
                     >
-                        <div className="pointer-events-auto w-full max-w-3xl">
+                        <div className="w-full" onClick={(event) => event.stopPropagation()}>
                             <FoodsTray
                                 savedFoods={savedFoods}
                                 recentItems={recentItems}

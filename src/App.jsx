@@ -68,7 +68,7 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
         <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
-          <div className="max-w-4xl mx-auto pl-0 md:pl-24 relative z-10 p-2 md:p-8 pt-[calc(0.5rem+env(safe-area-inset-top))] flex flex-col min-h-full">
+          <div className={`relative z-10 mx-auto flex min-h-full w-full max-w-none flex-col px-0 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-2 md:max-w-4xl md:pl-24 md:pr-8 md:pt-[calc(0.75rem+env(safe-area-inset-top))] ${currentTab === 'calories' ? 'bg-black md:bg-transparent' : ''}`}>
             <Motion.main
               className="flex-1 flex flex-col relative z-10"
               initial={{ opacity: 0, y: 20 }}
