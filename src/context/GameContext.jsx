@@ -52,6 +52,8 @@ const INITIAL_CALORIES = {
     history: [],
     savedFoods: [],
     recentFoodIds: [],
+    passiveCheckpointDate: null,
+    passiveCheckpoints: [],
     preset100FoodId: null,
     preset250FoodId: null,
     preset400FoodId: null,
@@ -75,6 +77,12 @@ const STIPEND_PERIOD_DAYS = {
     'bi-weekly': 14,
     monthly: 30
 };
+const PASSIVE_CALORIE_SOURCE = 'passive';
+const PASSIVE_CALORIE_CHECKPOINTS = [
+    { id: '18:00', hour: 18, minute: 0, label: 'Passive Fill 6PM' },
+    { id: '21:00', hour: 21, minute: 0, label: 'Passive Fill 9PM' },
+    { id: '23:59', hour: 23, minute: 59, label: 'Passive Fill 11:59PM' }
+];
 
 const normalizeStatsForImport = (stats = {}) => ({
     ...INITIAL_STATS,
@@ -102,6 +110,25 @@ const normalizeSignedCalorieNumber = (value) => Math.round(Number(value) || 0);
 const normalizeCalorieLabel = (label, fallback = 'Manual Entry') => {
     const trimmed = `${label ?? ''}`.trim();
     return trimmed || fallback;
+};
+
+const getPassiveCheckpointDate = (dateKey, checkpoint) => {
+    const [year, month, day] = `${dateKey}`.split('-').map(Number);
+    return new Date(year, month - 1, day, checkpoint.hour, checkpoint.minute, 0, 0);
+};
+
+const getPassiveCalorieChunks = (target) => {
+    const safeTarget = Math.max(1, normalizeCalorieNumber(target));
+    const baseChunk = Math.floor(safeTarget / PASSIVE_CALORIE_CHECKPOINTS.length);
+    const chunks = PASSIVE_CALORIE_CHECKPOINTS.map(() => baseChunk);
+    chunks[chunks.length - 1] += safeTarget - chunks.reduce((sum, chunk) => sum + chunk, 0);
+    return chunks;
+};
+
+const normalizePassiveCheckpoints = (checkpoints) => {
+    if (!Array.isArray(checkpoints)) return [];
+    const validCheckpointIds = new Set(PASSIVE_CALORIE_CHECKPOINTS.map((checkpoint) => checkpoint.id));
+    return [...new Set(checkpoints.filter((checkpointId) => validCheckpointIds.has(checkpointId)))];
 };
 
 const createCalorieHistoryEntry = ({
@@ -156,9 +183,11 @@ const normalizeCalorieHistoryEntry = (entry, index) => {
     const source = entry?.source || 'manual';
     const fallbackLabel = source === 'preset'
         ? `Quick Add ${Math.abs(normalizeSignedCalorieNumber(calories))}`
-        : normalizeSignedCalorieNumber(calories) < 0
-            ? 'Exercise Burn'
-            : 'Manual Entry';
+        : source === PASSIVE_CALORIE_SOURCE
+            ? 'Passive Fill'
+            : normalizeSignedCalorieNumber(calories) < 0
+                ? 'Exercise Burn'
+                : 'Manual Entry';
 
     return createCalorieHistoryEntry({
         id: entry?.id || createId(`cal-${index}`),
@@ -204,6 +233,12 @@ const normalizeCaloriesForImport = (calories = {}) => {
         ? calories.recentFoodIds.filter((id) => savedFoodIds.has(id)).slice(0, 10)
         : INITIAL_CALORIES.recentFoodIds;
     const target = Math.max(1, normalizeCalorieNumber(calories.target || INITIAL_CALORIES.target));
+    const passiveCheckpointDate = calories.passiveCheckpointDate === getTodayISO()
+        ? calories.passiveCheckpointDate
+        : getTodayISO();
+    const passiveCheckpoints = calories.passiveCheckpointDate === passiveCheckpointDate
+        ? normalizePassiveCheckpoints(calories.passiveCheckpoints)
+        : [];
 
     return {
         ...INITIAL_CALORIES,
@@ -213,6 +248,8 @@ const normalizeCaloriesForImport = (calories = {}) => {
         history,
         savedFoods,
         recentFoodIds,
+        passiveCheckpointDate,
+        passiveCheckpoints,
         preset100FoodId: normalizeQuickSlotFoodId(calories.preset100FoodId, savedFoodIds),
         preset250FoodId: normalizeQuickSlotFoodId(calories.preset250FoodId, savedFoodIds),
         preset400FoodId: normalizeQuickSlotFoodId(calories.preset400FoodId, savedFoodIds),
@@ -251,6 +288,18 @@ const isCaloriesStateNormalized = (calories = {}) => {
         || !Array.isArray(calories.savedFoods)
         || !Array.isArray(calories.recentFoodIds)
     ) {
+        return false;
+    }
+
+    if (calories.passiveCheckpointDate !== null && typeof calories.passiveCheckpointDate !== 'string') {
+        return false;
+    }
+
+    if (!Array.isArray(calories.passiveCheckpoints)) {
+        return false;
+    }
+
+    if (normalizePassiveCheckpoints(calories.passiveCheckpoints).length !== calories.passiveCheckpoints.length) {
         return false;
     }
 
@@ -515,6 +564,84 @@ export const GameProvider = ({ children }) => {
     useEffect(() => {
         setCalories((prev) => (isCaloriesStateNormalized(prev) ? prev : normalizeCaloriesForImport(prev)));
     }, [setCalories]);
+
+    const settlePassiveCalorieCheckpoints = useCallback((now = new Date()) => {
+        const todayKey = toLocalDateKey(now);
+
+        setCalories((prev) => {
+            const history = Array.isArray(prev.history) ? prev.history : [];
+            const storedSettledCheckpointIds = prev.passiveCheckpointDate === todayKey
+                ? normalizePassiveCheckpoints(prev.passiveCheckpoints)
+                : [];
+            const existingPassiveCheckpointIds = PASSIVE_CALORIE_CHECKPOINTS
+                .filter((checkpoint) => history.some((entry) => (
+                    entry.dateKey === todayKey
+                    && entry.source === PASSIVE_CALORIE_SOURCE
+                    && entry.id === `cal-passive-${todayKey}-${checkpoint.id}`
+                )))
+                .map((checkpoint) => checkpoint.id);
+            const settledCheckpointIds = normalizePassiveCheckpoints([
+                ...storedSettledCheckpointIds,
+                ...existingPassiveCheckpointIds
+            ]);
+            const settledCheckpointSet = new Set(settledCheckpointIds);
+            const passiveChunks = getPassiveCalorieChunks(prev.target);
+            const nextHistory = [...history];
+            const nextSettledCheckpointIds = [...settledCheckpointIds];
+
+            PASSIVE_CALORIE_CHECKPOINTS.forEach((checkpoint, index) => {
+                const checkpointDate = getPassiveCheckpointDate(todayKey, checkpoint);
+
+                if (now < checkpointDate || settledCheckpointSet.has(checkpoint.id)) return;
+
+                const hasUserEntryBeforeCheckpoint = history.some((entry) => {
+                    if (entry.dateKey !== todayKey || entry.source === PASSIVE_CALORIE_SOURCE) return false;
+                    const entryDate = new Date(entry.timestamp);
+                    return Number.isFinite(entryDate.getTime()) && entryDate <= checkpointDate;
+                });
+
+                settledCheckpointSet.add(checkpoint.id);
+                nextSettledCheckpointIds.push(checkpoint.id);
+
+                if (hasUserEntryBeforeCheckpoint) return;
+
+                nextHistory.push(createCalorieHistoryEntry({
+                    id: `cal-passive-${todayKey}-${checkpoint.id}`,
+                    timestamp: checkpointDate.toISOString(),
+                    dateKey: todayKey,
+                    calories: passiveChunks[index],
+                    label: checkpoint.label,
+                    source: PASSIVE_CALORIE_SOURCE
+                }));
+            });
+
+            const checkpointDateChanged = prev.passiveCheckpointDate !== todayKey;
+            const checkpointsChanged = nextSettledCheckpointIds.length !== settledCheckpointIds.length;
+            const historyChanged = nextHistory.length !== history.length;
+
+            if (!checkpointDateChanged && !checkpointsChanged && !historyChanged) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                history: nextHistory,
+                passiveCheckpointDate: todayKey,
+                passiveCheckpoints: nextSettledCheckpointIds,
+                current: recomputeCalorieCurrent(nextHistory, todayKey)
+            };
+        });
+    }, [setCalories]);
+
+    useEffect(() => {
+        settlePassiveCalorieCheckpoints();
+
+        const intervalId = window.setInterval(() => {
+            settlePassiveCalorieCheckpoints();
+        }, 30000);
+
+        return () => window.clearInterval(intervalId);
+    }, [settlePassiveCalorieCheckpoints]);
 
     const updateStats = useCallback((newStats) => {
         setStats(prev => ({ ...prev, ...newStats }));

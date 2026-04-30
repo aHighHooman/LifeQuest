@@ -59,7 +59,16 @@ const ALLOWED_SCALAR_KEYS = {
         'goldToUsdRatio'
     ]),
     ui: new Set(['protocolLookaheadDays']),
-    calories: new Set(['current', 'target', 'preset100FoodId', 'preset250FoodId', 'preset400FoodId', 'preset550FoodId'])
+    calories: new Set([
+        'current',
+        'target',
+        'passiveCheckpointDate',
+        'passiveCheckpoints',
+        'preset100FoodId',
+        'preset250FoodId',
+        'preset400FoodId',
+        'preset550FoodId'
+    ])
 };
 
 const isCommentLine = (line) => {
@@ -280,6 +289,8 @@ export const formatPortableSnapshot = (snapshot) => {
         renderScalarSection('calories', {
             current: snapshot.calories.current,
             target: snapshot.calories.target,
+            passiveCheckpointDate: snapshot.calories.passiveCheckpointDate ?? null,
+            passiveCheckpoints: snapshot.calories.passiveCheckpoints || [],
             preset100FoodId: snapshot.calories.preset100FoodId ?? null,
             preset250FoodId: snapshot.calories.preset250FoodId ?? null,
             preset400FoodId: snapshot.calories.preset400FoodId ?? null,
@@ -365,6 +376,8 @@ export const parsePortableSnapshot = (text) => {
         calories: {
             current: sections.calories.current,
             target: sections.calories.target,
+            passiveCheckpointDate: sections.calories.passiveCheckpointDate ?? null,
+            passiveCheckpoints: sections.calories.passiveCheckpoints || [],
             preset100FoodId: sections.calories.preset100FoodId ?? null,
             preset250FoodId: sections.calories.preset250FoodId ?? null,
             preset400FoodId: sections.calories.preset400FoodId ?? null,
