@@ -15,7 +15,6 @@ import {
     Database
 } from 'lucide-react';
 import { useGame } from '../context/GameContext';
-// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { getTodayISO } from '../utils/dateUtils';

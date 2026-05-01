@@ -9,7 +9,6 @@ import {
     endOfWeek,
     isSameMonth,
     isSameDay,
-    addDays,
     eachDayOfInterval,
     isToday,
     parseISO
@@ -82,7 +81,7 @@ const CalendarView = () => {
 
         return (
             <div className="grid grid-cols-7 gap-2">
-                {days.map((day, i) => {
+                {days.map((day) => {
                     const dayQuests = quests.filter(q => q.dueDate && isSameDay(parseISO(q.dueDate), day));
                     const isSelected = isSameDay(day, selectedDate);
                     const isCurrentMonth = isSameMonth(day, monthStart);

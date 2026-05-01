@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X, CheckCircle, Circle, Shield, Swords, Crosshair } from 'lucide-react';
 import { useGame } from '../context/GameContext';
+import { isHabitDueForFocus } from '../domain/gameState';
 
 const FocusSelectionModal = ({ isOpen, onClose }) => {
     const { quests, habits, toggleToday } = useGame();
@@ -71,20 +72,22 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                         No pending objectives found.
                                     </div>
                                 ) : (
-                                    availableQuests.map(quest => (
+                                    availableQuests.map(quest => {
+                                        const isFocused = Boolean(quest.isFocusedToday);
+                                        return (
                                         <div
                                             key={quest.id}
                                             onClick={() => toggleItem(quest.id, 'quest')}
-                                            className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all active:scale-[0.98] ${quest.isToday
+                                            className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all active:scale-[0.98] ${isFocused
                                                 ? 'bg-game-accent/10 border-game-accent/50'
                                                 : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800'
                                                 }`}
                                         >
-                                            <div className={`p-1 rounded-full ${quest.isToday ? 'text-game-accent' : 'text-gray-500'}`}>
-                                                {quest.isToday ? <CheckCircle size={20} className="fill-current" /> : <Circle size={20} />}
+                                            <div className={`p-1 rounded-full ${isFocused ? 'text-game-accent' : 'text-gray-500'}`}>
+                                                {isFocused ? <CheckCircle size={20} className="fill-current" /> : <Circle size={20} />}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className={`font-bold text-sm truncate ${quest.isToday ? 'text-white' : 'text-gray-300'}`}>
+                                                <div className={`font-bold text-sm truncate ${isFocused ? 'text-white' : 'text-gray-300'}`}>
                                                     {quest.title}
                                                 </div>
                                                 <div className="flex gap-2 text-[10px] mt-1">
@@ -101,7 +104,8 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                    ))
+                                        );
+                                    })
                                 )
                             ) : (
                                 // Protocols Tab
@@ -110,20 +114,21 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                         No protocols found.
                                     </div>
                                 ) : (
-                                    availableHabits.map(habit => (
+                                    availableHabits.map(habit => {
+                                        const isDue = isHabitDueForFocus(habit);
+                                        return (
                                         <div
                                             key={habit.id}
-                                            onClick={() => toggleItem(habit.id, 'habit')}
-                                            className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all active:scale-[0.98] ${habit.isToday
+                                            className={`p-3 rounded-xl border flex items-center gap-3 transition-all active:scale-[0.98] ${isDue
                                                 ? 'bg-purple-500/10 border-purple-500/50'
                                                 : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800'
                                                 }`}
                                         >
-                                            <div className={`p-1 rounded-full ${habit.isToday ? 'text-purple-400' : 'text-gray-500'}`}>
-                                                {habit.isToday ? <CheckCircle size={20} className="fill-current" /> : <Circle size={20} />}
+                                            <div className={`p-1 rounded-full ${isDue ? 'text-purple-400' : 'text-gray-500'}`}>
+                                                {isDue ? <CheckCircle size={20} className="fill-current" /> : <Circle size={20} />}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className={`font-bold text-sm truncate ${habit.isToday ? 'text-white' : 'text-gray-300'}`}>
+                                                <div className={`font-bold text-sm truncate ${isDue ? 'text-white' : 'text-gray-300'}`}>
                                                     {habit.title}
                                                 </div>
                                                 <div className="text-[10px] text-gray-500 mt-1 capitalize flex items-center gap-2">
@@ -131,7 +136,8 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                    ))
+                                        );
+                                    })
                                 )
                             )}
                         </div>

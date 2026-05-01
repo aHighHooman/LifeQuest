@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint src eslint.config.js vite.config.js postcss.config.js tailwind.config.js",
     "preview": "vite preview"
   },
   "dependencies": {

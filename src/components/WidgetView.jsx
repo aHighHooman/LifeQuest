@@ -4,7 +4,7 @@ import { Shield, CheckCircle, Flame, Maximize2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const WidgetView = () => {
-    const { stats, quests, habits, setWidgetMode, completeQuest, checkHabit } = useGame();
+    const { stats, quests, habits, setWidgetMode, completeQuest, completeHabit } = useGame();
 
     // Get top priority quest (first uncompleted)
     const topQuest = quests.find(q => !q.completed);
@@ -77,7 +77,7 @@ const WidgetView = () => {
                         <div key={habit.id} className="flex items-center justify-between group">
                             <span className="text-xs text-slate-300 truncate max-w-[70%]">{habit.title}</span>
                             <button
-                                onClick={() => checkHabit(habit.id)}
+                                onClick={() => completeHabit(habit.id)}
                                 className="flex items-center gap-1 text-xs text-slate-500 hover:text-orange-400 transition-colors"
                             >
                                 <Flame size={12} className={habit.streak > 0 ? "text-orange-500" : ""} />

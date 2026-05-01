@@ -16,7 +16,7 @@ import {
     Zap
 } from 'lucide-react';
 import clsx from 'clsx';
-import { getTodayISO } from '../utils/dateUtils';
+import { getTodayISO, toLocalISOString } from '../utils/dateUtils';
 
 const GENERIC_ENTRY_LABELS = new Set(['Manual Entry']);
 const EMPTY_LIST = [];
@@ -261,6 +261,17 @@ const getTodayEntriesSnapshot = (history, todayKey) => {
         lastEntry: nextTodayEntries[0] || latestEntry
     };
 };
+
+const getYesterdayKey = (todayKey) => {
+    const [year, month, day] = todayKey.split('-').map(Number);
+    const yesterday = new Date(year, month - 1, day);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return toLocalISOString(yesterday);
+};
+
+const isEditableEntryDate = (dateKey, todayKey, yesterdayKey) => (
+    dateKey === todayKey || dateKey === yesterdayKey
+);
 
 const buildRecentManualItems = (history, limit = 5) => {
     if (!history.length) return EMPTY_LIST;
@@ -623,6 +634,7 @@ const SavedFoodEditor = ({ food, onSave, onCancel }) => {
 const HistoryVaultModal = memo(({
     entriesByDay,
     todayKey,
+    yesterdayKey,
     savedFoods,
     mode = 'entries',
     selectionMode = null,
@@ -727,6 +739,7 @@ const HistoryVaultModal = memo(({
 
                             {entriesByDay.map((group) => {
                                 const isToday = group.dateKey === todayKey;
+                                const isEditable = isEditableEntryDate(group.dateKey, todayKey, yesterdayKey);
 
                                 return (
                                     <div
@@ -737,7 +750,7 @@ const HistoryVaultModal = memo(({
                                         <div className="flex items-center justify-between gap-4">
                                             <div>
                                                 <div className="text-[10px] uppercase tracking-[0.28em] text-rose-400/65">
-                                                    {isToday ? 'Editable Window' : 'Read Only'}
+                                                    {isEditable ? (isToday ? 'Editable Today' : 'Editable Yesterday') : 'Read Only'}
                                                 </div>
                                                 <div className="mt-1 font-game text-lg font-semibold uppercase tracking-[0.08em] text-rose-50">
                                                     {formatDateLabel(group.dateKey)}
@@ -769,7 +782,7 @@ const HistoryVaultModal = memo(({
                                                             <div className="rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1 text-xs font-mono text-rose-100">
                                                                 {entry.calories}
                                                             </div>
-                                                            {isToday && (
+                                                            {isEditable && (
                                                                 <>
                                                                     <button
                                                                         type="button"
@@ -790,7 +803,7 @@ const HistoryVaultModal = memo(({
                                                         </div>
                                                     </div>
 
-                                                    {isToday && editingEntryId === entry.id && (
+                                                    {isEditable && editingEntryId === entry.id && (
                                                         <EntryEditor
                                                             entry={entry}
                                                             onCancel={() => setEditingEntryId(null)}
@@ -1546,6 +1559,7 @@ const CalorieTracker = () => {
     } = useGameCalories();
 
     const todayKey = getTodayISO();
+    const yesterdayKey = useMemo(() => getYesterdayKey(todayKey), [todayKey]);
     const safeTarget = getSafeTarget(calories?.target);
     const currentCalories = Number(calories?.current || 0);
     const history = Array.isArray(calories?.history) ? calories.history : EMPTY_LIST;
@@ -1580,10 +1594,11 @@ const CalorieTracker = () => {
     }, [history, showVault]);
 
     const savedFoodsById = useMemo(() => new Map(rawSavedFoods.map((food) => [food.id, food])), [rawSavedFoods]);
-    const preset100Food = calories?.preset100FoodId ? savedFoodsById.get(calories.preset100FoodId) || null : null;
-    const preset250Food = calories?.preset250FoodId ? savedFoodsById.get(calories.preset250FoodId) || null : null;
-    const preset400Food = calories?.preset400FoodId ? savedFoodsById.get(calories.preset400FoodId) || null : null;
-    const preset550Food = calories?.preset550FoodId ? savedFoodsById.get(calories.preset550FoodId) || null : null;
+    const quickSlots = calories?.quickSlots || {};
+    const preset100Food = quickSlots.preset100 ? savedFoodsById.get(quickSlots.preset100) || null : null;
+    const preset250Food = quickSlots.preset250 ? savedFoodsById.get(quickSlots.preset250) || null : null;
+    const preset400Food = quickSlots.preset400 ? savedFoodsById.get(quickSlots.preset400) || null : null;
+    const preset550Food = quickSlots.preset550 ? savedFoodsById.get(quickSlots.preset550) || null : null;
     const recentManualItems = useMemo(() => buildRecentManualItems(history), [history]);
 
     const recentItems = useMemo(() => {
@@ -1627,20 +1642,8 @@ const CalorieTracker = () => {
     }, [logCalories, spendCoins]);
 
     const handleQuickSlotFoodSelect = useCallback((food) => {
-        if (foodPickerTarget === 'preset100') {
-            assignQuickSlotFood('preset100', food.id);
-        }
-
-        if (foodPickerTarget === 'preset250') {
-            assignQuickSlotFood('preset250', food.id);
-        }
-
-        if (foodPickerTarget === 'preset400') {
-            assignQuickSlotFood('preset400', food.id);
-        }
-
-        if (foodPickerTarget === 'preset550') {
-            assignQuickSlotFood('preset550', food.id);
+        if (foodPickerTarget) {
+            assignQuickSlotFood(foodPickerTarget, food.id);
         }
 
         setActiveSheet(null);
@@ -1926,6 +1929,7 @@ const CalorieTracker = () => {
                         liteMode={liteMode}
                         entriesByDay={entriesByDay}
                         todayKey={todayKey}
+                        yesterdayKey={yesterdayKey}
                         savedFoods={savedFoods}
                         mode={vaultTab}
                         onClose={() => setShowVault(false)}

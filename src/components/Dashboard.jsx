@@ -7,6 +7,7 @@ import FocusSelectionModal from './FocusSelectionModal';
 import DayTimer from './DayTimer';
 import clsx from 'clsx';
 import { getTodayISO } from '../utils/dateUtils';
+import { isHabitDueForFocus } from '../domain/gameState';
 
 const HexNode = ({ node, onClick, index, position }) => {
     const isCompleted = node.completed;
@@ -253,34 +254,21 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
 };
 
 const Dashboard = ({ onTabChange, onOpenSettings }) => {
-    const { stats, quests, habits, completeQuest, checkHabit } = useGame();
+    const { stats, quests, habits, completeQuest, completeHabit } = useGame();
     const [showStats, setShowStats] = useState(false);
     const [showFocusModal, setShowFocusModal] = useState(false);
 
     const xpPercentage = Math.min((stats.xp / stats.maxXp) * 100, 100);
     const hpPercentage = Math.min((stats.hp / stats.maxHp) * 100, 100);
 
-    // Filter "Today's Focus" items
-    const todayQuests = useMemo(() =>
-        quests.filter(q => q.isToday && !q.completed),
-        [quests]
-    );
-    const todayHabits = useMemo(() =>
-        habits.filter(h => h.isToday),
-        [habits]
-    );
-
     // Get today's date for habit completion check
     const today = useMemo(() => getTodayISO(), []);
 
-    // Check if habit is already completed today (inline helper)
-    const isHabitDoneToday = (habit) => (habit.history?.[today] || 0) > 0;
-
     // Memoized pending queue for the hex matrix
     const matrixNodes = useMemo(() => {
-        const allPendingTodayQuests = quests.filter(q => q.isToday && !q.completed);
+        const allPendingTodayQuests = quests.filter(q => q.isFocusedToday && !q.completed);
         const allPendingTodayHabits = habits.filter(h => {
-            if (!h.isToday) return false;
+            if (!isHabitDueForFocus(h)) return false;
             return (h.history?.[today] || 0) <= 0;
         });
 
@@ -301,13 +289,8 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
             if (!node.completed) completeQuest(node.id);
             // If completed, maybe uncomplete? Not currently supported easily by logic, but for now just prevent action or show details
         } else {
-            // Habit toggle
-            // If completed, we want to undo? checkHabit handles 'positive', usually just adds. 
-            // The prompt says "reversible if i dont like it" referring to the UI, not necessarily the habit action.
-            // But usually habits are toggleable. 
-            // Current checkHabit implementation usually assumes 'doing' it.
             if (!node.completed) {
-                checkHabit(node.id, 'positive');
+                completeHabit(node.id);
             }
         }
     };
@@ -331,8 +314,6 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
         ].join(" ");
         return d;
     };
-    const xpBarStart = 160 - ((xpPercentage / 100) * 140);
-
     return (
         <motion.div
             className="flex flex-col h-full relative touch-none"
@@ -430,14 +411,14 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                                 <HexNode
                                     node={{ id: 'stat-lvl', type: 'level', title: 'LVL ' + stats.level, completed: false }}
                                     position={{ x: 0, y: -256 }}
-                                    onClick={(node) => setShowStats(true)}
+                                    onClick={() => setShowStats(true)}
                                 />
                             </div>
                             <div className="pointer-events-auto">
                                 <HexNode
                                     node={{ id: 'stat-gold', type: 'gold', title: stats.gold + '', completed: false }}
                                     position={{ x: 0, y: 256 }}
-                                    onClick={(node) => onTabChange('budget')}
+                                    onClick={() => onTabChange('budget')}
                                 />
                             </div>
 

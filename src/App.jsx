@@ -5,12 +5,13 @@ import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
 import { motion as Motion } from 'framer-motion';
 import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
-import Dashboard from './components/Dashboard';
-import QuestBoard from './components/QuestBoard';
-import HabitTracker from './components/HabitTracker';
 import Navigation from './components/Navigation';
-import BudgetView from './components/BudgetView';
-import CalorieTracker from './components/CalorieTracker';
+
+const Dashboard = React.lazy(() => import('./components/Dashboard'));
+const QuestBoard = React.lazy(() => import('./components/QuestBoard'));
+const HabitTracker = React.lazy(() => import('./components/HabitTracker'));
+const BudgetView = React.lazy(() => import('./components/BudgetView'));
+const CalorieTracker = React.lazy(() => import('./components/CalorieTracker'));
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -76,11 +77,13 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
               transition={{ duration: 0.5 }}
             >
               <Profiler id={`screen:${currentTab}`} onRender={onProfileRender}>
-                {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} onOpenSettings={() => setIsSettingsOpen(true)} />}
-                {currentTab === 'quests' && <QuestBoard />}
-                {currentTab === 'protocols' && <HabitTracker />}
-                {currentTab === 'budget' && <BudgetView />}
-                {currentTab === 'calories' && <CalorieTracker />}
+                <React.Suspense fallback={null}>
+                  {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} onOpenSettings={() => setIsSettingsOpen(true)} />}
+                  {currentTab === 'quests' && <QuestBoard />}
+                  {currentTab === 'protocols' && <HabitTracker />}
+                  {currentTab === 'budget' && <BudgetView />}
+                  {currentTab === 'calories' && <CalorieTracker />}
+                </React.Suspense>
               </Profiler>
             </Motion.main>
           </div>

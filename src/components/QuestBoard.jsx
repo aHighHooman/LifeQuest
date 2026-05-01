@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { CheckCircle, Trash2, Plus, Sword, Settings, Calendar, X, RotateCcw } from 'lucide-react';
 import clsx from 'clsx';
 import { SPRING_CONFIG } from '../constants/animations';
 import { isWithinDays, getTodayISO, toLocalISOString } from '../utils/dateUtils';
+import { useDeckOrder } from '../hooks/useDeckOrder';
 
 const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious, custom }) => {
     const x = useMotionValue(0);
@@ -12,9 +13,6 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
     const rotate = useTransform(x, [-200, 200], [-30, 30]);
 
     // Background colors for swipe feedback
-    const bgRight = useTransform(x, [0, 150], ["rgba(0,0,0,0)", "rgba(16, 185, 129, 0.5)"]);
-    const bgLeft = useTransform(x, [-150, 0], ["rgba(244, 63, 94, 0.5)", "rgba(0,0,0,0)"]);
-
     const [showDetails, setShowDetails] = useState(false);
     const [isEditingBrief, setIsEditingBrief] = useState(false);
     const [localBrief, setLocalBrief] = useState(quest.missionBrief || '');
@@ -332,43 +330,28 @@ const QuestBoard = () => {
         setDifficulty('easy');
     };
 
-    const [skippedOffsets, setSkippedOffsets] = useState({});
+    const baseActiveQuests = useMemo(() =>
+        quests.filter(q => !q.completed && !q.discarded),
+        [quests]
+    );
+    const activeQuestIds = useMemo(() => baseActiveQuests.map((quest) => quest.id), [baseActiveQuests]);
+    const questDeckOrder = useDeckOrder(activeQuestIds);
 
     const handleSkip = (id) => {
         setSlideDirection(1);
-        setSkippedOffsets(prev => ({ ...prev, [id]: Date.now() }));
+        questDeckOrder.next(id);
     };
 
     const handlePrevious = () => {
         setSlideDirection(-1);
-        // Calculate current order to find the last item
-        const active = quests
-            .filter(q => !q.completed && !q.discarded)
-            .sort((a, b) => (skippedOffsets[a.id] || 0) - (skippedOffsets[b.id] || 0));
-
-        if (active.length === 0) return;
-
-        // Get the last item (bottom of the deck)
-        const lastQuest = active[active.length - 1];
-
-        // To bring it to the front, we need an offset smaller than any current offset
-        const currentOffsets = Object.values(skippedOffsets);
-        const minOffset = currentOffsets.length > 0 ? Math.min(...currentOffsets) : 0;
-
-        // Assign a new negative offset to force it to the top
-        setSkippedOffsets(prev => ({
-            ...prev,
-            [lastQuest.id]: Math.min(0, minOffset) - 1
-        }));
+        questDeckOrder.prev();
     };
 
     // Filter Logic (memoized)
-    const activeQuests = useMemo(() =>
-        quests
-            .filter(q => !q.completed && !q.discarded)
-            .sort((a, b) => (skippedOffsets[a.id] || 0) - (skippedOffsets[b.id] || 0)),
-        [quests, skippedOffsets]
-    );
+    const activeQuests = useMemo(() => {
+        const questsById = new Map(baseActiveQuests.map((quest) => [quest.id, quest]));
+        return questDeckOrder.orderedIds.map((id) => questsById.get(id)).filter(Boolean);
+    }, [baseActiveQuests, questDeckOrder.orderedIds]);
 
     const completedQuests = useMemo(() =>
         quests.filter(q => q.completed),

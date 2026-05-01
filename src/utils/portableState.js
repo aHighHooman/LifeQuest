@@ -64,6 +64,8 @@ const ALLOWED_SCALAR_KEYS = {
         'target',
         'passiveCheckpointDate',
         'passiveCheckpoints',
+        'passiveCheckpointLedger',
+        'quickSlots',
         'preset100FoodId',
         'preset250FoodId',
         'preset400FoodId',
@@ -291,10 +293,13 @@ export const formatPortableSnapshot = (snapshot) => {
             target: snapshot.calories.target,
             passiveCheckpointDate: snapshot.calories.passiveCheckpointDate ?? null,
             passiveCheckpoints: snapshot.calories.passiveCheckpoints || [],
-            preset100FoodId: snapshot.calories.preset100FoodId ?? null,
-            preset250FoodId: snapshot.calories.preset250FoodId ?? null,
-            preset400FoodId: snapshot.calories.preset400FoodId ?? null,
-            preset550FoodId: snapshot.calories.preset550FoodId ?? null
+            passiveCheckpointLedger: snapshot.calories.passiveCheckpointLedger || {},
+            quickSlots: snapshot.calories.quickSlots || {
+                preset100: snapshot.calories.preset100FoodId ?? null,
+                preset250: snapshot.calories.preset250FoodId ?? null,
+                preset400: snapshot.calories.preset400FoodId ?? null,
+                preset550: snapshot.calories.preset550FoodId ?? null
+            }
         }),
         '',
         renderJsonSection('calorieHistory', snapshot.calories.history || []),
@@ -378,6 +383,13 @@ export const parsePortableSnapshot = (text) => {
             target: sections.calories.target,
             passiveCheckpointDate: sections.calories.passiveCheckpointDate ?? null,
             passiveCheckpoints: sections.calories.passiveCheckpoints || [],
+            passiveCheckpointLedger: sections.calories.passiveCheckpointLedger || {},
+            quickSlots: sections.calories.quickSlots || {
+                preset100: sections.calories.preset100FoodId ?? null,
+                preset250: sections.calories.preset250FoodId ?? null,
+                preset400: sections.calories.preset400FoodId ?? null,
+                preset550: sections.calories.preset550FoodId ?? null
+            },
             preset100FoodId: sections.calories.preset100FoodId ?? null,
             preset250FoodId: sections.calories.preset250FoodId ?? null,
             preset400FoodId: sections.calories.preset400FoodId ?? null,

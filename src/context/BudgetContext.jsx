@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { usePersistentState } from '../utils/persistence';
+import { createId } from '../domain/gameState';
 
 const BudgetContext = createContext();
 
@@ -38,7 +39,7 @@ export const BudgetProvider = ({ children }) => {
     const addGroceryItem = useCallback((name, quantity = 1) => {
         const price = priceDatabase[name] || 0;
         const newItem = {
-            id: Date.now().toString(),
+            id: createId('grocery'),
             name,
             quantity: Math.max(1, Number(quantity) || 1),
             price,

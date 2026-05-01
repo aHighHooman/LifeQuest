@@ -5,6 +5,7 @@ import { CheckCircle, Trash2, Plus, Zap, X, RotateCcw, Power, Coins } from 'luci
 import clsx from 'clsx';
 import { usePersistentState } from '../utils/persistence';
 import { PROTOCOL_LOOKAHEAD_STORAGE_KEY } from '../constants/persistenceKeys.js';
+import { useDeckOrder } from '../hooks/useDeckOrder';
 
 // Constants
 const LOOKAHEAD_DAYS_DEFAULT = 1;
@@ -389,7 +390,7 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
     );
 };
 
-const ProtocolDeck = ({ habits, cycleOffsets, onComplete, onSkip, onCycleNext, onCyclePrev, onUpdateRewards, slideDirection = 1 }) => {
+const ProtocolDeck = ({ habits, onComplete, onSkip, onCycleNext, onCyclePrev, onUpdateRewards, slideDirection = 1 }) => {
     // Only show top 4
     const visibleHabits = habits.slice(0, 4);
 
@@ -410,7 +411,7 @@ const ProtocolDeck = ({ habits, cycleOffsets, onComplete, onSkip, onCycleNext, o
             <AnimatePresence custom={slideDirection}>
                 {visibleHabits.map((habit, index) => (
                     <ProtocolDeckCard
-                        key={`${habit.id}-${cycleOffsets[habit.id] || 0}`}
+                        key={habit.id}
                         habit={habit}
                         index={index}
                         isTopInDeck={index === 0}
@@ -713,7 +714,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
 };
 
 const HabitTracker = () => {
-    const { habits, addHabit, checkHabit, deleteHabit, toggleHabitActivation, updateHabitRewards, settings } = useGame();
+    const { habits, addHabit, completeHabit, skipHabitCycle, deleteHabit, toggleHabitActivation, updateHabitRewards, settings } = useGame();
 
     // Modal States
     const [showActiveList, setShowActiveList] = useState(false);
@@ -731,7 +732,6 @@ const HabitTracker = () => {
     }, [setStoredLookaheadDays]);
 
     // Deck Logic
-    const [cycleOffsets, setCycleOffsets] = useState({});
     const [dismissedHabits, setDismissedHabits] = useState([]);
     const [slideDirection, setSlideDirection] = useState(1); // 1 = Right, -1 = Left (Skip)
 
@@ -752,18 +752,20 @@ const HabitTracker = () => {
         [activeHabits]
     );
 
-    const deckHabits = useMemo(() => {
+    const baseDeckHabits = useMemo(() => {
         return activeHabits.filter(h => {
             if (dismissedHabits.includes(h.id)) return false;
 
             const daysUntil = getDaysUntilDue(h);
             return daysUntil < lookaheadDays;
-        }).sort((a, b) => {
-            const cycleA = cycleOffsets[a.id] || 0;
-            const cycleB = cycleOffsets[b.id] || 0;
-            return cycleA - cycleB;
         });
-    }, [activeHabits, dismissedHabits, lookaheadDays, cycleOffsets]);
+    }, [activeHabits, dismissedHabits, lookaheadDays]);
+    const deckHabitIds = useMemo(() => baseDeckHabits.map((habit) => habit.id), [baseDeckHabits]);
+    const protocolDeckOrder = useDeckOrder(deckHabitIds);
+    const deckHabits = useMemo(() => {
+        const habitsById = new Map(baseDeckHabits.map((habit) => [habit.id, habit]));
+        return protocolDeckOrder.orderedIds.map((id) => habitsById.get(id)).filter(Boolean);
+    }, [baseDeckHabits, protocolDeckOrder.orderedIds]);
 
 
     // --- HANDLERS ---
@@ -772,54 +774,24 @@ const HabitTracker = () => {
 
     const handleComplete = (id) => {
         setSlideDirection(1); // Right
-        setCycleOffsets(prev => ({ ...prev, [id]: Date.now() }));
-        checkHabit(id, 'positive');
+        protocolDeckOrder.complete(id);
+        completeHabit(id);
     };
 
     const handleSkip = (id) => {
         setSlideDirection(-1); // Left
         setDismissedHabits(prev => [...prev, id]);
-        checkHabit(id, 'skip');
+        skipHabitCycle(id);
     };
 
     const handleCycleNext = (id) => {
         setSlideDirection(2); // Up (Fly Up)
-        // Move to bottom of deck
-        setCycleOffsets(prev => ({ ...prev, [id]: Date.now() }));
+        protocolDeckOrder.next(id);
     };
 
     const handleCyclePrev = () => {
         setSlideDirection(-2); // Down (Drop In - Initial variant handles negative direction appropriately if matched)
-
-        // 1. Identify items currently in the deck (including cycled ones)
-        // We want to find the one that was cycled *last* (highest timestamp) and force it to top.
-        // Actually, we need to find the one with the highest cycle offset and give it the lowest offset.
-
-        const inDeck = activeHabits.filter(h => {
-            if (dismissedHabits.includes(h.id)) return false;
-            const daysUntil = getDaysUntilDue(h);
-            return daysUntil < lookaheadDays;
-        });
-
-        if (inDeck.length === 0) return;
-
-        // Sort by current cycle offsets
-        const sorted = [...inDeck].sort((a, b) => {
-            const cycleA = cycleOffsets[a.id] || 0;
-            const cycleB = cycleOffsets[b.id] || 0;
-            return cycleA - cycleB;
-        });
-
-        // The last item (highest offset) is the one we want to bring back to top
-        const lastHabit = sorted[sorted.length - 1];
-
-        const currentOffsets = Object.values(cycleOffsets);
-        const minOffset = currentOffsets.length > 0 ? Math.min(...currentOffsets) : 0;
-
-        setCycleOffsets(prev => ({
-            ...prev,
-            [lastHabit.id]: Math.min(0, minOffset) - 1
-        }));
+        protocolDeckOrder.prev();
     };
 
     const handleDeactivate = (id) => {
@@ -828,11 +800,7 @@ const HabitTracker = () => {
 
     const handleActivate = (id) => {
         toggleHabitActivation(id, true);
-        setCycleOffsets(prev => {
-            const next = { ...prev };
-            delete next[id];
-            return next;
-        });
+        setDismissedHabits(prev => prev.filter((habitId) => habitId !== id));
     };
 
     return (
@@ -867,7 +835,6 @@ const HabitTracker = () => {
             <div className="mb-0 z-10 relative">
                 <ProtocolDeck
                     habits={deckHabits}
-                    cycleOffsets={cycleOffsets}
                     onComplete={handleComplete}
                     onSkip={handleSkip}
                     onCycleNext={handleCycleNext}
