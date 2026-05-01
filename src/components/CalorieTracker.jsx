@@ -213,10 +213,9 @@ const getWheelPosition = (angle, radius) => {
 const groupEntriesByDay = (history) => {
     if (!history?.length) return EMPTY_LIST;
 
-    const groups = [];
     const groupsByDate = new Map();
 
-    for (let index = history.length - 1; index >= 0; index -= 1) {
+    for (let index = 0; index < history.length; index += 1) {
         const entry = history[index];
         const dateKey = entry.dateKey || getTodayISO();
         let group = groupsByDate.get(dateKey);
@@ -228,14 +227,33 @@ const groupEntriesByDay = (history) => {
                 total: 0
             };
             groupsByDate.set(dateKey, group);
-            groups.push(group);
         }
 
-        group.entries.push(entry);
+        group.entries.push({ entry, index });
         group.total += Number(entry.calories || 0);
     }
 
-    return groups;
+    return Array.from(groupsByDate.values())
+        .sort((a, b) => b.dateKey.localeCompare(a.dateKey))
+        .map((group) => ({
+            ...group,
+            entries: group.entries
+                .sort((a, b) => {
+                    const aTime = Date.parse(a.entry.timestamp || '');
+                    const bTime = Date.parse(b.entry.timestamp || '');
+
+                    if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+                        return bTime - aTime;
+                    }
+
+                    if (Number.isFinite(aTime) !== Number.isFinite(bTime)) {
+                        return Number.isFinite(bTime) ? 1 : -1;
+                    }
+
+                    return b.index - a.index;
+                })
+                .map(({ entry }) => entry)
+        }));
 };
 
 const getTodayEntriesSnapshot = (history, todayKey) => {
@@ -1637,7 +1655,8 @@ const CalorieTracker = () => {
             calories: food.calories,
             label: food.name,
             source: 'saved-food',
-            foodId: food.id
+            foodId: food.id,
+            coinCost: normalizeCalories(food.coinCost)
         });
     }, [logCalories, spendCoins]);
 
@@ -1680,7 +1699,8 @@ const CalorieTracker = () => {
                 calories: food.calories,
                 label: food.name,
                 source: 'saved-food',
-                foodId: food.id
+                foodId: food.id,
+                coinCost: normalizeCalories(food.coinCost)
             });
             return;
         }
@@ -1691,7 +1711,8 @@ const CalorieTracker = () => {
         logCalories({
             calories: amount,
             label: label || (amount < 0 ? 'Exercise Burn' : 'Manual Entry'),
-            source: 'manual'
+            source: 'manual',
+            coinCost: amount > 0 ? normalizeCalories(coinCost) : 0
         });
     }, [createSavedFood, logCalories, spendCoins]);
 

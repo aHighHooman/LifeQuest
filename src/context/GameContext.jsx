@@ -166,7 +166,8 @@ const createCalorieHistoryEntry = ({
     calories,
     label,
     source = 'manual',
-    foodId = null
+    foodId = null,
+    coinCost = 0
 }) => {
     const safeTimestamp = timestamp || new Date().toISOString();
     const safeCalories = normalizeSignedCalorieNumber(calories);
@@ -185,7 +186,8 @@ const createCalorieHistoryEntry = ({
                     : 'Manual Entry'
         ),
         source: safeSource,
-        foodId: foodId || null
+        foodId: foodId || null,
+        coinCost: Math.max(0, normalizeCalorieNumber(coinCost))
     };
 };
 
@@ -224,7 +226,8 @@ const normalizeCalorieHistoryEntry = (entry, index) => {
         calories,
         label: entry?.label || fallbackLabel,
         source,
-        foodId: entry?.foodId || null
+        foodId: entry?.foodId || null,
+        coinCost: entry?.coinCost
     });
 };
 
@@ -253,12 +256,24 @@ const getEditableCalorieDateKeys = () => {
 };
 
 const normalizeCaloriesForImport = (calories = {}) => {
-    const history = Array.isArray(calories.history)
-        ? calories.history.map(normalizeCalorieHistoryEntry)
-        : INITIAL_CALORIES.history;
     const savedFoods = Array.isArray(calories.savedFoods)
         ? calories.savedFoods.map(normalizeSavedFood)
         : INITIAL_CALORIES.savedFoods;
+    const savedFoodsById = new Map(savedFoods.map((food) => [food.id, food]));
+    const history = Array.isArray(calories.history)
+        ? calories.history.map((entry, index) => {
+            const normalizedEntry = normalizeCalorieHistoryEntry(entry, index);
+            if (Object.prototype.hasOwnProperty.call(entry || {}, 'coinCost')) {
+                return normalizedEntry;
+            }
+
+            const savedFood = normalizedEntry.foodId ? savedFoodsById.get(normalizedEntry.foodId) : null;
+            return {
+                ...normalizedEntry,
+                coinCost: normalizeCalorieNumber(savedFood?.coinCost || 0)
+            };
+        })
+        : INITIAL_CALORIES.history;
     const savedFoodIds = new Set(savedFoods.map((food) => food.id));
     const recentFoodIds = Array.isArray(calories.recentFoodIds)
         ? calories.recentFoodIds.filter((id) => savedFoodIds.has(id)).slice(0, 10)
@@ -307,6 +322,7 @@ const isNormalizedCalorieHistoryEntry = (entry) => {
     if (typeof entry.label !== 'string' || !entry.label.trim()) return false;
     if (typeof entry.source !== 'string' || !entry.source) return false;
     if (!Number.isInteger(Number(entry.calories))) return false;
+    if (!Number.isInteger(Number(entry.coinCost)) || Number(entry.coinCost) < 0) return false;
 
     return Object.prototype.hasOwnProperty.call(entry, 'foodId');
 };
@@ -763,7 +779,8 @@ export const GameProvider = ({ children }) => {
         calories: amount,
         label,
         source = 'manual',
-        foodId = null
+        foodId = null,
+        coinCost = 0
     }) => {
         const safeCalories = normalizeSignedCalorieNumber(amount);
         if (safeCalories === 0) return false;
@@ -774,7 +791,8 @@ export const GameProvider = ({ children }) => {
             calories: safeCalories,
             label,
             source,
-            foodId
+            foodId,
+            coinCost
         });
 
         setCalories(prev => {
@@ -839,6 +857,14 @@ export const GameProvider = ({ children }) => {
 
     const deleteCalorieEntry = useCallback((entryId) => {
         const editableDateKeys = getEditableCalorieDateKeys();
+        const history = calories.history || [];
+        const deletedEntry = history.find((entry) => entry.id === entryId && editableDateKeys.has(entry.dateKey));
+        const savedFood = deletedEntry?.foodId
+            ? (calories.savedFoods || []).find((food) => food.id === deletedEntry.foodId)
+            : null;
+        const refundAmount = deletedEntry
+            ? normalizeCalorieNumber(deletedEntry.coinCost ?? savedFood?.coinCost ?? 0)
+            : 0;
 
         setCalories(prev => {
             const nextHistory = (prev.history || []).filter(
@@ -851,7 +877,18 @@ export const GameProvider = ({ children }) => {
                 current: recomputeCalorieCurrent(nextHistory)
             };
         });
-    }, [setCalories]);
+
+        if (deletedEntry && refundAmount > 0) {
+            setStats(prev => ({ ...prev, gold: Number(prev.gold || 0) + refundAmount }));
+            appendCoinHistoryEntries([
+                createCoinHistoryEntry({
+                    amount: refundAmount,
+                    description: `Refunded food removal: ${deletedEntry.label || 'Calorie entry'}`,
+                    type: 'earned'
+                })
+            ]);
+        }
+    }, [appendCoinHistoryEntries, calories.history, calories.savedFoods, setCalories, setStats]);
 
     const createSavedFood = useCallback(({ name, calories, coinCost = 0 }) => {
         const nextFood = createSavedFoodRecord({ name, calories, coinCost });
