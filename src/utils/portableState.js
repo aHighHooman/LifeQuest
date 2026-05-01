@@ -7,6 +7,7 @@ import {
     normalizeQuickSlots
 } from '../domain/gameState.js';
 import { getTodayISO, toLocalDateKey } from './dateUtils.js';
+import { DEFAULT_HOME_SCREEN_ICON_ID, normalizeHomeScreenIconId } from './homeScreenIcons.js';
 import { safeGet, safeSet } from './persistence.js';
 
 export const PORTABLE_FORMAT_VERSION = 3;
@@ -76,7 +77,8 @@ const ALLOWED_SCALAR_KEYS = {
         'questRewardEasy',
         'questRewardMedium',
         'questRewardHard',
-        'questRewardLegendary'
+        'questRewardLegendary',
+        'homeScreenIconId'
     ]),
     budget: new Set([
         'totalMonthlyBudget',
@@ -115,6 +117,7 @@ const INITIAL_STATS = {
 
 const INITIAL_SETTINGS = {
     protocolReward: 1,
+    homeScreenIconId: DEFAULT_HOME_SCREEN_ICON_ID,
     questRewards: {
         easy: 5,
         medium: 15,
@@ -427,6 +430,7 @@ const normalizeSettings = (settings = {}) => ({
     ...INITIAL_SETTINGS,
     ...settings,
     protocolReward: normalizeNonNegativeInteger(settings.protocolReward ?? INITIAL_SETTINGS.protocolReward, INITIAL_SETTINGS.protocolReward),
+    homeScreenIconId: normalizeHomeScreenIconId(settings.homeScreenIconId),
     questRewards: {
         easy: normalizeNonNegativeInteger(settings.questRewards?.easy ?? settings.questRewardEasy ?? INITIAL_SETTINGS.questRewards.easy, INITIAL_SETTINGS.questRewards.easy),
         medium: normalizeNonNegativeInteger(settings.questRewards?.medium ?? settings.questRewardMedium ?? INITIAL_SETTINGS.questRewards.medium, INITIAL_SETTINGS.questRewards.medium),
@@ -596,6 +600,7 @@ export const formatPortableSnapshot = (snapshot) => {
         '',
         renderScalarSection('settings', {
             protocolReward: normalized.settings.protocolReward,
+            homeScreenIconId: normalized.settings.homeScreenIconId,
             questRewardEasy: normalized.settings.questRewards.easy,
             questRewardMedium: normalized.settings.questRewards.medium,
             questRewardHard: normalized.settings.questRewards.hard,
@@ -665,6 +670,7 @@ const sectionsToSnapshot = (header, sections) => {
         stats: sections.stats,
         settings: {
             protocolReward: sections.settings.protocolReward,
+            homeScreenIconId: sections.settings.homeScreenIconId,
             questRewards: {
                 easy: sections.settings.questRewardEasy,
                 medium: sections.settings.questRewardMedium,

@@ -6,6 +6,7 @@ import {
     parsePortableSnapshot,
     summarizePortableSnapshot
 } from '../utils/portableState.js';
+import { HOME_SCREEN_ICON_IDS, getHomeScreenIcon, normalizeHomeScreenIconId } from '../utils/homeScreenIcons.js';
 
 const SettingsModal = ({ isOpen, onClose }) => {
     const {
@@ -24,13 +25,18 @@ const SettingsModal = ({ isOpen, onClose }) => {
     const [importText, setImportText] = useState('');
     const [importError, setImportError] = useState('');
     const [importStatus, setImportStatus] = useState('');
+    const [saveStatus, setSaveStatus] = useState('');
     const [importSummary, setImportSummary] = useState(null);
     const [validatedSnapshot, setValidatedSnapshot] = useState(null);
 
     React.useEffect(() => {
         if (isOpen) {
             setLocalStats(stats);
-            setLocalSettings(settings);
+            setLocalSettings({
+                ...settings,
+                homeScreenIconId: normalizeHomeScreenIconId(settings.homeScreenIconId)
+            });
+            setSaveStatus('');
         }
     }, [isOpen, stats, settings]);
 
@@ -69,8 +75,11 @@ const SettingsModal = ({ isOpen, onClose }) => {
 
     const handleSave = () => {
         updateStats(localStats);
-        updateSettings(localSettings);
-        onClose();
+        updateSettings({
+            ...localSettings,
+            homeScreenIconId: normalizeHomeScreenIconId(localSettings.homeScreenIconId)
+        });
+        setSaveStatus('Configuration saved. For iPhone, this affects the next Add to Home Screen action. If LifeQuest is already on your home screen, remove it and add it again to use the new icon.');
     };
 
     const handleGenerateExport = () => {
@@ -252,6 +261,52 @@ const SettingsModal = ({ isOpen, onClose }) => {
                         </div>
                     </div>
 
+                    <div className="space-y-4">
+                        <div className="border-b border-slate-800 pb-2">
+                            <h3 className="text-lg font-bold text-white">Home Screen Icon</h3>
+                            <p className="text-sm text-slate-400 mt-1">Choose the icon Safari should use for future iPhone Add to Home Screen installs.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {HOME_SCREEN_ICON_IDS.map((iconId) => {
+                                const icon = getHomeScreenIcon(iconId);
+                                const isSelected = normalizeHomeScreenIconId(localSettings.homeScreenIconId) === iconId;
+
+                                return (
+                                    <button
+                                        key={icon.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setLocalSettings(prev => ({ ...prev, homeScreenIconId: icon.id }));
+                                            setSaveStatus('');
+                                        }}
+                                        className={`rounded-lg border p-3 text-left transition-colors ${isSelected ? 'border-game-accent bg-game-accent/10 shadow-[0_0_18px_rgba(34,211,238,0.16)]' : 'border-slate-800 bg-slate-950 hover:border-slate-600'}`}
+                                        aria-pressed={isSelected}
+                                    >
+                                        <div className="flex items-center gap-3 sm:block">
+                                            <img
+                                                src={icon.src}
+                                                alt=""
+                                                className="h-16 w-16 shrink-0 rounded-[18px] object-cover sm:h-20 sm:w-20"
+                                            />
+                                            <div className="min-w-0 sm:mt-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-bold text-white">{icon.label}</span>
+                                                    {isSelected && <CheckCircle2 size={15} className="shrink-0 text-game-accent" />}
+                                                </div>
+                                                <div className="mt-1 text-xs text-slate-500">{icon.id}</div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="rounded-lg border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-300">
+                            iPhone uses <span className="font-mono text-slate-100">apple-touch-icon</span> for this flow. Existing home screen shortcuts keep their old icon until removed and added again.
+                        </div>
+                    </div>
+
                     <div className="space-y-5">
                         <div className="border-b border-slate-800 pb-2">
                             <h3 className="text-lg font-bold text-white">Data Transfer</h3>
@@ -367,6 +422,11 @@ const SettingsModal = ({ isOpen, onClose }) => {
                 </div>
 
                 <div className="p-4 border-t border-slate-800 flex justify-end gap-3 sticky bottom-0 bg-slate-900/95 backdrop-blur">
+                    {saveStatus && (
+                        <div className="mr-auto max-w-xl rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-100">
+                            {saveStatus}
+                        </div>
+                    )}
                     <button
                         onClick={onClose}
                         className="px-4 py-2 rounded text-gray-400 hover:bg-slate-800 transition-colors font-bold text-sm"

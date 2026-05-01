@@ -26,6 +26,11 @@ import {
     normalizeQuestRecord,
     normalizeQuickSlots
 } from '../domain/gameState.js';
+import {
+    DEFAULT_HOME_SCREEN_ICON_ID,
+    applyHomeScreenIconMetadata,
+    normalizeHomeScreenIconId
+} from '../utils/homeScreenIcons.js';
 
 const GameContext = createContext();
 const CalorieContext = createContext();
@@ -47,6 +52,7 @@ const INITIAL_HABITS = [];
 
 const INITIAL_SETTINGS = {
     protocolReward: 1,
+    homeScreenIconId: DEFAULT_HOME_SCREEN_ICON_ID,
     questRewards: {
         easy: 5,
         medium: 15,
@@ -551,6 +557,15 @@ export const GameProvider = ({ children }) => {
     useEffect(() => {
         setCalories((prev) => (isCaloriesStateNormalized(prev) ? prev : normalizeCaloriesForImport(prev)));
     }, [setCalories]);
+
+    useEffect(() => {
+        const normalizedIconId = normalizeHomeScreenIconId(settings.homeScreenIconId);
+        applyHomeScreenIconMetadata(normalizedIconId);
+
+        if (settings.homeScreenIconId !== normalizedIconId) {
+            setSettings((prev) => ({ ...prev, homeScreenIconId: normalizedIconId }));
+        }
+    }, [settings.homeScreenIconId, setSettings]);
 
     const settlePassiveCalorieCheckpoints = useCallback((now = new Date()) => {
         const todayKey = toLocalDateKey(now);

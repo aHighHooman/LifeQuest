@@ -190,6 +190,7 @@ describe('portableState', () => {
 
         expect(Object.keys(normalized)).toEqual(PORTABLE_SNAPSHOT_KEYS);
         expect(normalized.settings.questRewards.easy).toBe(9);
+        expect(normalized.settings.homeScreenIconId).toBe('abstract-path-compass-v2');
         expect(normalized.quests[0].isFocusedToday).toBe(true);
         expect(normalized.calories.target).toBe(1);
         expect(normalized.calories.recentFoodIds).toEqual(['food-a']);
@@ -217,6 +218,7 @@ describe('portableState', () => {
         expect(sectionIndexes.every((index) => index >= 0)).toBe(true);
         expect(sectionIndexes).toEqual([...sectionIndexes].sort((left, right) => left - right));
         expect(text.indexOf('name: "Apples"')).toBeLessThan(text.indexOf('name: "Zucchini"'));
+        expect(text).toContain('homeScreenIconId: "abstract-path-compass-v2"');
         expect(formatPortableSnapshot(populatedSnapshot)).toBe(formatPortableSnapshot(populatedSnapshot));
     });
 
