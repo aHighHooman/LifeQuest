@@ -1,0 +1,82 @@
+# LifeQuest Transfer
+# Scalar sections use key: value. Collection sections use JSON.
+formatVersion: 2
+generatedAt: "2026-01-15T12:00:00.000Z"
+appName: "LifeQuest"
+
+[stats]
+level: 2
+xp: 20
+maxXp: 100
+hp: 90
+maxHp: 100
+gold: 50
+lastLoginDate: "2026-01-14"
+
+[settings]
+protocolReward: 2
+questRewardEasy: 5
+questRewardMedium: 15
+questRewardHard: 40
+questRewardLegendary: 100
+
+[budget]
+totalMonthlyBudget: 500
+groceryAllocation: 125
+earnedRewards: 4
+groceryPeriod: "weekly"
+stipendAmount: 10
+stipendPeriod: "weekly"
+stipendPaidThrough: "2026-01-08"
+goldToUsdRatio: 10
+
+[ui]
+protocolLookaheadDays: 2
+
+[quests]
+[
+  {"id":"quest-old","title":"Legacy Quest","isToday":true,"completed":false}
+]
+
+[habits]
+[
+  {"id":"habit-old","title":"Legacy Habit","history":{"2026-01-14":1},"completionReward":2}
+]
+
+[calories]
+current: 0
+target: 1800
+passiveCheckpointDate: "2026-01-15"
+passiveCheckpoints: ["18:00"]
+passiveCheckpointLedger: {"2026-01-15":["18:00"]}
+quickSlots: {"preset100":"food-old","preset250":null,"preset400":null,"preset550":null}
+
+[calorieHistory]
+[
+  {"id":"cal-old","timestamp":"2026-01-15T18:00:00.000Z","dateKey":"2026-01-15","calories":300,"label":"Soup","source":"saved-food","foodId":"food-old","coinCost":1}
+]
+
+[calorieSavedFoods]
+[
+  {"id":"food-old","name":"Soup","calories":300,"coinCost":1,"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"}
+]
+
+[calorieRecentFoods]
+[
+  "food-old"
+]
+
+[coinHistory]
+[
+  {"id":"coin-old","date":"2026-01-12T00:00:00.000Z","amount":5,"description":"Legacy","type":"earned"}
+]
+
+[groceryList]
+[
+  {"id":"grocery-old","name":"Eggs","quantity":1,"price":3,"completed":false}
+]
+
+[priceDatabase]
+{
+  "Eggs": 3
+}

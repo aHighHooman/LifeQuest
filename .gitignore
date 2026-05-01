@@ -11,6 +11,10 @@ node_modules
 dist
 dist-electron
 dist-ssr
+coverage
+.nyc_output
+test-results
+*.lcov
 *.local
 .gemini
 .agent

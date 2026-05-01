@@ -12,6 +12,7 @@ import {
 import { getTodayISO, isWithinDays, toLocalDateKey } from '../utils/dateUtils';
 import {
     createPortableSnapshot,
+    normalizePortableSnapshot,
     readProtocolLookaheadDays,
     storePortableImportBackup,
     writeProtocolLookaheadDays
@@ -89,20 +90,6 @@ const PASSIVE_CALORIE_CHECKPOINTS = [
     { id: '18:00', hour: 18, minute: 0, label: 'Passive Fill 6PM' },
     { id: '23:59', hour: 23, minute: 59, label: 'Passive Fill 11:59PM' }
 ];
-
-const normalizeStatsForImport = (stats = {}) => ({
-    ...INITIAL_STATS,
-    ...stats
-});
-
-const normalizeSettingsForImport = (settings = {}) => ({
-    ...INITIAL_SETTINGS,
-    ...settings,
-    questRewards: {
-        ...INITIAL_SETTINGS.questRewards,
-        ...(settings.questRewards || {})
-    }
-});
 
 const normalizeCalorieNumber = (value) => {
     const parsed = Math.round(Number(value) || 0);
@@ -407,30 +394,6 @@ const isCaloriesStateNormalized = (calories = {}) => {
     ));
 };
 
-const normalizeBudgetForImport = (budget = {}) => ({
-    ...INITIAL_BUDGET_TRANSFER,
-    ...budget,
-    groceryList: Array.isArray(budget.groceryList) ? budget.groceryList : INITIAL_BUDGET_TRANSFER.groceryList,
-    priceDatabase: budget.priceDatabase && !Array.isArray(budget.priceDatabase)
-        ? budget.priceDatabase
-        : INITIAL_BUDGET_TRANSFER.priceDatabase
-});
-
-const normalizeImportedSnapshot = (snapshot) => ({
-    stats: normalizeStatsForImport(snapshot.stats),
-    settings: normalizeSettingsForImport(snapshot.settings),
-    quests: Array.isArray(snapshot.quests) ? snapshot.quests.map(normalizeQuestRecord) : INITIAL_TASKS,
-    habits: Array.isArray(snapshot.habits)
-        ? snapshot.habits.map((habit) => normalizeDomainHabitRecord(habit, snapshot.settings?.protocolReward, getTodayISO()))
-        : INITIAL_HABITS,
-    calories: normalizeCaloriesForImport(snapshot.calories),
-    coinHistory: Array.isArray(snapshot.coinHistory) ? snapshot.coinHistory : INITIAL_COIN_HISTORY,
-    budget: normalizeBudgetForImport(snapshot.budget),
-    ui: {
-        protocolLookaheadDays: Math.max(1, Number(snapshot.ui?.protocolLookaheadDays) || 1)
-    }
-});
-
 const createLedgerTimestamp = (dateKey) => {
     if (!dateKey) return new Date().toISOString();
 
@@ -732,7 +695,7 @@ export const GameProvider = ({ children }) => {
 
     const importAppState = useCallback((snapshot) => {
         const backupKey = storePortableImportBackup(exportAppState());
-        const nextState = normalizeImportedSnapshot(snapshot);
+        const nextState = normalizePortableSnapshot(snapshot);
 
         setStats(nextState.stats);
         setSettings(nextState.settings);
