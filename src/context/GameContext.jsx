@@ -855,6 +855,11 @@ export const GameProvider = ({ children }) => {
         });
     }, [setCalories]);
 
+    const appendCoinHistoryEntries = useCallback((entries) => {
+        if (!entries.length) return;
+        setCoinHistory(prev => [...prev, ...entries]);
+    }, [setCoinHistory]);
+
     const deleteCalorieEntry = useCallback((entryId) => {
         const editableDateKeys = getEditableCalorieDateKeys();
         const history = calories.history || [];
@@ -953,11 +958,6 @@ export const GameProvider = ({ children }) => {
             };
         });
     }, [setCalories]);
-
-    const appendCoinHistoryEntries = useCallback((entries) => {
-        if (!entries.length) return;
-        setCoinHistory(prev => [...prev, ...entries]);
-    }, [setCoinHistory]);
 
     const spendCoins = useCallback((amount, description) => {
         setStats(prev => ({ ...prev, gold: prev.gold - amount }));
