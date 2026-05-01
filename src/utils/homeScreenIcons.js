@@ -1,3 +1,5 @@
+const assetUrl = (path) => `${import.meta.env.BASE_URL}${path}`;
+
 export const HOME_SCREEN_ICON_IDS = [
     'abstract-path-compass-v2',
     'shield-check-v2',
@@ -10,19 +12,19 @@ export const HOME_SCREEN_ICONS = {
     'abstract-path-compass-v2': {
         id: 'abstract-path-compass-v2',
         label: 'Path Compass',
-        src: '/icon-concepts/corrected/lifequest-abstract-path-compass-v2.png',
+        src: assetUrl('icon-concepts/corrected/lifequest-abstract-path-compass-v2.png'),
         sizes: '180x180'
     },
     'shield-check-v2': {
         id: 'shield-check-v2',
         label: 'Shield Check',
-        src: '/icon-concepts/corrected/lifequest-shield-check-v2.png',
+        src: assetUrl('icon-concepts/corrected/lifequest-shield-check-v2.png'),
         sizes: '180x180'
     },
     'mountain-path-star-v2': {
         id: 'mountain-path-star-v2',
         label: 'Mountain Path',
-        src: '/icon-concepts/corrected/lifequest-mountain-path-star-v2.png',
+        src: assetUrl('icon-concepts/corrected/lifequest-mountain-path-star-v2.png'),
         sizes: '180x180'
     }
 };

@@ -48,7 +48,7 @@ describe('homeScreenIcons', () => {
 
             expect(icon.id).toBe(iconId);
             expect(icon.label).toBeTruthy();
-            expect(icon.src).toMatch(/^\/icon-concepts\/corrected\/lifequest-.+\.png$/);
+            expect(icon.src).toMatch(/^\/?\.?\/?icon-concepts\/corrected\/lifequest-.+\.png$/);
             expect(icon.sizes).toBe('180x180');
         });
     });
