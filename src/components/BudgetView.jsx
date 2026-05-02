@@ -17,7 +17,7 @@ import {
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
-import { getTodayISO } from '../utils/dateUtils';
+import { getTodayISO, toLocalDateKey } from '../utils/dateUtils';
 
 // Constants
 const TAB_PROVISIONS = 'provisions';
@@ -902,30 +902,30 @@ const CoinSwitch = memo(({ onClick, onHoldComplete, resetSignal }) => {
     );
 });
 
-const VaultHeader = memo(({ totalMonthlyBudget, stipendAmount, formatCredits, liquidAssets }) => (
+const VaultHeader = memo(({ todayIn, liquidAssets, todayOut }) => (
     <div className="shrink-0 grid grid-cols-3 gap-2 p-2 pt-12 bg-black/40 border-b border-amber-900/50 backdrop-blur-md z-20" style={{ touchAction: 'none' }}>
-        <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
-            <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Budget</span>
+        <div className="bg-amber-950/30 border border-emerald-400/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group shadow-[0_0_18px_rgba(16,185,129,0.04)]">
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(245,158,11,0.05),rgba(16,185,129,0.08))] opacity-60 group-hover:opacity-100 transition-opacity" />
+            <span className="relative text-[9px] font-bold text-emerald-300/70 uppercase tracking-widest mb-0.5">Today In</span>
             <div className="flex items-center gap-1">
-                <Coins size={14} className="text-amber-500" />
-                <span className="text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{formatCredits(totalMonthlyBudget)}</span>
+                <Coins size={14} className="relative text-amber-500 drop-shadow-[0_0_6px_rgba(16,185,129,0.22)]" />
+                <span className="relative text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{Number(todayIn || 0).toLocaleString()}</span>
             </div>
         </div>
         <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
             <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest mb-0.5">Stipend</span>
-            <div className="flex items-center gap-1">
-                <Coins size={14} className="text-amber-500" />
-                <span className="text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{Number(stipendAmount || 0).toLocaleString()}</span>
-            </div>
-        </div>
-        <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
-            <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <span className="text-[9px] font-bold text-amber-400/80 uppercase tracking-widest mb-0.5">Liquid Assets</span>
+            <span className="text-[9px] font-bold text-amber-400/80 uppercase tracking-widest mb-0.5">On Hand</span>
             <div className="flex items-center gap-1">
                 <Coins size={14} className="text-amber-400" />
                 <span className="text-lg font-black font-game text-amber-400 leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">{liquidAssets.toLocaleString()}</span>
+            </div>
+        </div>
+        <div className="bg-amber-950/30 border border-red-400/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group shadow-[0_0_18px_rgba(248,113,113,0.04)]">
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(245,158,11,0.05),rgba(248,113,113,0.08))] opacity-60 group-hover:opacity-100 transition-opacity" />
+            <span className="relative text-[9px] font-bold text-red-300/70 uppercase tracking-widest mb-0.5">Today Out</span>
+            <div className="flex items-center gap-1">
+                <Coins size={14} className="relative text-amber-500 drop-shadow-[0_0_6px_rgba(248,113,113,0.22)]" />
+                <span className="relative text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{Number(todayOut || 0).toLocaleString()}</span>
             </div>
         </div>
     </div>
@@ -1301,6 +1301,23 @@ const BudgetView = () => {
         return toCreditValue(usdAmount).toLocaleString();
     }, [toCreditValue]);
 
+    const dailyLedgerSummary = useMemo(() => {
+        const todayKey = getTodayISO();
+
+        return coinHistory.reduce((summary, tx) => {
+            if (toLocalDateKey(tx.date) !== todayKey) return summary;
+
+            const amount = Number(tx.amount || 0);
+            if (tx.type === 'earned') {
+                summary.todayIn += amount;
+            } else if (tx.type === 'spent') {
+                summary.todayOut += amount;
+            }
+
+            return summary;
+        }, { todayIn: 0, todayOut: 0 });
+    }, [coinHistory]);
+
     const resetStipendAnchor = useCallback(() => {
         setStipendPaidThrough(getTodayISO());
     }, [setStipendPaidThrough]);
@@ -1658,10 +1675,9 @@ const BudgetView = () => {
 
             {/* 1. VAULT HEADER (Fixed) */}
             <VaultHeader
-                totalMonthlyBudget={totalMonthlyBudget}
-                stipendAmount={stipendAmount}
-                formatCredits={formatCredits}
+                todayIn={dailyLedgerSummary.todayIn}
                 liquidAssets={stats.gold}
+                todayOut={dailyLedgerSummary.todayOut}
             />
 
             {/* 4. MAIN VIEWPORT (Swappable) */}
