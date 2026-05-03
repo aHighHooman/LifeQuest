@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { motion as Motion, useDragControls } from 'framer-motion';
+import { AnimatePresence, motion as Motion, useDragControls } from 'framer-motion';
 import {
     Activity,
     Calendar,
     Coins,
-    Flame,
-    Heart,
     Target,
     TrendingUp,
-    WalletCards,
 } from 'lucide-react';
 import {
     Area,
@@ -26,27 +23,6 @@ import {
 } from 'recharts';
 import { useGame, useGameCalories } from '../context/GameContext';
 import { toLocalDateKey } from '../utils/dateUtils';
-
-const TAB_CONFIG = {
-    overview: {
-        label: 'Overview',
-        icon: Activity,
-        range: 'Last 7 days',
-        accent: 'text-sky-300'
-    },
-    finance: {
-        label: 'Finance',
-        icon: WalletCards,
-        range: 'Last 14 days',
-        accent: 'text-yellow-300'
-    },
-    health: {
-        label: 'Health',
-        icon: Heart,
-        range: 'Last 7 days',
-        accent: 'text-rose-300'
-    }
-};
 
 const TONE_STYLES = {
     blue: {
@@ -113,8 +89,6 @@ const formatAxisDate = (dateKey) =>
         day: 'numeric'
     }).format(fromDateKey(dateKey));
 
-const formatSignedValue = (value) => `${value > 0 ? '+' : ''}${value}`;
-
 const truncateLabel = (label, maxLength = 14) =>
     label.length > maxLength ? `${label.slice(0, maxLength - 1)}...` : label;
 
@@ -127,25 +101,121 @@ const EmptyChartState = ({ title, body }) => (
     </div>
 );
 
-const SummaryCard = ({ icon, label, value, helper, tone = 'blue', className = '' }) => {
-    const IconComponent = icon;
-    const toneStyles = TONE_STYLES[tone] || TONE_STYLES.blue;
+const getIndicatorColor = (tone) => {
+    switch (tone) {
+        case 'emerald':
+            return '#34d399';
+        case 'amber':
+            return '#fbbf24';
+        case 'rose':
+            return '#fb7185';
+        case 'violet':
+            return '#818cf8';
+        case 'blue':
+        default:
+            return '#38bdf8';
+    }
+};
+
+const MiniIndicator = ({ values = [], tone = 'blue', type = 'spark' }) => {
+    const color = getIndicatorColor(tone);
+    const safeValues = values.length ? values.map((value) => Number(value || 0)) : [0];
+    const maxValue = Math.max(...safeValues, 1);
+    const minValue = Math.min(...safeValues, 0);
+    const range = Math.max(maxValue - minValue, 1);
+
+    if (type === 'bars') {
+        return (
+            <div className="mt-3 flex h-7 items-end gap-1" aria-hidden="true">
+                {safeValues.map((value, index) => (
+                    <span
+                        key={`${value}-${index}`}
+                        className="min-w-0 flex-1 rounded-t-sm opacity-80"
+                        style={{
+                            height: `${Math.max(((value - minValue) / range) * 100, value > 0 ? 18 : 8)}%`,
+                            backgroundColor: color
+                        }}
+                    />
+                ))}
+            </div>
+        );
+    }
+
+    const points = safeValues
+        .map((value, index) => {
+            const x = safeValues.length === 1 ? 48 : (index / (safeValues.length - 1)) * 96;
+            const y = 28 - ((value - minValue) / range) * 24;
+            return `${x},${y}`;
+        })
+        .join(' ');
 
     return (
-        <div className={`relative overflow-hidden rounded-[1.35rem] border px-3.5 py-3 text-left shadow-[0_18px_40px_rgba(0,0,0,0.34)] sm:px-4 sm:py-4 ${toneStyles.card} ${className}`}>
-            <div className={`pointer-events-none absolute inset-x-4 top-0 h-px ${toneStyles.line}`} />
-            <div className={`pointer-events-none absolute -right-8 top-0 h-24 w-24 bg-gradient-to-bl blur-2xl ${toneStyles.glow}`} />
+        <svg className="mt-3 h-8 w-full overflow-visible" viewBox="0 0 96 32" preserveAspectRatio="none" aria-hidden="true">
+            <polyline
+                points={points}
+                fill="none"
+                stroke={color}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.4"
+                opacity="0.9"
+            />
+        </svg>
+    );
+};
+
+const SummaryCard = ({ icon, label, value, helper, tone = 'blue', className = '', onClick, isExpanded, indicator, variant = 'card', showIcon = true, chromeless = false }) => {
+    const IconComponent = icon;
+    const toneStyles = TONE_STYLES[tone] || TONE_STYLES.blue;
+    const Component = onClick ? 'button' : 'div';
+    const interactiveClasses = onClick ? 'cursor-pointer transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70' : '';
+
+    if (variant === 'strip') {
+        return (
+            <Component
+                type={onClick ? 'button' : undefined}
+                onClick={onClick}
+                aria-expanded={onClick ? isExpanded : undefined}
+                className={`relative overflow-hidden rounded-[1.1rem] px-3.5 py-3 text-left ${chromeless ? '' : `border shadow-[0_14px_30px_rgba(0,0,0,0.26)] ${toneStyles.card}`} ${interactiveClasses} ${className}`}
+            >
+                {!chromeless && <div className={`pointer-events-none absolute inset-y-3 left-0 w-px ${toneStyles.line}`} />}
+                <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="font-game text-[9px] font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
+                        <p className={`mt-1 text-[11px] leading-4 ${toneStyles.helper}`}>{helper}</p>
+                    </div>
+                    <p className={`shrink-0 font-game text-xl font-semibold uppercase tracking-[0.05em] ${toneStyles.value}`}>{value}</p>
+                </div>
+                {indicator && <MiniIndicator {...indicator} tone={tone} />}
+            </Component>
+        );
+    }
+
+    return (
+        <Component
+            type={onClick ? 'button' : undefined}
+            onClick={onClick}
+            aria-expanded={onClick ? isExpanded : undefined}
+            className={`relative overflow-hidden rounded-[1.35rem] px-3.5 py-3 text-left sm:px-4 sm:py-4 ${chromeless ? '' : `border shadow-[0_18px_40px_rgba(0,0,0,0.34)] ${toneStyles.card}`} ${interactiveClasses} ${className}`}
+        >
+            {!chromeless && <div className={`pointer-events-none absolute inset-x-4 top-0 h-px ${toneStyles.line}`} />}
+            {!chromeless && <div className={`pointer-events-none absolute -right-8 top-0 h-24 w-24 bg-gradient-to-bl blur-2xl ${toneStyles.glow}`} />}
             <div className="flex items-start justify-between gap-2.5">
                 <div className="min-w-0 flex-1">
                     <p className="font-game text-[9px] font-semibold uppercase tracking-[0.24em] text-slate-500 sm:text-[10px] sm:tracking-[0.28em]">{label}</p>
                     <p className={`mt-1 font-game text-[1.45rem] font-semibold uppercase tracking-[0.04em] sm:mt-2 sm:text-[1.7rem] sm:tracking-[0.06em] ${toneStyles.value}`}>{value}</p>
-                    <p className={`mt-1.5 text-[11px] leading-4 sm:mt-3 sm:text-xs sm:leading-relaxed ${toneStyles.helper}`}>{helper}</p>
+                    {helper && (
+                        <p className={`mt-1.5 text-[11px] leading-4 sm:mt-3 sm:text-xs sm:leading-relaxed ${toneStyles.helper}`}>{helper}</p>
+                    )}
                 </div>
-                <div className={`shrink-0 rounded-full p-2 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] sm:p-2.5 ${toneStyles.icon}`}>
-                    <IconComponent size={16} strokeWidth={2.2} className="sm:h-[18px] sm:w-[18px]" />
-                </div>
+                {showIcon && (
+                    <div className={`shrink-0 rounded-full p-2 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] sm:p-2.5 ${toneStyles.icon}`}>
+                        <IconComponent size={16} strokeWidth={2.2} className="sm:h-[18px] sm:w-[18px]" />
+                    </div>
+                )}
             </div>
-        </div>
+            {indicator && <MiniIndicator {...indicator} tone={tone} />}
+        </Component>
     );
 };
 
@@ -189,7 +259,10 @@ const ChartTooltip = ({ active, payload, label, formatLabel = (value) => value }
 const StatsView = ({ isOpen, onClose }) => {
     const { stats, quests, habits, coinHistory } = useGame();
     const { calories } = useGameCalories();
-    const [activeTab, setActiveTab] = useState('overview');
+    const [showQuestVelocity, setShowQuestVelocity] = useState(false);
+    const [showProtocolConsistency, setShowProtocolConsistency] = useState(false);
+    const [showCoinBalanceTrend, setShowCoinBalanceTrend] = useState(false);
+    const [showCalorieTrend, setShowCalorieTrend] = useState(false);
     const dragControls = useDragControls();
     const scrollRef = useRef(null);
     const swipeStateRef = useRef({ startY: 0, startX: 0, startAtTop: false });
@@ -280,108 +353,92 @@ const StatsView = ({ isOpen, onClose }) => {
         const avgCalories = calorieData.length
             ? Math.round(calorieData.reduce((sum, item) => sum + item.calories, 0) / calorieData.length)
             : 0;
-        const daysOnTarget = calorieData.filter(
-            (item) => item.calories > 0 && Math.abs(item.calories - item.target) <= 150
-        ).length;
-
-        if (activeTab === 'finance') {
-            return [
-                {
-                    icon: Coins,
-                    label: 'Current Balance',
-                    value: `${currentBalance}`,
-                    helper: `${coinHistory.length} ledger event${coinHistory.length === 1 ? '' : 's'} recorded`,
-                    tone: 'amber'
-                },
-                {
-                    icon: TrendingUp,
-                    label: 'Earned 14D',
-                    value: `+${earned14}`,
-                    helper: spent14 ? `${spent14} spent in the same window` : 'No spend in the same window',
-                    tone: 'emerald'
-                },
-                {
-                    icon: WalletCards,
-                    label: 'Net 14D',
-                    value: formatSignedValue(earned14 - spent14),
-                    helper: 'A tighter read than the large chart alone',
-                    tone: earned14 - spent14 >= 0 ? 'blue' : 'rose'
-                }
-            ];
-        }
-
-        if (activeTab === 'health') {
-            return [
-                {
-                    icon: Flame,
-                    label: 'Today',
-                    value: `${calories.current || 0}`,
-                    helper: `Target ${calories.target || 0} calories`,
-                    tone: 'rose'
-                },
-                {
-                    icon: Target,
-                    label: 'Weekly Average',
-                    value: `${avgCalories}`,
-                    helper: 'Average intake across the last 7 days',
-                    tone: 'blue'
-                },
-                {
-                    icon: Heart,
-                    label: 'On Target',
-                    value: `${daysOnTarget}/7`,
-                    helper: 'Days landing within 150 calories of goal',
-                    tone: 'emerald'
-                }
-            ];
-        }
-
         return [
             {
                 icon: Calendar,
                 label: 'Quests Cleared',
                 value: `${completedThisWeek}`,
-                helper: 'Total completions across the last 7 days',
-                tone: 'emerald'
+                helper: '',
+                tone: 'emerald',
+                className: 'border-0 bg-transparent shadow-none',
+                showIcon: false,
+                chromeless: true,
+                indicator: { type: 'bars', values: questData.map((item) => item.count) }
             },
             {
                 icon: Activity,
                 label: 'Protocol Hits',
                 value: `${protocolHitsLast7}`,
-                helper: `${activeHabitCount} active protocol${activeHabitCount === 1 ? '' : 's'}`,
-                tone: 'violet'
+                helper: '',
+                detail: `${activeHabitCount} active protocol${activeHabitCount === 1 ? '' : 's'}`,
+                tone: 'violet',
+                className: 'border-0 bg-transparent shadow-none',
+                showIcon: false,
+                chromeless: true,
+                indicator: { type: 'bars', values: protocolData.map((item) => item.hits) }
             },
             {
                 icon: Coins,
-                label: 'Current Gold',
+                label: 'Current Balance',
                 value: `${currentBalance}`,
-                helper: `${stats.level || 1} level system with ${coinHistory.length} logged transactions`,
-                tone: 'amber'
+                helper: '',
+                tone: 'amber',
+                className: 'border-0 bg-transparent shadow-none',
+                showIcon: false,
+                chromeless: true,
+                indicator: { type: 'spark', values: coinData.map((item) => item.balance) }
+            },
+            {
+                icon: Target,
+                label: 'Weekly Average',
+                value: `${avgCalories}`,
+                helper: '',
+                tone: 'rose',
+                className: 'border-0 bg-transparent shadow-none',
+                showIcon: false,
+                chromeless: true,
+                indicator: { type: 'spark', values: calorieData.map((item) => item.calories) }
+            },
+            {
+                icon: TrendingUp,
+                label: 'Earned 14D',
+                value: `+${earned14}`,
+                helper: spent14 ? `${spent14} spent in the same window` : 'No spend in the same window',
+                tone: 'emerald',
+                variant: 'strip',
+                className: 'border-0 bg-transparent shadow-none',
+                chromeless: true,
+                indicator: { type: 'bars', values: coinData.map((item) => Math.max(item.change, 0)) }
             }
         ];
     }, [
-        activeTab,
         calorieData,
-        calories,
         coinData,
-        coinHistory.length,
         habits,
         last7Days,
+        protocolData,
         questData,
         stats.gold,
-        stats.level
     ]);
 
     useEffect(() => {
         if (!isOpen) return;
         scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
-    }, [activeTab, isOpen]);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
+    const handleClose = () => {
+        setShowQuestVelocity(false);
+        setShowProtocolConsistency(false);
+        setShowCoinBalanceTrend(false);
+        setShowCalorieTrend(false);
+        onClose();
+    };
+
     const handleDragEnd = (_, info) => {
         if (info.offset.y < -80 || info.velocity.y < -500) {
-            onClose();
+            handleClose();
         }
     };
 
@@ -406,299 +463,268 @@ const StatsView = ({ isOpen, onClose }) => {
         const isAtTopNow = (scrollRef.current?.scrollTop || 0) <= 0;
 
         if (startAtTop && isAtTopNow && deltaY < -85 && Math.abs(deltaX) < 70) {
-            onClose();
+            handleClose();
         }
     };
 
+    const renderCoinBalanceChart = ({ hologram = false } = {}) => (
+        coinData.some((item) => item.balance !== 0 || item.change !== 0) ? (
+            <div className="h-52 w-full sm:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={coinData} margin={{ left: 0, right: 8 }}>
+                        <defs>
+                            <linearGradient id="coinGlow" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.38} />
+                                <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
+                            </linearGradient>
+                        </defs>
+                        {!hologram && <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />}
+                        <XAxis
+                            dataKey="date"
+                            stroke={hologram ? '#facc15' : '#64748b'}
+                            tick={{ fontSize: 10, fill: hologram ? '#fde68a' : '#64748b' }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={formatAxisDate}
+                        />
+                        <YAxis
+                            stroke={hologram ? '#facc15' : '#64748b'}
+                            tick={{ fontSize: 10, fill: hologram ? '#fde68a' : '#64748b' }}
+                            axisLine={false}
+                            tickLine={false}
+                            allowDecimals={false}
+                        />
+                        <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ stroke: '#fbbf24', strokeOpacity: 0.15 }} />
+                        <Area
+                            type="monotone"
+                            dataKey="balance"
+                            name="Balance"
+                            stroke="#fbbf24"
+                            strokeWidth={2.5}
+                            fill="url(#coinGlow)"
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+        ) : (
+            <EmptyChartState
+                title="Economy data will appear here"
+                body="Earn or spend a few coins and this turns into a cleaner pulse of balance changes over time."
+            />
+        )
+    );
+
+    const renderQuestVelocityChart = ({ hologram = false } = {}) => (
+        questData.some((item) => item.count > 0) ? (
+            <div className="h-52 w-full sm:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={questData} barGap={8}>
+                        {!hologram && <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />}
+                        <XAxis
+                            dataKey="date"
+                            stroke={hologram ? '#34d399' : '#64748b'}
+                            tick={{ fontSize: 10, fill: hologram ? '#bbf7d0' : '#64748b' }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={formatAxisDate}
+                        />
+                        <YAxis
+                            stroke={hologram ? '#34d399' : '#64748b'}
+                            tick={{ fontSize: 10, fill: hologram ? '#bbf7d0' : '#64748b' }}
+                            axisLine={false}
+                            tickLine={false}
+                            allowDecimals={false}
+                        />
+                        <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ fill: 'rgba(52,211,153,0.08)' }} />
+                        <Bar dataKey="count" name="Completed" fill="#34d399" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        ) : (
+            <EmptyChartState
+                title="No quest history yet"
+                body="Once completed quests start landing, this becomes your quick weekly momentum read."
+            />
+        )
+    );
+
+    const renderProtocolConsistencyChart = ({ hologram = false } = {}) => (
+        protocolData.some((item) => item.hits > 0) ? (
+            <div className="h-52 w-full sm:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={protocolData} layout="vertical" margin={{ left: 8, right: 8 }}>
+                        {!hologram && <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />}
+                        <XAxis
+                            type="number"
+                            stroke={hologram ? '#a78bfa' : '#64748b'}
+                            tick={{ fontSize: 10, fill: hologram ? '#ddd6fe' : '#64748b' }}
+                            axisLine={false}
+                            tickLine={false}
+                            allowDecimals={false}
+                        />
+                        <YAxis
+                            dataKey="name"
+                            type="category"
+                            width={72}
+                            stroke={hologram ? '#a78bfa' : '#94a3b8'}
+                            tick={{ fontSize: 10, fill: hologram ? '#ddd6fe' : '#94a3b8' }}
+                            axisLine={false}
+                            tickLine={false}
+                        />
+                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(129,140,248,0.08)' }} />
+                        <Bar dataKey="hits" name="Hits" fill="#818cf8" radius={[0, 8, 8, 0]} barSize={18} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        ) : (
+            <EmptyChartState
+                title="Protocols are warming up"
+                body="Track a few completions and this will surface your most consistent systems."
+            />
+        )
+    );
+
+    const renderCalorieTrendChart = ({ hologram = false } = {}) => (
+        (calorieData.some((item) => item.calories > 0) || Number(calories.current || 0) > 0) ? (
+            <div className="h-52 w-full sm:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    {hologram ? (
+                        <AreaChart data={calorieData} margin={{ left: 0, right: 8 }}>
+                            <defs>
+                                <linearGradient id="calorieGlow" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#fb7185" stopOpacity={0.32} />
+                                    <stop offset="95%" stopColor="#fb7185" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <XAxis
+                                dataKey="date"
+                                stroke="#fb7185"
+                                tick={{ fontSize: 10, fill: '#fecdd3' }}
+                                axisLine={false}
+                                tickLine={false}
+                                tickFormatter={formatAxisDate}
+                            />
+                            <YAxis
+                                stroke="#fb7185"
+                                tick={{ fontSize: 10, fill: '#fecdd3' }}
+                                axisLine={false}
+                                tickLine={false}
+                                allowDecimals={false}
+                            />
+                            <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ stroke: '#fb7185', strokeOpacity: 0.15 }} />
+                            <Area
+                                type="monotone"
+                                dataKey="calories"
+                                name="Calories"
+                                stroke="#fb7185"
+                                strokeWidth={2.5}
+                                fill="url(#calorieGlow)"
+                            />
+                        </AreaChart>
+                    ) : (
+                    <LineChart data={calorieData} margin={{ left: 0, right: 8 }}>
+                        {!hologram && <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />}
+                        <XAxis
+                            dataKey="date"
+                            stroke={hologram ? '#fb7185' : '#64748b'}
+                            tick={{ fontSize: 10, fill: hologram ? '#fecdd3' : '#64748b' }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={formatAxisDate}
+                        />
+                        <YAxis
+                            stroke={hologram ? '#fb7185' : '#64748b'}
+                            tick={{ fontSize: 10, fill: hologram ? '#fecdd3' : '#64748b' }}
+                            axisLine={false}
+                            tickLine={false}
+                            allowDecimals={false}
+                        />
+                        <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ stroke: '#fb7185', strokeOpacity: 0.15 }} />
+                        <Line
+                            type="monotone"
+                            dataKey="calories"
+                            name="Calories"
+                            stroke="#fb7185"
+                            strokeWidth={2.5}
+                            dot={hologram ? false : { r: 3, fill: '#f87171' }}
+                            activeDot={{ r: 5 }}
+                        />
+                        {!hologram && (
+                            <Line
+                                type="monotone"
+                                dataKey="target"
+                                name="Target"
+                                stroke="#94a3b8"
+                                strokeDasharray="5 5"
+                                dot={false}
+                            />
+                        )}
+                    </LineChart>
+                    )}
+                </ResponsiveContainer>
+            </div>
+        ) : (
+            <EmptyChartState
+                title="Health stream is quiet"
+                body="Log a few entries and this view turns into a much clearer week-over-week intake snapshot."
+            />
+        )
+    );
+
     const renderOverview = () => (
         <div className="space-y-3 sm:space-y-4">
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-6 sm:gap-3">
                 {summaryCards.map((card, index) => (
                     <SummaryCard
                         key={card.label}
                         {...card}
-                        className={index === summaryCards.length - 1 && summaryCards.length % 2 !== 0
-                            ? 'col-span-2 sm:col-span-1'
-                            : ''}
+                        onClick={card.label === 'Quests Cleared'
+                            ? () => {
+                                setShowProtocolConsistency(false);
+                                setShowCoinBalanceTrend(false);
+                                setShowCalorieTrend(false);
+                                setShowQuestVelocity((isShown) => !isShown);
+                            }
+                            : card.label === 'Protocol Hits'
+                                ? () => {
+                                    setShowQuestVelocity(false);
+                                    setShowCoinBalanceTrend(false);
+                                    setShowCalorieTrend(false);
+                                    setShowProtocolConsistency((isShown) => !isShown);
+                                }
+                                : card.label === 'Current Balance'
+                                    ? () => {
+                                        setShowQuestVelocity(false);
+                                        setShowProtocolConsistency(false);
+                                        setShowCalorieTrend(false);
+                                        setShowCoinBalanceTrend((isShown) => !isShown);
+                                    }
+                                    : card.label === 'Weekly Average'
+                                        ? () => {
+                                            setShowQuestVelocity(false);
+                                            setShowProtocolConsistency(false);
+                                            setShowCoinBalanceTrend(false);
+                                            setShowCalorieTrend((isShown) => !isShown);
+                                        }
+                                        : undefined}
+                        isExpanded={card.label === 'Quests Cleared'
+                            ? showQuestVelocity
+                            : card.label === 'Protocol Hits'
+                                ? showProtocolConsistency
+                                : card.label === 'Current Balance'
+                                    ? showCoinBalanceTrend
+                                    : card.label === 'Weekly Average'
+                                        ? showCalorieTrend
+                                        : undefined}
+                        className={card.variant === 'strip'
+                            ? 'col-span-2 sm:col-span-3'
+                            : index === summaryCards.length - 1 && summaryCards.length % 2 !== 0
+                                ? 'col-span-2 sm:col-span-2'
+                                : 'sm:col-span-2'}
                     />
                 ))}
             </div>
 
-            <SectionCard title="Quest Completion Velocity" eyebrow="Mission Pulse" icon={Calendar}>
-                {questData.some((item) => item.count > 0) ? (
-                    <div className="h-44 w-full sm:h-52">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={questData} barGap={8}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                <XAxis
-                                    dataKey="date"
-                                    stroke="#64748b"
-                                    tick={{ fontSize: 10 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickFormatter={formatAxisDate}
-                                />
-                                <YAxis
-                                    stroke="#64748b"
-                                    tick={{ fontSize: 10 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    allowDecimals={false}
-                                />
-                                <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
-                                <Bar dataKey="count" name="Completed" fill="#34d399" radius={[8, 8, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                ) : (
-                    <EmptyChartState
-                        title="No quest history yet"
-                        body="Once completed quests start landing, this block becomes your quick weekly momentum read."
-                    />
-                )}
-            </SectionCard>
-
-            <SectionCard title="Protocol Consistency" eyebrow="Behavior Scan" icon={Activity}>
-                {protocolData.some((item) => item.hits > 0) ? (
-                    <div className="h-48 w-full sm:h-56">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={protocolData} layout="vertical" margin={{ left: 8, right: 8 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                                <XAxis
-                                    type="number"
-                                    stroke="#64748b"
-                                    tick={{ fontSize: 10 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    allowDecimals={false}
-                                />
-                                <YAxis
-                                    dataKey="name"
-                                    type="category"
-                                    width={72}
-                                    stroke="#94a3b8"
-                                    tick={{ fontSize: 10 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                />
-                                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(129,140,248,0.08)' }} />
-                                <Bar dataKey="hits" name="Hits" fill="#818cf8" radius={[0, 8, 8, 0]} barSize={18} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                ) : (
-                    <EmptyChartState
-                        title="Protocols are warming up"
-                        body="Track a few protocol completions and this section will surface your most consistent systems."
-                    />
-                )}
-            </SectionCard>
-        </div>
-    );
-
-    const renderFinance = () => (
-        <div className="space-y-3 sm:space-y-4">
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
-                {summaryCards.map((card, index) => (
-                    <SummaryCard
-                        key={card.label}
-                        {...card}
-                        className={index === summaryCards.length - 1 && summaryCards.length % 2 !== 0
-                            ? 'col-span-2 sm:col-span-1'
-                            : ''}
-                    />
-                ))}
-            </div>
-
-            <SectionCard title="Coin Balance Trend" eyebrow="Economy Feed" icon={Coins}>
-                {coinData.some((item) => item.balance !== 0 || item.change !== 0) ? (
-                    <div className="h-48 w-full sm:h-56">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={coinData} margin={{ left: 0, right: 8 }}>
-                                <defs>
-                                    <linearGradient id="coinGlow" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.38} />
-                                        <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                <XAxis
-                                    dataKey="date"
-                                    stroke="#64748b"
-                                    tick={{ fontSize: 10 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickFormatter={formatAxisDate}
-                                />
-                                <YAxis
-                                    stroke="#64748b"
-                                    tick={{ fontSize: 10 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    allowDecimals={false}
-                                />
-                                <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ stroke: '#fbbf24', strokeOpacity: 0.15 }} />
-                                <Area
-                                    type="monotone"
-                                    dataKey="balance"
-                                    name="Balance"
-                                    stroke="#fbbf24"
-                                    strokeWidth={2.5}
-                                    fill="url(#coinGlow)"
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                ) : (
-                    <EmptyChartState
-                        title="Economy data will appear here"
-                        body="Earn or spend a few coins and this turns into a cleaner pulse of balance changes over time."
-                    />
-                )}
-            </SectionCard>
-
-            <SectionCard title="Recent Ledger Activity" eyebrow="Latest Movement" icon={WalletCards}>
-                {coinHistory.length > 0 ? (
-                    <div className="space-y-2">
-                        {coinHistory
-                            .slice()
-                            .reverse()
-                            .slice(0, 5)
-                            .map((entry) => (
-                                <div
-                                    key={entry.id}
-                                    className="flex items-center justify-between gap-3 rounded-[1.2rem] border border-slate-800/90 bg-black/35 px-4 py-3 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)]"
-                                >
-                                    <div className="min-w-0 text-left">
-                                        <p className="truncate text-sm font-medium text-slate-100">
-                                            {entry.description || 'Ledger update'}
-                                        </p>
-                                        <p className="mt-1 text-xs text-slate-500">
-                                            {new Date(entry.date).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                year: 'numeric'
-                                            })}
-                                        </p>
-                                    </div>
-                                    <span
-                                        className={`shrink-0 rounded-full border px-2.5 py-1 font-game text-xs font-semibold uppercase tracking-[0.12em] ${
-                                            entry.type === 'earned'
-                                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                                                : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
-                                        }`}
-                                    >
-                                        {entry.type === 'earned' ? '+' : '-'}
-                                        {entry.amount}
-                                    </span>
-                                </div>
-                            ))}
-                    </div>
-                ) : (
-                    <EmptyChartState
-                        title="No ledger entries yet"
-                        body="This list becomes more useful than a chart on mobile once purchases and rewards start stacking up."
-                    />
-                )}
-            </SectionCard>
-        </div>
-    );
-
-    const renderHealth = () => (
-        <div className="space-y-3 sm:space-y-4">
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
-                {summaryCards.map((card, index) => (
-                    <SummaryCard
-                        key={card.label}
-                        {...card}
-                        className={index === summaryCards.length - 1 && summaryCards.length % 2 !== 0
-                            ? 'col-span-2 sm:col-span-1'
-                            : ''}
-                    />
-                ))}
-            </div>
-
-            <SectionCard title="Calorie Intake vs Target" eyebrow="Body Systems" icon={Heart}>
-                {(calorieData.some((item) => item.calories > 0) || Number(calories.current || 0) > 0) ? (
-                    <div className="h-48 w-full sm:h-56">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={calorieData} margin={{ left: 0, right: 8 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                <XAxis
-                                    dataKey="date"
-                                    stroke="#64748b"
-                                    tick={{ fontSize: 10 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickFormatter={formatAxisDate}
-                                />
-                                <YAxis
-                                    stroke="#64748b"
-                                    tick={{ fontSize: 10 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    allowDecimals={false}
-                                />
-                                <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ stroke: '#f87171', strokeOpacity: 0.15 }} />
-                                <Line
-                                    type="monotone"
-                                    dataKey="calories"
-                                    name="Calories"
-                                    stroke="#f87171"
-                                    strokeWidth={2.5}
-                                    dot={{ r: 3, fill: '#f87171' }}
-                                    activeDot={{ r: 5 }}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="target"
-                                    name="Target"
-                                    stroke="#94a3b8"
-                                    strokeDasharray="5 5"
-                                    dot={false}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                ) : (
-                    <EmptyChartState
-                        title="Health stream is quiet"
-                        body="Log a few entries and this view turns into a much clearer week-over-week intake snapshot."
-                    />
-                )}
-            </SectionCard>
-
-            <SectionCard title="Today at a Glance" eyebrow="Immediate Read" icon={Flame}>
-                <div className="rounded-[1.25rem] border border-slate-800/90 bg-black/35 p-3.5 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.04)] sm:rounded-[1.4rem] sm:p-4">
-                    <div className="flex items-end justify-between gap-4">
-                        <div className="text-left">
-                            <p className="font-game text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
-                                Current Progress
-                            </p>
-                            <p className="mt-2 font-game text-[1.7rem] font-semibold uppercase tracking-[0.08em] text-rose-100 sm:text-3xl">
-                                {calories.current || 0}
-                            </p>
-                        </div>
-                        <div className="text-right">
-                            <p className="font-game text-[10px] uppercase tracking-[0.26em] text-slate-500">Target</p>
-                            <p className="font-game text-lg font-semibold uppercase tracking-[0.08em] text-slate-100">{calories.target || 0}</p>
-                        </div>
-                    </div>
-                    <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-800">
-                        <div
-                            className="h-full rounded-full bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-300 transition-all"
-                            style={{
-                                width: `${Math.min(((Number(calories.current || 0) / Math.max(Number(calories.target || 1), 1)) * 100), 100)}%`
-                            }}
-                        />
-                    </div>
-                    <p className="mt-3 text-left text-xs text-slate-400">
-                        {Number(calories.target || 0) - Number(calories.current || 0) > 0
-                            ? `${Number(calories.target || 0) - Number(calories.current || 0)} calories remaining today`
-                            : `${Math.abs(Number(calories.target || 0) - Number(calories.current || 0))} calories over target`}
-                    </p>
-                </div>
-            </SectionCard>
         </div>
     );
 
@@ -728,60 +754,174 @@ const StatsView = ({ isOpen, onClose }) => {
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/80 to-transparent" />
 
                 <div
-                    className="relative z-10 shrink-0 border-b border-slate-800/90 bg-slate-950/55 px-4 pb-4"
-                    style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+                    className="relative z-10 shrink-0 border-b border-slate-900/70 bg-slate-950/25 px-4 pb-2.5"
+                    style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)' }}
                 >
+                    <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(rgba(148,163,184,0.45)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.45)_1px,transparent_1px)] [background-size:24px_24px]" />
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-slate-950/20" />
                     <div className="text-left">
                         <p className="font-game text-[10px] font-semibold uppercase tracking-[0.34em] text-slate-500">System Intel</p>
                         <h2 className="mt-1 font-game text-2xl font-semibold uppercase tracking-[0.08em] text-slate-50">Data Center</h2>
-                        <p className="mt-1 text-sm text-slate-400">Live telemetry for your current dashboard state.</p>
-                        <p className="mt-2 font-game text-[10px] uppercase tracking-[0.26em] text-slate-500">
-                            Swipe up to close when the feed is at the top
-                        </p>
-                    </div>
-
-                    <div className="mt-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                        {Object.entries(TAB_CONFIG).map(([tabKey, tab]) => {
-                            const Icon = tab.icon;
-                            const isActive = activeTab === tabKey;
-
-                            return (
-                                <button
-                                    key={tabKey}
-                                    onClick={() => setActiveTab(tabKey)}
-                                    className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm transition-all ${
-                                        isActive
-                                            ? 'border-slate-600 bg-slate-900/90 text-slate-100 shadow-[0_0_18px_rgba(0,0,0,0.22)]'
-                                            : 'border-slate-800/80 bg-black/35 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                                    }`}
-                                >
-                                    <Icon size={15} className={isActive ? tab.accent : 'text-slate-500'} />
-                                    <span className="font-game text-[13px] font-semibold uppercase tracking-[0.14em]">{tab.label}</span>
-                                    <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                                        {tab.range}
-                                    </span>
-                                </button>
-                            );
-                        })}
                     </div>
                 </div>
 
                 <div ref={scrollRef} className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4 no-scrollbar">
-                    {activeTab === 'overview' && renderOverview()}
-                    {activeTab === 'finance' && renderFinance()}
-                    {activeTab === 'health' && renderHealth()}
+                    {renderOverview()}
                 </div>
 
+                <AnimatePresence>
+                    {showQuestVelocity && (
+                        <Motion.div
+                            key="quest-velocity-projection"
+                            className="absolute inset-0 z-30 flex items-center justify-center bg-[#03110d]/88 px-4 pb-12 backdrop-blur-[2px]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                            onClick={() => setShowQuestVelocity(false)}
+                        >
+                            <Motion.div
+                                role="dialog"
+                                aria-label="Quest completion trend detail"
+                                className="relative w-full max-w-2xl overflow-visible text-left"
+                                initial={{ opacity: 0, y: -12, scale: 0.94 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -12, scale: 0.94 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                            >
+                                <div className="relative z-10">
+                                    <div className="mb-2 flex items-start justify-between gap-4">
+                                        <h3 className="font-game text-base font-semibold uppercase tracking-[0.08em] text-emerald-200 drop-shadow-[0_0_14px_rgba(52,211,153,0.34)]">Quests Cleared</h3>
+                                        <p className="font-game text-2xl font-semibold uppercase tracking-[0.05em] text-emerald-200 drop-shadow-[0_0_14px_rgba(52,211,153,0.48)]">
+                                            {summaryCards.find((card) => card.label === 'Quests Cleared')?.value || 0}
+                                        </p>
+                                    </div>
+                                    <div className="relative bg-transparent">
+                                        <div className="relative z-10">{renderQuestVelocityChart({ hologram: true })}</div>
+                                    </div>
+                                </div>
+                            </Motion.div>
+                        </Motion.div>
+                    )}
+
+                    {showProtocolConsistency && (
+                        <Motion.div
+                            key="protocol-consistency-projection"
+                            className="absolute inset-0 z-30 flex items-center justify-center bg-[#08071a]/88 px-4 pb-12 backdrop-blur-[2px]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                            onClick={() => setShowProtocolConsistency(false)}
+                        >
+                            <Motion.div
+                                role="dialog"
+                                aria-label="Protocol consistency detail"
+                                className="relative w-full max-w-2xl overflow-visible text-left"
+                                initial={{ opacity: 0, y: -12, scale: 0.94 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -12, scale: 0.94 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                            >
+                                <div className="relative z-10">
+                                    <div className="mb-2 flex items-start justify-between gap-4">
+                                        <div>
+                                            <h3 className="font-game text-base font-semibold uppercase tracking-[0.08em] text-violet-200 drop-shadow-[0_0_14px_rgba(167,139,250,0.34)]">Protocol Hits</h3>
+                                            <p className="mt-1 text-xs font-medium text-violet-100/80">
+                                                {summaryCards.find((card) => card.label === 'Protocol Hits')?.detail}
+                                            </p>
+                                        </div>
+                                        <p className="font-game text-2xl font-semibold uppercase tracking-[0.05em] text-violet-200 drop-shadow-[0_0_14px_rgba(167,139,250,0.48)]">
+                                            {summaryCards.find((card) => card.label === 'Protocol Hits')?.value || 0}
+                                        </p>
+                                    </div>
+                                    <div className="relative bg-transparent">
+                                        <div className="relative z-10">{renderProtocolConsistencyChart({ hologram: true })}</div>
+                                    </div>
+                                </div>
+                            </Motion.div>
+                        </Motion.div>
+                    )}
+
+                    {showCoinBalanceTrend && (
+                        <Motion.div
+                            key="coin-balance-projection"
+                            className="absolute inset-0 z-30 flex items-center justify-center bg-[#020817]/88 px-4 pb-12 backdrop-blur-[2px]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                            onClick={() => setShowCoinBalanceTrend(false)}
+                        >
+                            <Motion.div
+                                role="dialog"
+                                aria-label="Coin balance trend detail"
+                                className="relative w-full max-w-2xl overflow-visible text-left"
+                                initial={{ opacity: 0, y: -12, scale: 0.94 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -12, scale: 0.94 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                            >
+                                <div className="relative z-10">
+                                    <div className="mb-2 flex items-start justify-between gap-4">
+                                        <h3 className="font-game text-base font-semibold uppercase tracking-[0.08em] text-yellow-200 drop-shadow-[0_0_14px_rgba(250,204,21,0.34)]">Current Balance</h3>
+                                        <p className="font-game text-2xl font-semibold uppercase tracking-[0.05em] text-yellow-200 drop-shadow-[0_0_14px_rgba(250,204,21,0.48)]">{stats.gold || 0}</p>
+                                    </div>
+                                    <div className="relative bg-transparent">
+                                        <div className="relative z-10">{renderCoinBalanceChart({ hologram: true })}</div>
+                                    </div>
+                                </div>
+                            </Motion.div>
+                        </Motion.div>
+                    )}
+
+                    {showCalorieTrend && (
+                        <Motion.div
+                            key="weekly-average-projection"
+                            className="absolute inset-0 z-30 flex items-center justify-center bg-[#08040b]/88 px-4 pb-12 backdrop-blur-[2px]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                            onClick={() => setShowCalorieTrend(false)}
+                        >
+                            <Motion.div
+                                role="dialog"
+                                aria-label="Weekly average calorie trend detail"
+                                className="relative w-full max-w-2xl overflow-visible text-left"
+                                initial={{ opacity: 0, y: -12, scale: 0.94 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -12, scale: 0.94 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                            >
+                                <div className="relative z-10">
+                                    <div className="mb-2 flex items-start justify-between gap-4">
+                                        <h3 className="font-game text-base font-semibold uppercase tracking-[0.08em] text-rose-200 drop-shadow-[0_0_14px_rgba(251,113,133,0.34)]">Weekly Average</h3>
+                                        <p className="font-game text-2xl font-semibold uppercase tracking-[0.05em] text-rose-200 drop-shadow-[0_0_14px_rgba(251,113,133,0.48)]">
+                                            {summaryCards.find((card) => card.label === 'Weekly Average')?.value || 0}
+                                        </p>
+                                    </div>
+                                    <div className="relative bg-transparent">
+                                        <div className="relative z-10">{renderCalorieTrendChart({ hologram: true })}</div>
+                                    </div>
+                                </div>
+                            </Motion.div>
+                        </Motion.div>
+                    )}
+                </AnimatePresence>
+
                 <div
-                    className="relative z-10 shrink-0 border-t border-slate-800/90 bg-slate-950/55 px-4 pt-4"
-                    style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)' }}
+                    className="relative z-10 shrink-0 border-t border-slate-800/90 bg-slate-950/55 px-4 py-1.5"
+                    style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.375rem)' }}
                 >
-                    <div
-                        className="mx-auto flex h-8 w-20 cursor-grab items-center justify-center active:cursor-grabbing"
+                    <button
+                        type="button"
+                        aria-label="Drag to close dashboard"
+                        className="mx-auto flex h-9 w-28 cursor-grab items-center justify-center rounded-full bg-transparent active:cursor-grabbing"
                         onPointerDown={(event) => dragControls.start(event)}
                     >
-                        <div className="h-1 w-10 rounded-full bg-slate-300/35 shadow-[0_0_14px_rgba(148,163,184,0.18)]" />
-                    </div>
+                        <span className="h-0.5 w-8 rounded-full bg-slate-300/35 shadow-[0_0_10px_rgba(148,163,184,0.14)]" />
+                    </button>
                 </div>
             </Motion.div>
         </div>,
