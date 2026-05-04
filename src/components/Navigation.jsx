@@ -32,7 +32,7 @@ const animateToTab = (targetTabId, innerRotationMV, outerRotationMV) => {
     animate(outerRotationMV, targetOuterRotation, springConfig);
 };
 
-const Navigation = ({ currentTab, onTabChange, children }) => {
+const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
     // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
@@ -242,6 +242,9 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                                 <motion.button
                                     key={tab.id}
                                     className="absolute pointer-events-auto hover:scale-110 transition-transform p-3 rounded-full"
+                                    onPointerEnter={() => onPreloadTab?.(tab.id)}
+                                    onFocus={() => onPreloadTab?.(tab.id)}
+                                    onTouchStart={() => onPreloadTab?.(tab.id)}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onTabChange(tab.id);
@@ -299,6 +302,9 @@ const Navigation = ({ currentTab, onTabChange, children }) => {
                             return (
                                 <motion.button
                                     key={tab.id}
+                                    onPointerEnter={() => onPreloadTab?.(tab.id)}
+                                    onFocus={() => onPreloadTab?.(tab.id)}
+                                    onTouchStart={() => onPreloadTab?.(tab.id)}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onTabChange(tab.id);

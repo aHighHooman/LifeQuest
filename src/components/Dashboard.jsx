@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { useGame } from '../context/GameContext';
+import { useGame, useGameCalories } from '../context/GameContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Zap, Coins, Heart, Plus, Check, Crosshair } from 'lucide-react';
+import { Zap, Coins, Check, Crosshair } from 'lucide-react';
 const StatsView = React.lazy(() => import('./StatsView'));
 import FocusSelectionModal from './FocusSelectionModal';
 import DayTimer from './DayTimer';
@@ -23,16 +23,6 @@ const HexNode = ({ node, onClick, index, position }) => {
                 text: "text-purple-200",
                 icon: "text-purple-400",
                 glowColor: "rgba(168,85,247,0.3)"
-            };
-        }
-        if (n.type === 'level') {
-            // Level: Sky Blue (Darker Base)
-            return {
-                gradient: "radial-gradient(circle at center, rgba(7,89,133,0.25) 0%, rgba(8,47,73,0.6) 100%)",
-                stroke: "#38bdf8",
-                text: "text-sky-200",
-                icon: "text-sky-400",
-                glowColor: "rgba(56,189,248,0.3)"
             };
         }
         if (n.type === 'gold') {
@@ -161,8 +151,6 @@ const HexNode = ({ node, onClick, index, position }) => {
                             <Crosshair size={20} className={clsx("transition-colors", isCompleted ? "text-gray-500" : style.icon)} />
                         ) : node.type === 'habit' ? (
                             <Zap size={20} className={clsx("transition-colors", isCompleted ? "text-gray-500" : style.icon)} />
-                        ) : node.type === 'level' ? (
-                            <Shield size={20} className={style.icon} />
                         ) : node.type === 'gold' ? (
                             <Coins size={20} className={style.icon} />
                         ) : (
@@ -255,11 +243,13 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
 
 const Dashboard = ({ onTabChange, onOpenSettings }) => {
     const { stats, quests, habits, completeQuest, completeHabit } = useGame();
+    const { calories } = useGameCalories();
     const [showStats, setShowStats] = useState(false);
     const [showFocusModal, setShowFocusModal] = useState(false);
 
-    const xpPercentage = Math.min((stats.xp / stats.maxXp) * 100, 100);
-    const hpPercentage = Math.min((stats.hp / stats.maxHp) * 100, 100);
+    const calorieTarget = Math.max(1, Number(calories?.target) || 1);
+    const calorieCurrent = Math.max(0, Number(calories?.current) || 0);
+    const caloriesLeftPercentage = Math.max(0, Math.min(((calorieTarget - calorieCurrent) / calorieTarget) * 100, 100));
 
     // Get today's date for habit completion check
     const today = useMemo(() => getTodayISO(), []);
@@ -305,15 +295,18 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
     };
 
     const describeArc = (x, y, radius, startAngle, endAngle) => {
-        var start = polarToCartesian(x, y, radius, endAngle);
-        var end = polarToCartesian(x, y, radius, startAngle);
+        var start = polarToCartesian(x, y, radius, startAngle);
+        var end = polarToCartesian(x, y, radius, endAngle);
         var largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
         var d = [
             "M", start.x, start.y,
-            "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+            "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y
         ].join(" ");
         return d;
     };
+
+    const healthRingPath = describeArc(200, 200, 190, 198, 522);
+
     return (
         <motion.div
             className="flex flex-col h-full relative touch-none"
@@ -361,59 +354,33 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                     <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 400 400">
                         {/* Define Gradients */}
                         <defs>
-                            {/* Health (Left Side): Darker at Left(0%) Edge, Lighter at Center(100%) */}
+                            {/* Health ring: brightest near the center line, dimmer toward both outer sides. */}
                             <linearGradient id="gradHP" x1="0%" y1="0%" x2="100%" y2="0%">
                                 <stop offset="0%" stopColor="#881337" />
-                                <stop offset="100%" stopColor="#f43f5e" />
-                            </linearGradient>
-                            {/* XP (Right Side): Lighter at Center(0%), Darker at Right(100%) Edge */}
-                            <linearGradient id="gradXP" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#38bdf8" />
-                                <stop offset="100%" stopColor="#0c4a6e" />
+                                <stop offset="50%" stopColor="#f43f5e" />
+                                <stop offset="100%" stopColor="#881337" />
                             </linearGradient>
                         </defs>
 
-                        {/* Health Arc Background (Dark) */}
-                        <path d={describeArc(200, 200, 190, 200, 340)} fill="none" stroke="#334155" strokeWidth="6" strokeLinecap="round" opacity="0.3" />
+                        {/* Health Ring Background (Dark) */}
+                        <path d={healthRingPath} fill="none" stroke="#334155" strokeWidth="6" strokeLinecap="round" opacity="0.3" />
 
-                        {/* Health Arc (Fill) */}
+                        {/* Health Ring (Fill) */}
                         <motion.path
                             initial={{ pathLength: 0 }}
-                            animate={{ pathLength: hpPercentage / 100 }}
-                            d={describeArc(200, 200, 190, 200, 340)}
+                            animate={{ pathLength: caloriesLeftPercentage / 100 }}
+                            d={healthRingPath}
                             fill="none"
                             stroke="url(#gradHP)"
                             strokeWidth="6"
                             strokeLinecap="round"
                             className="drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]"
                         />
-
-                        {/* XP Arc Background (Dark) */}
-                        <path d={describeArc(200, 200, 190, 20, 160)} fill="none" stroke="#334155" strokeWidth="6" strokeLinecap="round" opacity="0.3" />
-
-                        {/* XP Arc (Fill) */}
-                        <motion.path
-                            initial={{ pathLength: 0 }}
-                            animate={{ pathLength: xpPercentage / 100 }}
-                            d={describeArc(200, 200, 190, 20, 160)}
-                            fill="none"
-                            stroke="url(#gradXP)"
-                            strokeWidth="6"
-                            strokeLinecap="round"
-                            className="drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]"
-                        />
                     </svg>
 
-                    {/* Fixed Stat Hexes - Positioned seamlessly in grid */}
+                    {/* Fixed Coin Hex - Positioned seamlessly under the grid */}
                     <div className="z-20 scale-90 sm:scale-100 absolute inset-0 pointer-events-none flex items-center justify-center">
                         <div className="relative w-0 h-0 scale-75 sm:scale-100">
-                            <div className="pointer-events-auto">
-                                <HexNode
-                                    node={{ id: 'stat-lvl', type: 'level', title: 'LVL ' + stats.level, completed: false }}
-                                    position={{ x: 0, y: -256 }}
-                                    onClick={() => setShowStats(true)}
-                                />
-                            </div>
                             <div className="pointer-events-auto">
                                 <HexNode
                                     node={{ id: 'stat-gold', type: 'gold', title: stats.gold + '', completed: false }}

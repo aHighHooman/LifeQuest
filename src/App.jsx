@@ -7,11 +7,32 @@ import { motion as Motion } from 'framer-motion';
 import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
 import Navigation from './components/Navigation';
 
-const Dashboard = React.lazy(() => import('./components/Dashboard'));
-const QuestBoard = React.lazy(() => import('./components/QuestBoard'));
-const HabitTracker = React.lazy(() => import('./components/HabitTracker'));
-const BudgetView = React.lazy(() => import('./components/BudgetView'));
-const CalorieTracker = React.lazy(() => import('./components/CalorieTracker'));
+const screenLoaders = {
+  dashboard: () => import('./components/Dashboard'),
+  quests: () => import('./components/QuestBoard'),
+  protocols: () => import('./components/HabitTracker'),
+  budget: () => import('./components/BudgetView'),
+  calories: () => import('./components/CalorieTracker')
+};
+const preloadedScreens = new Map();
+
+const preloadScreen = (tabId) => {
+  const loader = screenLoaders[tabId];
+  if (!loader || preloadedScreens.has(tabId)) return;
+
+  preloadedScreens.set(tabId, loader());
+};
+
+const loadScreen = (tabId) => {
+  preloadScreen(tabId);
+  return preloadedScreens.get(tabId);
+};
+
+const Dashboard = React.lazy(() => loadScreen('dashboard'));
+const QuestBoard = React.lazy(() => loadScreen('quests'));
+const HabitTracker = React.lazy(() => loadScreen('protocols'));
+const BudgetView = React.lazy(() => loadScreen('budget'));
+const CalorieTracker = React.lazy(() => loadScreen('calories'));
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -68,7 +89,7 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
       <div className="h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col">
         <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-        <Navigation currentTab={currentTab} onTabChange={setCurrentTab}>
+        <Navigation currentTab={currentTab} onTabChange={setCurrentTab} onPreloadTab={preloadScreen}>
           <div className={`relative z-10 mx-auto flex min-h-full w-full max-w-none flex-col px-0 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-2 md:max-w-4xl md:pl-24 md:pr-8 md:pt-[calc(0.75rem+env(safe-area-inset-top))] ${currentTab === 'calories' ? 'bg-black md:bg-transparent' : ''}`}>
             <Motion.main
               className="flex-1 flex flex-col relative z-10"

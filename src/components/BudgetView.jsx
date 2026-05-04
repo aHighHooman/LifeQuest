@@ -308,7 +308,7 @@ const SettingsModal = memo(({
     goldToUsdRatio,
     setGoldToUsdRatio,
     clearGroceryList,
-    priceDatabase,
+    priceEntries,
     updatePrice
 }) => {
     const originCenterX = originRect ? (originRect.left + (originRect.width / 2)) - (window.innerWidth / 2) : 0;
@@ -316,8 +316,6 @@ const SettingsModal = memo(({
     const originScale = originRect
         ? clamp(Math.min(originRect.width / 360, originRect.height / 360), 0.22, 0.42)
         : 0.92;
-    const priceEntries = useMemo(() => Object.entries(priceDatabase), [priceDatabase]);
-
     return ReactDOM.createPortal(
         <>
             <motion.div
@@ -931,11 +929,80 @@ const VaultHeader = memo(({ todayIn, liquidAssets, todayOut }) => (
     </div>
 ));
 
+const GroceryItemRow = memo(({
+    item,
+    todayKey,
+    onTogglePurchased,
+    onRemove,
+    toCredits
+}) => {
+    const isPurchasedToday = item.completedDateKey === todayKey;
+
+    return (
+        <motion.div
+            key={item.id}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, height: 0 }}
+            className={clsx(
+                "group flex items-center justify-between p-3 rounded border transition-all relative overflow-hidden",
+                item.completed
+                    ? "bg-slate-900/30 border-slate-800 text-slate-600"
+                    : "bg-amber-950/20 border-amber-500/20 text-amber-100 hover:bg-amber-900/20"
+            )}
+        >
+            <div className="flex items-center gap-3 relative z-10">
+                <button
+                    onClick={() => onTogglePurchased(item)}
+                    className={clsx(
+                        "transition-all duration-300",
+                        item.completed ? "text-amber-900" : "text-amber-500 hover:text-amber-300"
+                    )}
+                >
+                    {item.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                </button>
+                <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                        <span className={clsx("text-sm font-bold leading-none", item.completed && "line-through opacity-50")}>{item.name}</span>
+                        <span className={clsx(
+                            "rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider",
+                            item.completed
+                                ? "border-slate-800 text-slate-700"
+                                : "border-amber-500/20 text-amber-400/80"
+                        )}>
+                            x{item.quantity || 1}
+                        </span>
+                    </div>
+                    {!item.completed && <span className="text-[9px] font-mono text-amber-500/50 mt-1 uppercase tracking-wider">est. {toCredits(item.price)} C each</span>}
+                    {item.completed && <span className="text-[9px] font-mono text-slate-700 mt-1 uppercase tracking-wider">purchased {isPurchasedToday ? 'today' : item.completedDateKey}</span>}
+                </div>
+            </div>
+            <div className="flex items-center gap-3 relative z-10">
+                <div className={clsx("font-mono text-sm flex items-center gap-1", item.completed ? "text-xs text-slate-700" : "text-amber-400 font-bold")}>
+                    <Coins size={12} />
+                    {toCredits(item.price * (item.quantity || 1))}
+                </div>
+                <button
+                    onClick={() => onRemove(item.id)}
+                    className="text-amber-900 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                    <Trash2 size={16} />
+                </button>
+            </div>
+
+            {!item.completed && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/5 to-transparent skew-x-12 translate-x-[-150%] group-hover:animate-holoscan pointer-events-none" />
+            )}
+        </motion.div>
+    );
+});
+
 const ProvisionsView = memo(({
     groceryList,
     totalGroceryEstimated,
     groceryPeriod,
     priceDatabase,
+    priceDatabaseKeys,
     addGroceryItem,
     markGroceryItemCompleted,
     unmarkGroceryItemCompleted,
@@ -960,10 +1027,10 @@ const ProvisionsView = memo(({
         if (!itemName) return [];
 
         const normalizedItemName = itemName.toLowerCase();
-        return Object.keys(priceDatabase).filter((item) =>
+        return priceDatabaseKeys.filter((item) =>
             item.toLowerCase().includes(normalizedItemName)
         );
-    }, [priceDatabase, itemName]);
+    }, [itemName, priceDatabaseKeys]);
     const todayKey = getTodayISO();
 
     const handleAdd = useCallback((e) => {
@@ -1095,80 +1162,46 @@ const ProvisionsView = memo(({
                     </div>
                 ) : (
                     <AnimatePresence>
-                        {groceryList.map((item) => {
-                            const isPurchasedToday = item.completedDateKey === todayKey;
-
-                            return (
-                                <motion.div
+                            {groceryList.map((item) => (
+                                <GroceryItemRow
                                     key={item.id}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className={clsx(
-                                        "group flex items-center justify-between p-3 rounded border transition-all relative overflow-hidden",
-                                        item.completed
-                                            ? "bg-slate-900/30 border-slate-800 text-slate-600"
-                                            : "bg-amber-950/20 border-amber-500/20 text-amber-100 hover:bg-amber-900/20"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-3 relative z-10">
-                                        <button
-                                            onClick={() => handleTogglePurchased(item)}
-                                            className={clsx(
-                                                "transition-all duration-300",
-                                                item.completed ? "text-amber-900" : "text-amber-500 hover:text-amber-300"
-                                            )}
-                                        >
-                                            {item.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-                                        </button>
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-2">
-                                                <span className={clsx("text-sm font-bold leading-none", item.completed && "line-through opacity-50")}>{item.name}</span>
-                                                <span className={clsx(
-                                                    "rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider",
-                                                    item.completed
-                                                        ? "border-slate-800 text-slate-700"
-                                                        : "border-amber-500/20 text-amber-400/80"
-                                                )}>
-                                                    x{item.quantity || 1}
-                                                </span>
-                                            </div>
-                                            {!item.completed && <span className="text-[9px] font-mono text-amber-500/50 mt-1 uppercase tracking-wider">est. {toCredits(item.price)} C each</span>}
-                                            {item.completed && <span className="text-[9px] font-mono text-slate-700 mt-1 uppercase tracking-wider">purchased {isPurchasedToday ? 'today' : item.completedDateKey}</span>}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 relative z-10">
-                                        <div className={clsx("font-mono text-sm flex items-center gap-1", item.completed ? "text-xs text-slate-700" : "text-amber-400 font-bold")}>
-                                            <Coins size={12} />
-                                            {toCredits(item.price * (item.quantity || 1))}
-                                        </div>
-                                        <button
-                                            onClick={() => removeGroceryItem(item.id)}
-                                            className="text-amber-900 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-
-                                    {!item.completed && (
-                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/5 to-transparent skew-x-12 translate-x-[-150%] group-hover:animate-holoscan pointer-events-none" />
-                                    )}
-                                </motion.div>
-                            );
-                        })}
-                    </AnimatePresence>
-                )}
+                                    item={item}
+                                    todayKey={todayKey}
+                                    onTogglePurchased={handleTogglePurchased}
+                                    onRemove={removeGroceryItem}
+                                    toCredits={toCredits}
+                                />
+                            ))}
+                        </AnimatePresence>
+                    )}
             </div>
         </div>
     );
 });
+
+const LedgerTransactionRow = memo(({ tx }) => (
+    <div className="flex items-center justify-between p-2 rounded hover:bg-white/5 border border-transparent hover:border-white/5 transition-colors group">
+        <div className="flex flex-col">
+            <span className="text-xs font-bold text-amber-100/80">{tx.description}</span>
+            <span className="text-[9px] font-mono text-gray-600">{tx.dateLabel} • {tx.timeLabel}</span>
+        </div>
+        <div className={clsx(
+            "font-mono text-xs font-bold px-2 py-1 rounded border flex items-center gap-1",
+            tx.type === 'earned'
+                ? "text-emerald-300 bg-emerald-900/10 border-emerald-900/20 group-hover:border-emerald-500/30"
+                : "text-red-400 bg-red-900/10 border-red-900/20 group-hover:border-red-500/30"
+        )}>
+            <Coins size={10} /> {tx.type === 'earned' ? '+' : '-'}{tx.amount}
+        </div>
+    </div>
+));
 
 const LedgerView = memo(({ spendCoins, coinHistory }) => {
     const [desc, setDesc] = useState('');
     const [amount, setAmount] = useState('');
     const recentTransactions = useMemo(() => (
         [...coinHistory]
-            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0))
             .map((tx) => {
                 const timestamp = new Date(tx.date);
                 return {
@@ -1234,23 +1267,8 @@ const LedgerView = memo(({ spendCoins, coinHistory }) => {
                     {recentTransactions.length === 0 ? (
                         <div className="text-center py-8 text-amber-900/30 italic text-xs">No transactions recorded.</div>
                     ) : (
-                        recentTransactions.map((tx) => (
-                            <div key={tx.id} className="flex items-center justify-between p-2 rounded hover:bg-white/5 border border-transparent hover:border-white/5 transition-colors group">
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-amber-100/80">{tx.description}</span>
-                                    <span className="text-[9px] font-mono text-gray-600">{tx.dateLabel} • {tx.timeLabel}</span>
-                                </div>
-                                <div className={clsx(
-                                    "font-mono text-xs font-bold px-2 py-1 rounded border flex items-center gap-1",
-                                    tx.type === 'earned'
-                                        ? "text-emerald-300 bg-emerald-900/10 border-emerald-900/20 group-hover:border-emerald-500/30"
-                                        : "text-red-400 bg-red-900/10 border-red-900/20 group-hover:border-red-500/30"
-                                )}>
-                                    <Coins size={10} /> {tx.type === 'earned' ? '+' : '-'}{tx.amount}
-                                </div>
-                            </div>
-                        ))
-                    )}
+                            recentTransactions.map((tx) => <LedgerTransactionRow key={tx.id} tx={tx} />)
+                        )}
                 </div>
             </div>
         </div>
@@ -1277,6 +1295,8 @@ const BudgetView = () => {
     const [showSettings, setShowSettings] = useState(false);
     const [settingsOriginRect, setSettingsOriginRect] = useState(null);
     const [coinResetSignal, setCoinResetSignal] = useState(0);
+    const priceDatabaseEntries = useMemo(() => Object.entries(priceDatabase), [priceDatabase]);
+    const priceDatabaseKeys = useMemo(() => priceDatabaseEntries.map(([name]) => name), [priceDatabaseEntries]);
 
     // --- CURRENCY HELPERS ---
     // The backend (Context) stores values in USD (standard unit).
@@ -1345,324 +1365,6 @@ const BudgetView = () => {
         setActiveTab(prev => prev === TAB_PROVISIONS ? TAB_LEDGER : TAB_PROVISIONS);
     }, []);
 
-    const LegacyProvisionsView = ({ groceryList, totalGroceryEstimated }) => {
-        const [itemName, setItemName] = useState('');
-        const [itemQuantity, setItemQuantity] = useState('1');
-        const [itemPriceCredits, setItemPriceCredits] = useState(''); // Store input as credits string
-        const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-        const totalUnits = groceryList.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
-
-        const filteredDbItems = Object.keys(priceDatabase).filter(item =>
-            item.toLowerCase().includes(itemName.toLowerCase())
-        );
-
-        const handleAdd = (e) => {
-            e.preventDefault();
-            if (!itemName) return;
-            const quantity = Math.max(1, parseInt(itemQuantity, 10) || 1);
-
-            // Logic: Use input price (Credits) OR DB price (USD -> convert to Credits for display? No wait.)
-            // updatePrice takes USD.
-            // addGroceryItem takes name. It internally looks up price from DB.
-
-            // If user entered a price manually, update DB first.
-            if (itemPriceCredits) {
-                const usdPrice = fromCredits(itemPriceCredits);
-                updatePrice(itemName, usdPrice);
-            }
-
-            // Note: If item exists in DB but no price input, addGroceryItem uses DB price.
-            // If item is new and no price input, DB defaults 0.
-
-            addGroceryItem(itemName, quantity);
-            setItemName('');
-            setItemQuantity('1');
-            setItemPriceCredits('');
-            setIsDropdownOpen(false);
-        };
-
-        const selectFromDb = (name) => {
-            setItemName(name);
-            // Pre-fill price input with Credits equivalent
-            if (priceDatabase[name]) {
-                setItemPriceCredits(toCredits(priceDatabase[name]));
-            } else {
-                setItemPriceCredits('');
-            }
-            setIsDropdownOpen(false);
-        };
-
-        const handleTogglePurchased = (item) => {
-            const todayKey = getTodayISO();
-            const quantity = Number(item.quantity || 1);
-            const totalCoinCost = toCreditValue(item.price * quantity);
-
-            if (!item.completed) {
-                markGroceryItemCompleted(item.id, todayKey);
-                if (totalCoinCost > 0) {
-                    spendCoins(totalCoinCost, `Groceries: ${item.name} x${quantity}`);
-                }
-                return;
-            }
-
-            if (item.completedDateKey !== todayKey) {
-                return;
-            }
-
-            unmarkGroceryItemCompleted(item.id);
-            if (totalCoinCost > 0) {
-                addGold(totalCoinCost, 'Grocery Refund', {
-                    description: `Grocery refund: ${item.name} x${quantity}`
-                });
-            }
-        };
-
-
-        return (
-            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-                {/* INPUT BAR (Moved to Top) */}
-                <div className="shrink-0 p-3 bg-black/90 border-b border-amber-900/50 backdrop-blur-xl z-30 shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
-                    <form onSubmit={handleAdd} className="flex gap-2 items-center">
-                        <div className="w-16 relative">
-                            <input
-                                type="number"
-                                min="1"
-                                placeholder="1"
-                                value={itemQuantity}
-                                onChange={(e) => setItemQuantity(e.target.value)}
-                                className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-2 py-3 text-sm text-amber-400 placeholder-amber-900/30 focus:border-amber-500/50 outline-none text-center font-mono"
-                            />
-                        </div>
-                        <div className="flex-1 relative">
-                            <input
-                                type="text"
-                                placeholder="PROVISION"
-                                value={itemName}
-                                onChange={(e) => {
-                                    setItemName(e.target.value);
-                                    setIsDropdownOpen(true);
-                                }}
-                                className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-3 py-3 text-sm text-amber-100 placeholder-amber-900/30 focus:border-amber-500/50 outline-none uppercase font-mono tracking-wide"
-                            />
-                            {/* Autocomplete Dropdown */}
-                            {isDropdownOpen && filteredDbItems.length > 0 && itemName && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-black border border-amber-900 rounded-lg shadow-2xl overflow-hidden max-h-32 overflow-y-auto z-50">
-                                    {filteredDbItems.map(item => (
-                                        <button
-                                            key={item}
-                                            type="button"
-                                            onClick={() => selectFromDb(item)}
-                                            className="w-full text-left px-3 py-2 hover:bg-amber-900/30 text-xs text-amber-100/80 flex justify-between items-center border-b border-amber-900/20 last:border-0"
-                                        >
-                                            <span>{item}</span>
-                                            <span className="font-mono text-amber-500 flex items-center gap-1">
-                                                <Coins size={10} />
-                                                {toCredits(priceDatabase[item])}
-                                            </span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        <div className="w-24 relative">
-                            <input
-                                type="number"
-                                placeholder="0"
-                                value={itemPriceCredits}
-                                onChange={(e) => setItemPriceCredits(e.target.value)}
-                                className="w-full bg-slate-900/80 border border-amber-900/50 rounded px-2 py-3 text-sm text-amber-400 placeholder-amber-900/30 focus:border-amber-500/50 outline-none text-right font-mono"
-                            />
-                            <Coins size={12} className="absolute left-2 top-4 text-amber-600/50" />
-                        </div>
-                        <button
-                            type="submit"
-                            className="bg-amber-600 hover:bg-amber-500 text-black py-3 px-4 rounded transition-colors shadow-[0_0_10px_rgba(245,158,11,0.2)] font-bold"
-                        >
-                            <Plus size={20} />
-                        </button>
-                    </form>
-                </div>
-
-                {/* STATUS BAR */}
-                <div className="shrink-0 px-4 py-2 flex items-center justify-between text-[10px] font-game text-amber-500/60 uppercase tracking-widest border-b border-white/5 bg-black/20">
-                    <div className="flex gap-4">
-                        <span>Cycle: {groceryPeriod}</span>
-                        <span>Entries: {groceryList.length}</span>
-                        <span>Items: {totalUnits}</span>
-                    </div>
-                    <div className="text-amber-400 flex items-center gap-1 font-bold">
-                        <Coins size={10} />
-                        <span>Total: {formatCredits(totalGroceryEstimated)}</span>
-                    </div>
-                </div>
-
-                {/* SCROLLABLE LIST AREA */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 pb-48 touch-pan-y overscroll-none">
-                    {groceryList.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-48 text-amber-900/40 border-2 border-dashed border-amber-900/20 rounded-xl m-4">
-                            <ShoppingCart size={32} className="mb-2 opacity-50" />
-                            <span className="font-game text-xs tracking-widest uppercase">Manifest Empty</span>
-                        </div>
-                    ) : (
-                        <AnimatePresence>
-                            {groceryList.map(item => (
-                                <motion.div
-                                    key={item.id}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className={clsx(
-                                        "group flex items-center justify-between p-3 rounded border transition-all relative overflow-hidden",
-                                        item.completed
-                                            ? "bg-slate-900/30 border-slate-800 text-slate-600"
-                                            : "bg-amber-950/20 border-amber-500/20 text-amber-100 hover:bg-amber-900/20"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-3 relative z-10">
-                                        <button
-                                            onClick={() => handleTogglePurchased(item)}
-                                            className={clsx(
-                                                "transition-all duration-300",
-                                                item.completed ? "text-amber-900" : "text-amber-500 hover:text-amber-300"
-                                            )}
-                                        >
-                                            {item.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-                                        </button>
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-2">
-                                                <span className={clsx("text-sm font-bold leading-none", item.completed && "line-through opacity-50")}>{item.name}</span>
-                                                <span className={clsx(
-                                                    "rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider",
-                                                    item.completed
-                                                        ? "border-slate-800 text-slate-700"
-                                                        : "border-amber-500/20 text-amber-400/80"
-                                                )}>
-                                                    x{item.quantity || 1}
-                                                </span>
-                                            </div>
-                                            {!item.completed && <span className="text-[9px] font-mono text-amber-500/50 mt-1 uppercase tracking-wider">est. {toCredits(item.price)} C each</span>}
-                                            {item.completed && <span className="text-[9px] font-mono text-slate-700 mt-1 uppercase tracking-wider">purchased {item.completedDateKey === getTodayISO() ? 'today' : item.completedDateKey}</span>}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 relative z-10">
-                                        <div className={clsx("font-mono text-sm flex items-center gap-1", item.completed ? "text-xs text-slate-700" : "text-amber-400 font-bold")}>
-                                            <Coins size={12} />
-                                            {toCredits(item.price * (item.quantity || 1))}
-                                        </div>
-                                        <button
-                                            onClick={() => removeGroceryItem(item.id)}
-                                            className="text-amber-900 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-
-                                    {/* Holographic Scanline Effect */}
-                                    {!item.completed && (
-                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/5 to-transparent skew-x-12 translate-x-[-150%] group-hover:animate-holoscan pointer-events-none" />
-                                    )}
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
-    const LegacyLedgerView = () => {
-        const { spendCoins, coinHistory } = useGame();
-        const [desc, setDesc] = useState('');
-        const [amount, setAmount] = useState('');
-
-        const handleSpend = (e) => {
-            e.preventDefault();
-            if (!desc || !amount) return;
-            // Amount is in CREDITS (Coins). spendCoins takes amount and deducts from stats.gold.
-            // stats.gold is already in Credits/Gold units.
-            // So NO conversion needed here. 
-            spendCoins(parseInt(amount), desc);
-            setDesc('');
-            setAmount('');
-        };
-
-        const recentTransactions = [...coinHistory]
-            .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        return (
-            <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
-                {/* TRANSFER TERMINAL (Top) */}
-                <div className="shrink-0 p-4 border-b border-amber-900/30 bg-black/20">
-                    <div className="mb-3 flex items-center gap-2 text-amber-500/70">
-                        <ArrowRightLeft size={14} />
-                        <span className="text-[10px] font-game uppercase tracking-widest">Execute Transaction</span>
-                    </div>
-
-                    <form onSubmit={handleSpend} className="flex flex-col gap-3">
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                placeholder="PAYMENT REFERENCE..."
-                                value={desc}
-                                onChange={(e) => setDesc(e.target.value)}
-                                className="flex-1 bg-slate-900/50 border border-amber-900/50 rounded px-3 py-3 text-amber-100 placeholder-amber-900/50 focus:border-amber-500/50 outline-none font-mono text-sm uppercase"
-                            />
-                            <div className="w-32 relative">
-                                <input
-                                    type="number"
-                                    placeholder="0"
-                                    value={amount}
-                                    onChange={(e) => setAmount(e.target.value)}
-                                    className="w-full bg-slate-900/50 border border-amber-900/50 rounded px-3 py-3 text-amber-400 placeholder-amber-900/50 focus:border-amber-500/50 outline-none font-mono text-right text-sm"
-                                />
-                                <span className="absolute left-2 top-3.5 text-[10px] text-amber-600 font-bold uppercase flex items-center gap-1">
-                                    <Coins size={10} /> CREDITS
-                                </span>
-                            </div>
-                        </div>
-                        <button
-                            disabled={!amount} // Allow negative balance
-                            type="submit"
-                            className="w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded uppercase font-bold text-xs tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Authorize Transfer <ArrowRightLeft size={14} />
-                        </button>
-                    </form>
-                </div>
-
-                {/* TRANSACTION LOG (Bottom) */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 pb-48 touch-pan-y overscroll-none">
-                    <div className="px-2 py-2 text-[10px] font-mono text-amber-500/40 uppercase border-b border-white/5 mb-1">Recent Activity Log</div>
-                    <div className="space-y-1">
-                        {recentTransactions.length === 0 ? (
-                            <div className="text-center py-8 text-amber-900/30 italic text-xs">No transactions recorded.</div>
-                        ) : (
-                            recentTransactions.map(tx => (
-                                <div key={tx.id} className="flex items-center justify-between p-2 rounded hover:bg-white/5 border border-transparent hover:border-white/5 transition-colors group">
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-bold text-amber-100/80">{tx.description}</span>
-                                        <span className="text-[9px] font-mono text-gray-600">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                    </div>
-                                    <div className={clsx(
-                                        "font-mono text-xs font-bold px-2 py-1 rounded border flex items-center gap-1",
-                                        tx.type === 'earned'
-                                            ? "text-emerald-300 bg-emerald-900/10 border-emerald-900/20 group-hover:border-emerald-500/30"
-                                            : "text-red-400 bg-red-900/10 border-red-900/20 group-hover:border-red-500/30"
-                                    )}>
-                                        <Coins size={10} /> {tx.type === 'earned' ? '+' : '-'}{tx.amount}
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    void LegacyProvisionsView;
-    void LegacyLedgerView;
-
     // --- MAIN RENDER ---
 
     return (
@@ -1698,6 +1400,7 @@ const BudgetView = () => {
                                 totalGroceryEstimated={totalGroceryEstimated}
                                 groceryPeriod={groceryPeriod}
                                 priceDatabase={priceDatabase}
+                                priceDatabaseKeys={priceDatabaseKeys}
                                 addGroceryItem={addGroceryItem}
                                 markGroceryItemCompleted={markGroceryItemCompleted}
                                 unmarkGroceryItemCompleted={unmarkGroceryItemCompleted}
@@ -1761,7 +1464,7 @@ const BudgetView = () => {
                         goldToUsdRatio={goldToUsdRatio}
                         setGoldToUsdRatio={setGoldToUsdRatio}
                         clearGroceryList={clearGroceryList}
-                        priceDatabase={priceDatabase}
+                        priceEntries={priceDatabaseEntries}
                         updatePrice={updatePrice}
                     />
                 )}

@@ -3,9 +3,25 @@ import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { usePersistentState } from '../utils/persistence';
 import { createId } from '../domain/gameState';
 
-const BudgetContext = createContext();
+const BudgetStateContext = createContext();
+const BudgetActionsContext = createContext();
+const BudgetDerivedContext = createContext();
 
-export const useBudget = () => useContext(BudgetContext);
+export const useBudgetState = () => useContext(BudgetStateContext);
+export const useBudgetActions = () => useContext(BudgetActionsContext);
+export const useBudgetDerived = () => useContext(BudgetDerivedContext);
+
+export const useBudget = () => {
+    const state = useBudgetState();
+    const actions = useBudgetActions();
+    const derived = useBudgetDerived();
+
+    return useMemo(() => ({
+        ...state,
+        ...actions,
+        ...derived
+    }), [actions, derived, state]);
+};
 
 const INITIAL_GROCERY_ITEMS = []; // { id, name, quantity, price, completed }
 const INITIAL_PRICE_DB = {}; // { "Milk": 4.00 }
@@ -108,41 +124,55 @@ export const BudgetProvider = ({ children }) => {
     const totalGroceryEstimated = useMemo(() => groceryList
         .reduce((sum, item) => sum + (item.price * item.quantity), 0), [groceryList]);
 
-    const contextValue = useMemo(() => ({
+    const stateValue = useMemo(() => ({
         totalMonthlyBudget, setTotalMonthlyBudget,
         groceryAllocation, setGroceryAllocation,
         earnedRewards, setEarnedRewards,
         groceryList, setGroceryList,
-        priceDatabase, setPriceDatabase, updatePrice,
+        priceDatabase, setPriceDatabase,
         groceryPeriod, setGroceryPeriod,
         stipendAmount, setStipendAmount,
         stipendPeriod, setStipendPeriod,
         stipendPaidThrough, setStipendPaidThrough,
-        goldToUsdRatio, setGoldToUsdRatio,
-        addRewardFromGold, removeRewardFromGold,
-        addGroceryItem, markGroceryItemCompleted, unmarkGroceryItemCompleted, removeGroceryItem,
-        resetGroceryList, clearGroceryList, removeCompletedGroceriesBefore,
-        totalGrocerySpent, totalGroceryEstimated
+        goldToUsdRatio, setGoldToUsdRatio
     }), [
         totalMonthlyBudget, setTotalMonthlyBudget,
         groceryAllocation, setGroceryAllocation,
         earnedRewards, setEarnedRewards,
         groceryList, setGroceryList,
-        priceDatabase, setPriceDatabase, updatePrice,
+        priceDatabase, setPriceDatabase,
         groceryPeriod, setGroceryPeriod,
         stipendAmount, setStipendAmount,
         stipendPeriod, setStipendPeriod,
         stipendPaidThrough, setStipendPaidThrough,
-        goldToUsdRatio, setGoldToUsdRatio,
+        goldToUsdRatio, setGoldToUsdRatio
+    ]);
+
+    const actionsValue = useMemo(() => ({
+        updatePrice,
         addRewardFromGold, removeRewardFromGold,
         addGroceryItem, markGroceryItemCompleted, unmarkGroceryItemCompleted, removeGroceryItem,
-        resetGroceryList, clearGroceryList, removeCompletedGroceriesBefore,
+        resetGroceryList, clearGroceryList, removeCompletedGroceriesBefore
+    }), [
+        updatePrice,
+        addRewardFromGold, removeRewardFromGold,
+        addGroceryItem, markGroceryItemCompleted, unmarkGroceryItemCompleted, removeGroceryItem,
+        resetGroceryList, clearGroceryList, removeCompletedGroceriesBefore
+    ]);
+
+    const derivedValue = useMemo(() => ({
+        totalGrocerySpent, totalGroceryEstimated
+    }), [
         totalGrocerySpent, totalGroceryEstimated
     ]);
 
     return (
-        <BudgetContext.Provider value={contextValue}>
-            {children}
-        </BudgetContext.Provider>
+        <BudgetStateContext.Provider value={stateValue}>
+            <BudgetActionsContext.Provider value={actionsValue}>
+                <BudgetDerivedContext.Provider value={derivedValue}>
+                    {children}
+                </BudgetDerivedContext.Provider>
+            </BudgetActionsContext.Provider>
+        </BudgetStateContext.Provider>
     );
 };

@@ -1617,7 +1617,10 @@ const CalorieTracker = () => {
     const preset250Food = quickSlots.preset250 ? savedFoodsById.get(quickSlots.preset250) || null : null;
     const preset400Food = quickSlots.preset400 ? savedFoodsById.get(quickSlots.preset400) || null : null;
     const preset550Food = quickSlots.preset550 ? savedFoodsById.get(quickSlots.preset550) || null : null;
-    const recentManualItems = useMemo(() => buildRecentManualItems(history), [history]);
+    const recentManualItems = useMemo(() => {
+        if (!isFoodsTrayOpen) return EMPTY_LIST;
+        return buildRecentManualItems(history);
+    }, [history, isFoodsTrayOpen]);
 
     const recentItems = useMemo(() => {
         if (!isFoodsTrayOpen) return EMPTY_LIST;
@@ -1824,6 +1827,18 @@ const CalorieTracker = () => {
         toggleSheet('foods');
     }, [toggleSheet]);
 
+    const closeSheet = useCallback(() => {
+        setActiveSheet(null);
+    }, []);
+
+    const closeVault = useCallback(() => {
+        setShowVault(false);
+    }, []);
+
+    const stopPropagation = useCallback((event) => {
+        event.stopPropagation();
+    }, []);
+
     const handleQuickPreset550 = useCallback(() => {
         if (isHeroEditing) {
             setFoodPickerTarget('preset550');
@@ -1839,18 +1854,20 @@ const CalorieTracker = () => {
         handleQuickPreset(550);
     }, [handleQuickFood, handleQuickPreset, isHeroEditing, preset550Food]);
 
-    const sheetPortal = typeof document !== 'undefined'
-        ? createPortal(
+    const sheetPortal = useMemo(() => {
+        if (typeof document === 'undefined') return null;
+
+        return createPortal(
             <AnimatePresence>
                 {activeSheet === 'manual' && (
                     <div
                         className={clsx('fixed inset-0 z-[220] flex items-center justify-center bg-black/55 px-3 py-4 sm:px-4', liteMode ? '' : 'backdrop-blur-[3px]')}
-                        onClick={() => setActiveSheet(null)}
+                        onClick={closeSheet}
                         data-no-swipe="true"
                     >
                         <ManualEntryPanel
                             liteMode={liteMode}
-                            onClose={() => setActiveSheet(null)}
+                            onClose={closeSheet}
                             onSubmit={handleManualSubmit}
                         />
                     </div>
@@ -1859,15 +1876,15 @@ const CalorieTracker = () => {
                 {activeSheet === 'foods' && (
                     <div
                         className={clsx('fixed inset-0 z-[240] flex items-end justify-center bg-black/45 px-0 sm:px-4', liteMode ? '' : 'backdrop-blur-[3px]')}
-                        onClick={() => setActiveSheet(null)}
+                        onClick={closeSheet}
                         data-no-swipe="true"
                     >
-                        <div className="w-full" onClick={(event) => event.stopPropagation()}>
+                        <div className="w-full" onClick={stopPropagation}>
                             <FoodsTray
                                 liteMode={liteMode}
                                 savedFoods={savedFoods}
                                 recentItems={recentItems}
-                                onClose={() => setActiveSheet(null)}
+                                onClose={closeSheet}
                                 onQuickAddFood={handleQuickFood}
                                 onSelectRecent={handleRecentSelection}
                                 onOpenManager={openFoodManager}
@@ -1879,8 +1896,21 @@ const CalorieTracker = () => {
                 )}
             </AnimatePresence>,
             document.body
-        )
-        : null;
+        );
+    }, [
+        activeSheet,
+        closeSheet,
+        foodPickerTarget,
+        handleManualSubmit,
+        handleQuickFood,
+        handleQuickSlotFoodSelect,
+        handleRecentSelection,
+        liteMode,
+        openFoodManager,
+        recentItems,
+        savedFoods,
+        stopPropagation
+    ]);
 
     return (
         <>
@@ -1953,7 +1983,7 @@ const CalorieTracker = () => {
                         yesterdayKey={yesterdayKey}
                         savedFoods={savedFoods}
                         mode={vaultTab}
-                        onClose={() => setShowVault(false)}
+                        onClose={closeVault}
                         selectionMode={foodPickerTarget ? `assign-${foodPickerTarget}` : null}
                         onUpdateEntry={updateCalorieEntry}
                         onDeleteEntry={deleteCalorieEntry}
