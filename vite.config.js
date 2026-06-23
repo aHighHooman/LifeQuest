@@ -46,7 +46,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'framer-motion', 'date-fns', 'uuid'],
+          vendor: ['react', 'react-dom', 'framer-motion', 'uuid'],
           charts: ['recharts'],
           icons: ['lucide-react']
         }
