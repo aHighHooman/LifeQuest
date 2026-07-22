@@ -1,0 +1,322 @@
+/* Physical quest-card finishes, based on the supplied card prototype. */
+.quest-board-title {
+    color: #6f9b85;
+    background: linear-gradient(180deg, #89ad9a 0%, #6f9b85 48%, #527a68 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: none;
+}
+
+.quest-active-count {
+    padding: .25rem 0;
+    color: #759987;
+    background: linear-gradient(180deg, #8caa9a 0%, #759987 52%, #5d806f 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: .75rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-shadow: none;
+}
+
+.quest-add-button {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    border: 1px solid #356b57;
+    border-radius: .5rem;
+    background: linear-gradient(115deg, #1d4d3c 0%, #2f7057 48%, #214f40 100%);
+    box-shadow: inset 0 1px rgba(173, 211, 190, .1), 0 3px 8px rgba(0, 0, 0, .32);
+    padding: .5rem 1.5rem;
+    color: #d4dfd7;
+    font-weight: 800;
+    transition: border-color .16s ease, background .16s ease, color .16s ease;
+}
+
+.quest-add-button:hover {
+    border-color: #477e68;
+    background: linear-gradient(115deg, #245844 0%, #377b60 48%, #285b49 100%);
+    color: #eef3ef;
+}
+
+.quest-add-button:focus-visible {
+    outline: 2px solid #668f7d;
+    outline-offset: 2px;
+}
+
+.quest-creation-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(3, 9, 7, .72);
+}
+
+.quest-creation-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 50;
+    max-height: calc(100vh - 1rem);
+    overflow-y: auto;
+    border-bottom: 1px solid #355447;
+    border-radius: 0 0 1.25rem 1.25rem;
+    background: linear-gradient(180deg, #17241f 0%, #101915 100%);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, .5), inset 0 -1px rgba(130, 166, 148, .04);
+    padding: calc(1.25rem + env(safe-area-inset-top)) 1.5rem 1.5rem;
+}
+
+.quest-creation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.quest-creation-header h2 {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 0;
+    color: #91ad9e;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.quest-creation-header button {
+    border: 1px solid #36443d;
+    border-radius: 50%;
+    background: #202b26;
+    padding: .5rem;
+    color: #8e9c94;
+    transition: border-color .16s ease, color .16s ease, background-color .16s ease;
+}
+
+.quest-creation-header button:hover {
+    border-color: #53675d;
+    background: #27342e;
+    color: #d8dfdb;
+}
+
+.quest-creation-title {
+    border: 1px solid #3e4d46;
+    background: #0b1210;
+    color: #edf1ee;
+    outline: none;
+}
+
+.quest-creation-title:hover { border-color: #56675f; }
+.quest-creation-title:focus { border-color: #668c79; }
+
+@media (min-width: 768px) {
+    .quest-creation-drawer {
+        right: 1.5rem;
+        left: 1.5rem;
+        width: min(44rem, calc(100vw - 3rem));
+        margin-inline: auto;
+    }
+}
+
+.quest-deck-card {
+    --shell: #171917;
+    --face: #141714;
+    --edge: #080a08;
+    --accent: #87917f;
+    --rim: #394039;
+    --rim-hi: #fff;
+    --title: #d8d8d1;
+    --ambient-light: rgba(255, 255, 255, .03);
+    position: absolute;
+    inset: 0 5% auto;
+    height: 310px;
+    border-radius: 16px;
+    transform-origin: 50% 100%;
+    touch-action: none;
+    cursor: grab;
+    filter: drop-shadow(0 18px 17px rgba(0, 0, 0, .5));
+    isolation: isolate;
+}
+
+.quest-deck-card:active { cursor: grabbing; }
+.quest-deck-card.is-editing { cursor: default; }
+
+.quest-deck-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border: 1px solid var(--rim);
+    border-radius: 16px;
+    background: var(--shell);
+    box-shadow: inset 0 1px var(--rim-hi), inset 0 -2px rgba(0, 0, 0, .6), 0 5px 9px rgba(0, 0, 0, .4);
+}
+
+.quest-card-depth {
+    position: absolute;
+    z-index: -2;
+    inset: 4px 0 -6px;
+    border-radius: 16px;
+    background: var(--edge);
+}
+
+.quest-card-face {
+    position: relative;
+    height: calc(100% - 2px);
+    margin: 1px;
+    overflow: hidden;
+    border-radius: 15px;
+    background: linear-gradient(132deg, rgba(255, 255, 255, .014), transparent 28%), var(--face);
+}
+
+.quest-deck-card.is-top .quest-card-face::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse 92% 72% at var(--light-x, 25%) -12%, var(--ambient-light), transparent 72%), linear-gradient(118deg, rgba(255, 255, 255, .012), transparent 34%);
+    mix-blend-mode: screen;
+}
+
+.quest-card-specular {
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 16px;
+    background: radial-gradient(ellipse 65% 26% at var(--light-x, 25%) -2%, rgba(255, 255, 255, .045), transparent 70%);
+    mix-blend-mode: screen;
+}
+
+.quest-card-title {
+    position: absolute;
+    z-index: 1;
+    top: 67px;
+    right: 27px;
+    left: 27px;
+    margin: 0;
+    color: var(--title);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 27px;
+    font-weight: 700;
+    line-height: 1.06;
+    letter-spacing: .018em;
+    text-shadow: 0 -1px 1px rgba(0, 0, 0, .98), 0 1px 0 color-mix(in srgb, var(--rim-hi) 28%, transparent);
+}
+
+.quest-card-content {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+}
+
+.quest-card-details {
+    position: absolute;
+    top: 158px;
+    right: 27px;
+    bottom: 26px;
+    left: 27px;
+    display: flex;
+    flex-direction: column;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, .045);
+}
+
+.quest-material-note,
+.quest-due-date,
+.quest-brief-heading {
+    font-family: 'Rajdhani', sans-serif;
+    text-transform: uppercase;
+}
+
+.quest-material-note {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    color: var(--accent);
+    font-size: 9px;
+    letter-spacing: .15em;
+}
+
+.quest-material-note small { color: rgba(225, 225, 215, .3); font-size: 7px; }
+
+.quest-due-date {
+    display: grid;
+    grid-template-columns: 17px 28px 1fr;
+    align-items: center;
+    color: #676d69;
+    font-size: 8px;
+    letter-spacing: .12em;
+}
+
+.quest-due-date strong { color: #afb2ad; font-size: 9px; text-align: right; }
+
+.quest-brief-heading {
+    display: flex;
+    justify-content: space-between;
+    margin: 14px 0 7px;
+    color: #707571;
+    font-size: 8px;
+    letter-spacing: .16em;
+}
+
+.quest-brief-heading small { color: #565b57; font-size: 7px; font-style: italic; letter-spacing: .04em; text-transform: none; }
+
+.quest-brief-copy {
+    flex: 1;
+    overflow-y: auto;
+    margin: 0;
+    padding-right: 3px;
+    color: #a6a9a4;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-style: italic;
+    line-height: 1.55;
+}
+
+.quest-brief-editor { display: flex; min-height: 0; flex: 1; flex-direction: column; }
+.quest-brief-textarea { min-height: 0; flex: 1; resize: none; border: 1px solid color-mix(in srgb, var(--rim) 80%, transparent); border-radius: 4px; background: rgba(0, 0, 0, .32); padding: 7px; color: #d9ddd7; font-family: 'IBM Plex Mono', monospace; font-size: 10px; outline: none; }
+.quest-brief-textarea:focus { border-color: var(--accent); }
+.quest-brief-save { align-self: flex-end; margin-top: 6px; border: 1px solid var(--rim); border-radius: 3px; background: rgba(255, 255, 255, .035); padding: 3px 6px; color: var(--title); font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+.quest-swipe-plate {
+    position: absolute;
+    z-index: 10;
+    inset: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    border-radius: 11px;
+    backdrop-filter: sepia(.2);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: .14em;
+}
+
+.quest-swipe-plate span { display: flex; align-items: center; gap: 8px; border: 2px solid currentColor; padding: 10px 15px; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .3); transform: rotate(-7deg); }
+.quest-complete-plate { color: #b8d4aa; background: rgba(43, 76, 43, .64); }
+.quest-dismiss-plate { color: #d1a09c; background: rgba(88, 44, 41, .66); }
+.quest-dismiss-plate span { transform: rotate(7deg); }
+
+.quest-deck-card.easy { --shell: #0c140e; --face: #0f1811; --edge: #060a07; --accent: #879b7f; --rim: #557b52; --rim-hi: #84a17f; --title: #b5c2b1; --ambient-light: rgba(183, 204, 179, .032); }
+.quest-deck-card.easy::before { background: linear-gradient(145deg, #111c14, #09100b 76%); }
+.quest-deck-card.medium { --shell: #0b1219; --face: #09121a; --edge: #05080c; --accent: #8ea3b7; --rim: #416f96; --rim-hi: #7198b8; --title: #b2c0ca; --ambient-light: rgba(174, 197, 216, .04); }
+.quest-deck-card.medium::before { background: linear-gradient(145deg, #101c26, #080e14 76%); }
+.quest-deck-card.hard { --shell: #160d19; --face: #120b16; --edge: #08050a; --accent: #9e8aa5; --rim: #795083; --rim-hi: #a476ad; --title: #c0b3c3; --ambient-light: rgba(207, 183, 211, .037); }
+.quest-deck-card.hard::before, .quest-deck-card.hard .quest-card-face, .quest-deck-card.hard .quest-card-depth { clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px)); }
+.quest-deck-card.hard::before { background: linear-gradient(135deg, #1c1120, #0f0912); }
+.quest-deck-card.legendary { --shell: #14130f; --face: #11110f; --edge: #050504; --accent: #b49a59; --rim: #a4863d; --rim-hi: #d0b467; --title: #cec4a7; --ambient-light: rgba(224, 205, 155, .035); filter: drop-shadow(0 21px 18px rgba(0, 0, 0, .65)); }
+.quest-deck-card.legendary::before { background: linear-gradient(125deg, #1c1b16 0, #0d0e0c 34%, #090a09 72%, #17150f); }
+
+@media (max-width: 350px) {
+    .quest-deck-card { inset-inline: 3px; }
+    .quest-card-title { font-size: 22px; }
+}

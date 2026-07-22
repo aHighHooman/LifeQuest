@@ -6,11 +6,13 @@ import clsx from 'clsx';
 import { SPRING_CONFIG } from '../constants/animations';
 import { isWithinDays, getTodayISO, toLocalISOString } from '../utils/dateUtils';
 import { useDeckOrder } from '../hooks/useDeckOrder';
+import './QuestBoard.css';
 
 const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious, custom }) => {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
     const rotate = useTransform(x, [-200, 200], [-30, 30]);
+    const highlightX = useTransform(x, [-180, 180], ['15%', '85%']);
 
     // Background colors for swipe feedback
     const [showDetails, setShowDetails] = useState(false);
@@ -51,15 +53,13 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
         setIsEditingBrief(false);
     };
 
-    const rarityColors = {
-        // Updated 'easy' to be emerald/green based
-        easy: { border: "border-emerald-500", text: "text-emerald-400", bg: "bg-slate-900", shadow: "shadow-emerald-500/20" },
-        medium: { border: "border-blue-500", text: "text-blue-400", bg: "bg-slate-900", shadow: "shadow-blue-500/40" },
-        hard: { border: "border-purple-500", text: "text-purple-400", bg: "bg-slate-900", shadow: "shadow-purple-500/40" },
-        legendary: { border: "border-game-gold", text: "text-game-gold", bg: "bg-slate-950", shadow: "shadow-game-gold/40" }
+    const materials = {
+        easy: { label: 'Common', material: 'Field Issue', code: 'FE–01' },
+        medium: { label: 'Rare', material: 'Tempered Alloy', code: 'TI–02' },
+        hard: { label: 'Epic', material: 'Forged Composite', code: 'CR–03' },
+        legendary: { label: 'Legendary', material: 'Blackened Metal', code: 'AU–01' }
     };
-
-    const rarity = rarityColors[quest.difficulty] || rarityColors.easy;
+    const material = materials[quest.difficulty] || materials.easy;
 
     return (
         <motion.div
@@ -69,7 +69,8 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
                 rotate: isTop ? rotate : 0,
                 zIndex: 100 - index,
                 scale: 1 - index * 0.05,
-                top: index * 10
+                top: index * 10,
+                '--light-x': highlightX
             }}
             drag={isTop && !isEditingBrief ? true : false}
             dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
@@ -112,64 +113,63 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
             animate="animate"
             exit="exit"
             className={clsx(
-                "absolute w-[90%] max-w-md bg-slate-900 rounded-2xl border-2 overflow-hidden shadow-2xl origin-bottom touch-none left-0 right-0 mx-auto",
-                rarity.border,
-                rarity.shadow,
-                isEditingBrief ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+                'quest-deck-card',
+                quest.difficulty || 'easy',
+                isTop && 'is-top',
+                isEditingBrief && 'is-editing'
             )}
         >
+            <div className="quest-card-depth" />
+            <div className="quest-card-specular" />
+
             {/* Swipe Feedback Overlays */}
-            <motion.div style={{ opacity: useTransform(x, [0, 100], [0, 1]) }} className="absolute inset-0 bg-emerald-500/20 z-10 flex items-center justify-center pointer-events-none">
-                <CheckCircle size={64} className="text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+            <motion.div style={{ opacity: useTransform(x, [0, 100], [0, 1]) }} className="quest-swipe-plate quest-complete-plate">
+                <span><CheckCircle size={22} /> COMPLETE</span>
             </motion.div>
-            <motion.div style={{ opacity: useTransform(x, [-100, 0], [1, 0]) }} className="absolute inset-0 bg-rose-500/20 z-10 flex items-center justify-center pointer-events-none">
-                <Trash2 size={64} className="text-rose-400 drop-shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
+            <motion.div style={{ opacity: useTransform(x, [-100, 0], [1, 0]) }} className="quest-swipe-plate quest-dismiss-plate">
+                <span><Trash2 size={22} /> DISMISS</span>
             </motion.div>
 
-            <div className={clsx("p-6 flex flex-col h-[300px] select-none", rarity.bg)}>
-                <div className="flex justify-between items-start mb-4">
-                    <span className={clsx("text-xs font-black uppercase tracking-widest px-2 py-1 rounded bg-black/40", rarity.text)}>
-                        {quest.difficulty}
-                    </span>
-                    {/* DELETED: Reward pill from top right */}
-                </div>
+            <div className="quest-card-face select-none">
+                <h3 className="quest-card-title">{quest.title}</h3>
 
-                <h3 className="text-2xl font-game font-bold text-white mb-2 leading-tight">
-                    {quest.title}
-                </h3>
-
-                <div className="flex-1 overflow-visible">
+                <div className="quest-card-content">
                     {showDetails ? (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="bg-black/20 p-3 rounded-lg border border-white/5 text-sm text-gray-400 h-full flex flex-col"
+                            className="quest-card-details"
                         >
-                            <div className="flex items-center gap-2 mb-2 shrink-0">
+                            <div className="quest-material-note">
+                                <span>{material.label} · {material.material}</span>
+                                <small>{material.code}</small>
+                            </div>
+                            <div className="quest-due-date">
                                 <Calendar size={14} />
-                                <span>Due: {quest.dueDate ? new Date(quest.dueDate).toLocaleDateString() : 'No Limit'}</span>
+                                <span>DUE</span>
+                                <strong>{quest.dueDate ? new Date(quest.dueDate).toLocaleDateString() : 'NO LIMIT'}</strong>
                             </div>
 
-                            <div className="flex items-center justify-between mb-1 shrink-0">
-                                <span className="text-xs uppercase font-bold text-gray-600">Mission Brief</span>
+                            <div className="quest-brief-heading">
+                                <span>MISSION BRIEF</span>
                                 {!isEditingBrief && (
-                                    <span className="text-[10px] text-gray-700 italic">Long press to edit</span>
+                                    <small>Long press to edit</small>
                                 )}
                             </div>
 
                             {isEditingBrief ? (
-                                <div className="flex-1 flex flex-col">
+                                <div className="quest-brief-editor">
                                     <textarea
                                         value={localBrief}
                                         onChange={(e) => setLocalBrief(e.target.value)}
                                         onClick={(e) => e.stopPropagation()} // Prevent card toggle
-                                        className="w-full bg-slate-950/80 text-white text-xs p-2 rounded border border-emerald-500/50 focus:outline-none resize-none flex-1 font-mono"
+                                        className="quest-brief-textarea"
                                         placeholder="Enter mission details..."
                                         autoFocus
                                     />
                                     <button
                                         onClick={saveBrief}
-                                        className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-1 px-2 rounded self-end flex items-center gap-1"
+                                        className="quest-brief-save"
                                     >
                                         <CheckCircle size={12} /> Save
                                     </button>
@@ -188,22 +188,13 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
                                     onPointerLeave={(e) => {
                                         clearTimeout(e.target.dataset.longPressTimer);
                                     }}
-                                    className="italic overflow-y-auto custom-scrollbar flex-1 relative active:bg-white/5 rounded p-1 transition-colors"
+                                    className="quest-brief-copy custom-scrollbar"
                                 >
                                     {quest.missionBrief ? quest.missionBrief : "Complete this objective to earn rewards."}
                                 </motion.div>
                             )}
                         </motion.div>
-                    ) : (
-                        <div className="flex items-center justify-center h-full text-slate-600 font-game text-sm uppercase tracking-widest animate-pulse">
-                            Tap for Info / Swipe Up to Skip
-                        </div>
-                    )}
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-white/10 flex justify-between text-xs text-gray-500 font-mono">
-                    <div className="flex items-center gap-1"><span className="text-emerald-400">►</span> COMPLETE</div>
-                    <div className="flex items-center gap-1">DISMISS <span className="text-rose-400">◄</span></div>
+                    ) : null}
                 </div>
             </div>
         </motion.div>
@@ -307,6 +298,7 @@ const QuestBoard = () => {
     // UI States
     const [showVictoryLog, setShowVictoryLog] = useState(false);
     const [showDiscardedLog, setShowDiscardedLog] = useState(false);
+    const [isCreationOpen, setIsCreationOpen] = useState(false);
 
     // Animation State
     const [slideDirection, setSlideDirection] = useState(1); // 1 = Next/Skip, -1 = Previous/Reverse
@@ -328,6 +320,7 @@ const QuestBoard = () => {
         setCustomReward({ xp: null, gold: null });
         setIsAdvancedOpen(false);
         setDifficulty('easy');
+        setIsCreationOpen(false);
     };
 
     const baseActiveQuests = useMemo(() =>
@@ -370,15 +363,21 @@ const QuestBoard = () => {
     );
 
     return (
-        <div className="pb-4 md:pb-0 relative flex flex-col w-full">
+        <motion.div
+            className="pb-4 md:pb-0 relative flex flex-col w-full touch-none"
+            onPanEnd={(event, info) => {
+                if (event.target.closest('[data-no-swipe="true"]')) return;
+                if (info.offset.y > 80 && !isCreationOpen && window.scrollY < 50) {
+                    setIsCreationOpen(true);
+                }
+            }}
+        >
             <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
                 <div>
-                    <h2 className="text-3xl font-game font-bold text-emerald-400 tracking-widest uppercase text-glow">
-                        Active Quests
-                    </h2>
+                    <h2 className="quest-board-title text-3xl font-game font-bold tracking-widest uppercase">Active Quests</h2>
                     <p className="text-sm text-emerald-400/60">Current objectives.</p>
                 </div>
-                <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-1 rounded-full text-xs font-bold shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                <span className="quest-active-count">
                     {activeQuests.length} ACTIVE
                 </span>
             </div>
@@ -396,8 +395,32 @@ const QuestBoard = () => {
                 />
             </div>
 
-            {/* 2. QUEST CREATION (Moved Below) */}
-            <div className="bg-emerald-900/10 p-4 rounded-xl border border-emerald-500/20 mb-2 relative overflow-hidden z-20">
+            <AnimatePresence>
+                {isCreationOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="quest-creation-backdrop"
+                            onClick={() => setIsCreationOpen(false)}
+                        />
+                        <motion.div
+                            initial={{ y: '-100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '-100%' }}
+                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                            className="quest-creation-drawer"
+                            drag="y"
+                            dragConstraints={{ top: 0, bottom: 0 }}
+                            onDragEnd={(event, { offset, velocity }) => {
+                                if (offset.y < -50 || velocity.y < -500) setIsCreationOpen(false);
+                            }}
+                        >
+                            <div className="quest-creation-header">
+                                <h2><Plus size={20} /> New Quest</h2>
+                                <button type="button" onClick={() => setIsCreationOpen(false)} aria-label="Close quest creation"><X size={20} /></button>
+                            </div>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-col md:flex-row gap-4 items-end">
                         <div className="flex-1 w-full relative">
@@ -408,14 +431,15 @@ const QuestBoard = () => {
                                     value={newQuestTitle}
                                     onChange={(e) => setNewQuestTitle(e.target.value)}
                                     placeholder="Enter quest title..."
-                                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-game-accent focus:shadow-neon transition-all"
+                                    className="quest-creation-title flex-1 rounded-lg px-4 py-2 transition-colors"
+                                    autoFocus
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
                                     className={clsx(
                                         "p-2 rounded-lg border transition-all shrink-0",
-                                        isAdvancedOpen ? "bg-game-accent/20 border-game-accent text-game-accent" : "bg-slate-800 border-slate-700 text-gray-400 hover:text-white"
+                                        isAdvancedOpen ? "bg-emerald-950 border-emerald-700 text-emerald-300" : "bg-slate-800 border-slate-700 text-gray-400 hover:text-white"
                                     )}
                                     title="Advanced Settings"
                                 >
@@ -426,7 +450,7 @@ const QuestBoard = () => {
 
                         <button
                             type="submit"
-                            className="w-full md:w-auto bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-6 py-2 rounded-lg transition-colors flex items-center justify-center font-bold gap-2 shadow-neon h-[42px]"
+                            className="quest-add-button w-full md:w-auto"
                         >
                             <Plus size={20} /> <span className="md:hidden">Add Quest</span>
                         </button>
@@ -448,33 +472,25 @@ const QuestBoard = () => {
                                                 id: 'easy',
                                                 label: 'Cmn',
                                                 fullLabel: 'Common',
-                                                activeClassName: 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_10px_rgba(16,185,129,0.12)]',
-                                                overlayClassName: 'bg-emerald-400/10',
-                                                textClassName: 'text-emerald-400'
+                                                activeClassName: 'border-emerald-600 bg-emerald-950/70', overlayClassName: 'bg-emerald-800/10', textClassName: 'text-emerald-300'
                                             },
                                             {
                                                 id: 'medium',
                                                 label: 'Rare',
                                                 fullLabel: 'Rare',
-                                                activeClassName: 'border-blue-500 bg-blue-500/10 shadow-[0_0_10px_rgba(59,130,246,0.12)]',
-                                                overlayClassName: 'bg-blue-400/10',
-                                                textClassName: 'text-blue-400'
+                                                activeClassName: 'border-blue-600 bg-blue-950/50', overlayClassName: 'bg-blue-800/10', textClassName: 'text-blue-300'
                                             },
                                             {
                                                 id: 'hard',
                                                 label: 'Epic',
                                                 fullLabel: 'Epic',
-                                                activeClassName: 'border-purple-500 bg-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.12)]',
-                                                overlayClassName: 'bg-purple-400/10',
-                                                textClassName: 'text-purple-400'
+                                                activeClassName: 'border-purple-600 bg-purple-950/50', overlayClassName: 'bg-purple-800/10', textClassName: 'text-purple-300'
                                             },
                                             {
                                                 id: 'legendary',
                                                 label: 'Leg',
                                                 fullLabel: 'Legendary',
-                                                activeClassName: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_10px_rgba(234,179,8,0.12)]',
-                                                overlayClassName: 'bg-yellow-400/10',
-                                                textClassName: 'text-yellow-400'
+                                                activeClassName: 'border-yellow-700 bg-yellow-950/40', overlayClassName: 'bg-yellow-800/10', textClassName: 'text-yellow-300'
                                             }
                                         ].map((level) => {
                                             const isActive = difficulty === level.id;
@@ -485,21 +501,12 @@ const QuestBoard = () => {
                                                     onClick={() => setDifficulty(level.id)}
                                                     className={clsx(
                                                         "flex flex-col items-center justify-center py-2 rounded-lg border transition-all relative overflow-hidden",
-                                                        isActive
-                                                            ? level.activeClassName
-                                                            : "bg-slate-900/50 border-slate-700 opacity-60 hover:opacity-100 hover:border-slate-500"
+                                                        isActive ? level.activeClassName : "bg-slate-900/50 border-slate-700 opacity-60 hover:opacity-100 hover:border-slate-500"
                                                     )}
                                                     title={level.fullLabel}
                                                 >
-                                                    {isActive && (
-                                                        <div
-                                                            className={clsx("absolute inset-0 z-0", level.overlayClassName)}
-                                                        />
-                                                    )}
-                                                    <span className={clsx(
-                                                        "relative z-10 text-[10px] font-black uppercase tracking-widest",
-                                                        isActive ? level.textClassName : "text-gray-500"
-                                                    )}>
+                                                    {isActive && <div className={clsx("absolute inset-0 z-0", level.overlayClassName)} />}
+                                                    <span className={clsx("relative z-10 text-[10px] font-black uppercase tracking-widest", isActive ? level.textClassName : "text-gray-500")}>
                                                         {level.label}
                                                     </span>
                                                 </button>
@@ -592,11 +599,13 @@ const QuestBoard = () => {
                         )}
                     </AnimatePresence>
                 </form>
-            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
 
             {/* 3. LOGS & HISTORY (Moved from Radial) */}
-            {/* 3. LOGS & HISTORY (Moved from Radial) */}
-            <div className="px-4 grid grid-cols-2 gap-8 mb-24 md:mb-8">
+            <div className="px-4 grid grid-cols-2 gap-8 mt-6 mb-24 md:mb-8">
                 {/* VICTORY LOG (LEFT) */}
                 <div
                     onClick={() => setShowVictoryLog(true)}
@@ -614,8 +623,7 @@ const QuestBoard = () => {
                         {recentVictories.slice(0, 5).map((q, i) => (
                             <div
                                 key={q.id}
-                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -ml-3 first:ml-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-emerald-900', 'text-emerald-800', 'text-emerald-600', 'text-emerald-500', 'text-emerald-400'][i] || 'text-emerald-400'
-                                    }`}
+                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -ml-3 first:ml-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-emerald-900', 'text-emerald-800', 'text-emerald-600', 'text-emerald-500', 'text-emerald-400'][i] || 'text-emerald-400'}`}
                                 title={q.title}
                             >
                                 <CheckCircle size={20} />
@@ -641,8 +649,7 @@ const QuestBoard = () => {
                         {discardedQuests.slice(0, 5).map((q, i) => (
                             <div
                                 key={q.id}
-                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -mr-3 first:mr-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-red-950', 'text-red-900', 'text-red-700', 'text-red-500', 'text-red-400'][i] || 'text-red-400'
-                                    }`}
+                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -mr-3 first:mr-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-red-950', 'text-red-900', 'text-red-700', 'text-red-500', 'text-red-400'][i] || 'text-red-400'}`}
                                 title={q.title}
                             >
                                 <Trash2 size={20} />
@@ -680,7 +687,7 @@ const QuestBoard = () => {
                     />
                 )}
             </AnimatePresence>
-        </div>
+        </motion.div>
     );
 };
 

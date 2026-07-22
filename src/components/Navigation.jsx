@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LayoutDashboard, Scroll, Zap, Coins, ChevronUp, Heart } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
@@ -34,6 +34,7 @@ const animateToTab = (targetTabId, innerRotationMV, outerRotationMV) => {
 
 const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const contentViewportRef = useRef(null);
 
     // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
 
@@ -66,6 +67,10 @@ const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
     useEffect(() => {
         animateToTab(currentTab, innerRotationMV, outerRotationMV);
     }, [currentTab, innerRotationMV, outerRotationMV]);
+
+    useLayoutEffect(() => {
+        contentViewportRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }, [currentTab]);
 
     // Combine Spring (State) + Drag (User Input)
     const innerRotationTransform = useTransform(
@@ -180,7 +185,9 @@ const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
             <div className={clsx(
                 "flex-1 w-full min-h-0 relative z-10 select-text overscroll-none",
                 (currentTab === 'dashboard' || currentTab === 'budget' || currentTab === 'protocols') ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
-            )}>
+            )}
+                ref={contentViewportRef}
+            >
                 {children}
             </div>
 

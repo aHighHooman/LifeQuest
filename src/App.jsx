@@ -86,7 +86,7 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
 
   return (
     <AppErrorBoundary>
-      <div className="h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col">
+      <div className={`h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] ${currentTab === 'quests' ? 'from-[#1d3b32] via-[#0b1714] to-black' : 'from-slate-800 via-game-bg to-black'} bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col`}>
         <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab} onPreloadTab={preloadScreen}>
