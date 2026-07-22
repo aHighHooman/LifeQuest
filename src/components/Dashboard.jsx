@@ -8,6 +8,85 @@ import DayTimer from './DayTimer';
 import clsx from 'clsx';
 import { getTodayISO } from '../utils/dateUtils';
 import { isHabitDueForFocus } from '../domain/gameState';
+import healthInjectorScene from '../assets/dashboard/health-injector-tabletop-blender.webp';
+
+const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick }) => {
+    const displayPercentage = Math.round(percentage);
+    const activeSegments = Math.round(percentage / 10);
+    const coinLabel = String(coins);
+
+    return (
+        <>
+            {/* The Blender plate is the dashboard's ground plane, not a floating prop vignette. */}
+            <div className="pointer-events-none absolute left-1/2 top-0 z-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
+                <img
+                    src={healthInjectorScene}
+                    alt=""
+                    draggable="false"
+                    className="block h-full w-full select-none"
+                />
+            </div>
+
+            {/* This second, transparent coordinate plane keeps only the physical screen interactive. */}
+            <div className="pointer-events-none absolute left-1/2 top-0 z-30 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2">
+            <motion.button
+                type="button"
+                onClick={onCapacityClick}
+                aria-label={`Open health tracker. Capacity ${displayPercentage} percent.`}
+                className="pointer-events-auto absolute left-[46.5%] top-[17.7%] flex h-[5.8%] w-[27%] origin-center rotate-[30deg] cursor-pointer flex-col justify-center overflow-hidden border-0 bg-transparent px-[1.4%] font-game text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/80"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.55, ease: 'easeOut' }}
+                whileTap={{ scale: 0.98 }}
+            >
+                <span aria-hidden="true">
+                    <span className="flex items-center justify-between leading-none">
+                        <span className="flex items-center gap-1 text-[5px] font-bold tracking-[0.12em] sm:text-[6px]">
+                            <span className="relative inline-flex h-2 w-2 shrink-0 items-center justify-center border border-rose-500/60">
+                                <span className="absolute h-px w-1 bg-rose-400" />
+                                <span className="absolute h-1 w-px bg-rose-400" />
+                            </span>
+                            CAPACITY
+                        </span>
+                        <span className="text-[8px] font-bold tabular-nums text-rose-300 sm:text-[10px]">
+                            {displayPercentage}%
+                        </span>
+                    </span>
+                    <span className="mt-0.5 flex gap-px">
+                        {Array.from({ length: 10 }, (_, index) => (
+                            <span
+                                key={index}
+                                className={clsx(
+                                    "h-0.5 flex-1 rounded-[1px] transition-all duration-500 sm:h-[3px]",
+                                    index < activeSegments
+                                        ? "bg-rose-400 shadow-[0_0_4px_rgba(251,113,133,0.75)]"
+                                        : "bg-rose-950/70"
+                                )}
+                            />
+                        ))}
+                    </span>
+                </span>
+            </motion.button>
+
+                <motion.button
+                    type="button"
+                    onClick={onCoinsClick}
+                    aria-label={`Open budget. ${coinLabel} coins.`}
+                    className="pointer-events-auto absolute left-[14.8%] top-[58.4%] flex h-[4%] w-[8.8%] items-center justify-center rounded-full border-0 bg-transparent p-0 font-game font-black leading-none text-[#f6d37a] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.15, duration: 0.45 }}
+                    whileTap={{ scale: 0.94 }}
+                    style={{ textShadow: '0 1px 1px rgba(28,12,0,0.95), 0 0 2px rgba(66,34,2,0.8)' }}
+                >
+                    <span className={clsx(coinLabel.length > 4 ? "text-[6px] sm:text-[7px]" : "text-[9px] sm:text-[10px]")}>
+                        {coinLabel}
+                    </span>
+                </motion.button>
+            </div>
+        </>
+    );
+};
 
 const HexNode = ({ node, onClick, index, position }) => {
     const isCompleted = node.completed;
@@ -285,28 +364,6 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
         }
     };
 
-    // SVG Arc Helper
-    const polarToCartesian = (centerX, centerY, radius, angleInDegrees) => {
-        var angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
-        return {
-            x: centerX + (radius * Math.cos(angleInRadians)),
-            y: centerY + (radius * Math.sin(angleInRadians))
-        };
-    };
-
-    const describeArc = (x, y, radius, startAngle, endAngle) => {
-        var start = polarToCartesian(x, y, radius, startAngle);
-        var end = polarToCartesian(x, y, radius, endAngle);
-        var largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-        var d = [
-            "M", start.x, start.y,
-            "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y
-        ].join(" ");
-        return d;
-    };
-
-    const healthRingPath = describeArc(200, 200, 190, 198, 522);
-
     return (
         <motion.div
             className="flex flex-col h-full relative touch-none"
@@ -337,6 +394,13 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
             {/* TUNING PARAMETER: Top Spacing for Timer (prevent overlap with Manage button) */}
             <DayTimer className="absolute top-14 left-0 right-0 z-20" />
 
+            <DashboardTabletop
+                percentage={caloriesLeftPercentage}
+                coins={stats.gold}
+                onCapacityClick={() => onTabChange('calories')}
+                onCoinsClick={() => onTabChange('budget')}
+            />
+
             {/* TUNING PARAMETER: Top Offset (Move content down) 
                 Adjust pt-[x] to move the entire structure down from the top.
                 e.g. pt-[20vh] (higher), pt-[30vh] (lower).
@@ -350,68 +414,20 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                 // transform removed to rely on flex layout
                 >
 
-                    {/* SVG Layer for Arcs */}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible" viewBox="0 0 400 400">
-                        {/* Define Gradients */}
-                        <defs>
-                            {/* Health ring: brightest near the center line, dimmer toward both outer sides. */}
-                            <linearGradient id="gradHP" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#881337" />
-                                <stop offset="50%" stopColor="#f43f5e" />
-                                <stop offset="100%" stopColor="#881337" />
-                            </linearGradient>
-                        </defs>
-
-                        {/* Health Ring Background (Dark) */}
-                        <path d={healthRingPath} fill="none" stroke="#334155" strokeWidth="6" strokeLinecap="round" opacity="0.3" />
-
-                        {/* Health Ring (Fill) */}
-                        <motion.path
-                            initial={{ pathLength: 0 }}
-                            animate={{ pathLength: caloriesLeftPercentage / 100 }}
-                            d={healthRingPath}
-                            fill="none"
-                            stroke="url(#gradHP)"
-                            strokeWidth="6"
-                            strokeLinecap="round"
-                            className="drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]"
-                        />
-                    </svg>
-
-                    {/* Fixed Coin Hex - Positioned seamlessly under the grid */}
-                    <div className="z-20 scale-90 sm:scale-100 absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="relative w-0 h-0 scale-75 sm:scale-100">
-                            <div className="pointer-events-auto">
-                                <HexNode
-                                    node={{ id: 'stat-gold', type: 'gold', title: stats.gold + '', completed: false }}
-                                    position={{ x: 0, y: 256 }}
-                                    onClick={() => onTabChange('budget')}
-                                />
-                            </div>
-
-                            {/* System Online Text - Positioned Relative to Grid Center (Hugging Gold Hex) */}
-                            {/* TUNING PARAMETER: Text Offset 
-                                Controls gap between Hex Grid and Text.
-                                Increase 380px to push text lower/away. Decrease to pull higher/closer. 
-                            */}
-                            <div
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenSettings();
-                                }}
-                                className="absolute left-1/2 top-0 flex flex-col items-center justify-center z-10 cursor-pointer pointer-events-auto w-40"
-                                style={{ transform: 'translate(-50%, 360px)' }}
-                            >
-                                <p className="text-game-muted font-game uppercase tracking-[0.2em] text-xs opacity-70 w-full text-center">
-                                    System Online
-                                </p>
-                                <p className="text-[10px] text-slate-600 font-mono mt-0.5">
-                                    {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}
-                                </p>
-                            </div>
-
-                        </div>
-
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenSettings();
+                        }}
+                        className="pointer-events-auto absolute left-1/2 top-0 z-20 flex w-40 cursor-pointer flex-col items-center justify-center"
+                        style={{ transform: 'translate(-50%, 360px)' }}
+                    >
+                        <p className="text-game-muted w-full text-center font-game text-xs uppercase tracking-[0.2em] opacity-70">
+                            System Online
+                        </p>
+                        <p className="mt-0.5 font-mono text-[10px] text-slate-600">
+                            {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}
+                        </p>
                     </div>
 
                     {/* Actual Hex Grid */}
