@@ -265,13 +265,6 @@ const QuestDeckCard = ({
                             <span><Trash2 size={22} /> DISMISS</span>
                         </motion.div>
                         <div className="quest-card-face select-none">
-                            <div className="quest-rarity-insignia" aria-label={`${material.label} rarity`}>
-                                <span className="quest-rarity-glyph" aria-hidden="true">
-                                    <i /><i /><i />
-                                </span>
-                                <span>{material.label}</span>
-                                <small>{material.code}</small>
-                            </div>
                             <h3 className="quest-card-title">{quest.title}</h3>
                             <div className="quest-card-content">
                                 {showDetails && (

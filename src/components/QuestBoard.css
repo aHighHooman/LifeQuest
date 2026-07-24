@@ -288,57 +288,6 @@
     text-shadow: 0 -1px 1px rgba(0, 0, 0, .98), 0 1px 0 color-mix(in srgb, var(--rim-hi) 28%, transparent);
 }
 
-.quest-rarity-insignia {
-    position: absolute;
-    z-index: 2;
-    top: 23px;
-    left: 27px;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    color: var(--accent);
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 8px;
-    font-weight: 700;
-    letter-spacing: .18em;
-    line-height: 1;
-    text-transform: uppercase;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, .85);
-}
-
-.quest-rarity-insignia small {
-    padding-left: 7px;
-    border-left: 1px solid color-mix(in srgb, var(--accent) 48%, transparent);
-    color: color-mix(in srgb, var(--accent) 66%, #cbd4ce);
-    font-size: 7px;
-    letter-spacing: .12em;
-}
-
-.quest-rarity-glyph {
-    display: flex;
-    gap: 3px;
-}
-
-.quest-rarity-glyph i {
-    display: block;
-    width: 6px;
-    height: 6px;
-    border: 1px solid var(--accent);
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 28%, transparent);
-    transform: rotate(45deg);
-}
-
-.quest-deck-card.easy .quest-rarity-glyph i:nth-child(n + 2),
-.quest-deck-card.medium .quest-rarity-glyph i:nth-child(3) {
-    display: none;
-}
-
-.quest-deck-card.legendary .quest-rarity-glyph i {
-    background: var(--accent);
-    box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 52%, transparent);
-}
-
 .quest-card-content {
     position: absolute;
     z-index: 1;
@@ -348,9 +297,9 @@
 .quest-card-details {
     position: absolute;
     top: 112px;
-    right: 27px;
-    bottom: 18px;
-    left: 27px;
+    right: 12%;
+    bottom: 11%;
+    left: 12%;
     display: flex;
     min-height: 0;
     flex-direction: column;

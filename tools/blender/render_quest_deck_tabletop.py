@@ -199,6 +199,52 @@ def physical_card(name, location, rotation_z, materials, shadow, rarity):
             rotation=rotation,
         ))
 
+    def detail_curve(part, points, mat=accent, thickness=0.022, height_z=0.176, cyclic=False, flowing=True):
+        """Raised local-space linework for engraved/embossed card ornament."""
+        curve_data = bpy.data.curves.new(f"{name} {part} curve", type="CURVE")
+        curve_data.dimensions = "3D"
+        curve_data.resolution_u = 12
+        curve_data.bevel_depth = thickness
+        curve_data.bevel_resolution = 4
+        curve_data.resolution_u = 16
+        spline_type = "BEZIER" if flowing else "POLY"
+        spline = curve_data.splines.new(spline_type)
+        if flowing:
+            spline.bezier_points.add(len(points) - 1)
+            for point, (px, py) in zip(spline.bezier_points, points):
+                point.co = (px, py, 0.0)
+                point.handle_left_type = "AUTO"
+                point.handle_right_type = "AUTO"
+        else:
+            spline.points.add(len(points) - 1)
+            for point, (px, py) in zip(spline.points, points):
+                point.co = (px, py, 0.0, 1.0)
+        spline.use_cyclic_u = cyclic
+        curve = bpy.data.objects.new(f"{name} {rarity} {part}", curve_data)
+        bpy.context.collection.objects.link(curve)
+        curve.location = (x, y, z + height_z)
+        curve.rotation_euler = rotation
+        curve.data.materials.append(mat)
+        objects.append(curve)
+
+    def mirrored(points, mirror_x=False, mirror_y=False):
+        return [
+            (-px if mirror_x else px, -py if mirror_y else py)
+            for px, py in points
+        ]
+
+    def detail_gem(part, dx, dy, size=0.11, mat=highlight, height_z=0.050):
+        """A solid raised diamond used as a jewel/leaf punctuation mark."""
+        offset_x, offset_y = rotated_offset(dx, dy, angle)
+        objects.append(add_box(
+            f"{name} {rarity} {part}",
+            (size, size, height_z),
+            (x + offset_x, y + offset_y, z + 0.180),
+            mat,
+            bevel=size * 0.13,
+            rotation=(0.0, 0.0, angle + math.radians(45.0)),
+        ))
+
     if rarity == "medium":
         # Tempered-alloy corner brackets and twin header rails restore the
         # original Rare card's cool, engineered appearance.
@@ -220,29 +266,188 @@ def physical_card(name, location, rotation_z, materials, shadow, rarity):
             detail_box(f"forged corner node {index}", dx, dy, 0.34, 0.34, accent)
         detail_box("epic center spine", 0.0, 2.38, 1.55, 0.085, highlight)
     elif rarity == "legendary":
-        # Legendary is a layered black-metal artifact with substantial gold
-        # corner armor and a small raised crest.
-        for corner, dx, dy in (
-            ("gold upper left armor", -3.42, 2.31),
-            ("gold upper right armor", 3.42, 2.31),
-            ("gold lower left armor", -3.42, -2.31),
-            ("gold lower right armor", 3.42, -2.31),
+        # A true layered black-and-gold artifact: the second rail, stepped
+        # corners, and raised filigree catch real scene light like embossing.
+        for part, dx, dy, width, height in (
+            ("inner frame top", 0.0, 2.43, 6.78, 0.040),
+            ("inner frame bottom", 0.0, -2.43, 6.78, 0.040),
+            ("inner frame left", -3.56, 0.0, 0.040, 4.64),
+            ("inner frame right", 3.56, 0.0, 0.040, 4.64),
         ):
-            detail_box(corner, dx, dy, 0.64, 0.24, highlight, 0.045)
-        detail_box("gold inner top rail", 0.0, 2.35, 2.65, 0.075, highlight)
-        detail_box("gold inner bottom rail", 0.0, -2.35, 2.10, 0.06, highlight)
-        offset_x, offset_y = rotated_offset(0.0, 2.08, angle)
-        bpy.ops.mesh.primitive_cylinder_add(
-            vertices=16,
-            radius=0.18,
-            depth=0.055,
-            location=(x + offset_x, y + offset_y, z + 0.16),
-            rotation=rotation,
+            detail_box(part, dx, dy, width, height, accent, 0.030)
+
+        # Architectural stepped shoulders echo the reference's hand-built
+        # double border without encroaching on the quest title.
+        top_step = [
+            (-3.30, 2.48), (-1.40, 2.48), (-1.24, 2.34), (-0.82, 2.34)
+        ]
+        bottom_step = [
+            (-3.30, -2.48), (-1.40, -2.48), (-1.24, -2.34), (-0.82, -2.34)
+        ]
+        for side, mirror_x in (("left", False), ("right", True)):
+            detail_curve(
+                f"bright stepped top {side}",
+                mirrored(top_step, mirror_x=mirror_x),
+                highlight,
+                thickness=0.026,
+                flowing=False,
+            )
+            detail_curve(
+                f"bright stepped bottom {side}",
+                mirrored(bottom_step, mirror_x=mirror_x),
+                highlight,
+                thickness=0.026,
+                flowing=False,
+            )
+
+        # Each corner is generated from the same master flourish, guaranteeing
+        # exact vertical and horizontal symmetry.
+        corner_paths = (
+            # The primary stem follows the frame, then turns inward. Shorter
+            # secondary curls resolve back into it instead of ending randomly.
+            [(-3.47, 1.48), (-3.49, 1.82), (-3.42, 2.12), (-3.22, 2.34), (-2.86, 2.39)],
+            [(-3.41, 2.09), (-3.20, 1.93), (-3.02, 2.00), (-3.09, 2.17)],
+            [(-3.28, 2.29), (-3.08, 2.12), (-2.87, 2.17)],
+            [(-3.47, 1.88), (-3.25, 1.72), (-3.21, 1.52)],
+            [(-3.10, 2.36), (-2.93, 2.24), (-2.72, 2.26), (-2.65, 2.38)],
+            [(-3.42, 1.72), (-3.29, 1.57), (-3.35, 1.42)],
         )
-        crest = bpy.context.object
-        crest.name = f"{name} legendary raised crest"
-        crest.data.materials.append(highlight)
-        objects.append(crest)
+        for vertical, mirror_y in (("upper", False), ("lower", True)):
+            for horizontal, mirror_x in (("left", False), ("right", True)):
+                for path_index, path in enumerate(corner_paths):
+                    detail_curve(
+                        f"{vertical} {horizontal} filigree {path_index}",
+                        mirrored(path, mirror_x=mirror_x, mirror_y=mirror_y),
+                        highlight if path_index in (0, 1) else accent,
+                        thickness=0.025 if path_index == 0 else 0.019,
+                    )
+                corner_sign_x = -1 if not mirror_x else 1
+                corner_sign_y = 1 if not mirror_y else -1
+                for leaf_index, (leaf_x, leaf_y, leaf_size) in enumerate((
+                    (3.23, 2.19, 0.075),
+                    (3.05, 2.31, 0.065),
+                    (3.36, 1.79, 0.062),
+                )):
+                    detail_gem(
+                        f"{vertical} {horizontal} raised leaf {leaf_index}",
+                        corner_sign_x * leaf_x,
+                        corner_sign_y * leaf_y,
+                        size=leaf_size,
+                        mat=highlight if leaf_index == 0 else accent,
+                        height_z=0.042,
+                    )
+
+        # A centered tiara with a sharp gemstone silhouette and mirrored wings.
+        top_diamond = [(0.0, 2.65), (0.15, 2.42), (0.0, 2.17), (-0.15, 2.42)]
+        detail_curve(
+            "top crown diamond",
+            top_diamond,
+            highlight,
+            thickness=0.027,
+            cyclic=True,
+            flowing=False,
+        )
+        detail_gem("top crown center jewel", 0.0, 2.40, size=0.115)
+        crown_wing = [
+            (-0.02, 2.20), (-0.16, 2.36), (-0.22, 2.56),
+            (-0.34, 2.37), (-0.52, 2.43),
+        ]
+        crown_curl = [
+            (-0.16, 2.23), (-0.38, 2.09), (-0.61, 2.12), (-0.70, 2.29)
+        ]
+        crown_lower_scroll = [
+            (-0.20, 2.18), (-0.43, 2.03), (-0.69, 2.06), (-0.92, 2.20)
+        ]
+        for side, mirror_x in (("left", False), ("right", True)):
+            detail_curve(
+                f"top crown {side} wing",
+                mirrored(crown_wing, mirror_x=mirror_x),
+                highlight,
+                thickness=0.024,
+            )
+            detail_curve(
+                f"top crown {side} curl",
+                mirrored(crown_curl, mirror_x=mirror_x),
+                accent,
+                thickness=0.018,
+            )
+            detail_curve(
+                f"top crown {side} lower scroll",
+                mirrored(crown_lower_scroll, mirror_x=mirror_x),
+                highlight,
+                thickness=0.020,
+            )
+            leaf_x = -0.34 if not mirror_x else 0.34
+            outer_leaf_x = -0.53 if not mirror_x else 0.53
+            detail_gem(f"top crown {side} inner leaf", leaf_x, 2.27, size=0.080)
+            detail_gem(f"top crown {side} outer leaf", outer_leaf_x, 2.19, size=0.065, mat=accent)
+
+        # The lower crest repeats the crown language at a quieter scale.
+        bottom_diamond = [(0.0, -2.61), (0.13, -2.40), (0.0, -2.19), (-0.13, -2.40)]
+        detail_curve(
+            "lower crest diamond",
+            bottom_diamond,
+            highlight,
+            thickness=0.025,
+            cyclic=True,
+            flowing=False,
+        )
+        detail_gem("lower crest center jewel", 0.0, -2.40, size=0.095)
+        lower_wing = [
+            (-0.03, -2.23), (-0.22, -2.38), (-0.46, -2.29),
+            (-0.67, -2.34), (-0.78, -2.46),
+        ]
+        for side, mirror_x in (("left", False), ("right", True)):
+            detail_curve(
+                f"lower crest {side} wing",
+                mirrored(lower_wing, mirror_x=mirror_x),
+                accent,
+                thickness=0.019,
+            )
+            leaf_x = -0.33 if not mirror_x else 0.33
+            detail_gem(f"lower crest {side} leaf", leaf_x, -2.31, size=0.060, mat=accent)
+
+        # Refined side clasps make the frame feel continuous. Tiny stitch marks
+        # sit beside them like hand-tooled registration detail.
+        side_clasp = [
+            (-3.55, -0.52), (-3.47, -0.32), (-3.53, -0.12),
+            (-3.40, 0.0), (-3.53, 0.12), (-3.47, 0.32), (-3.55, 0.52),
+        ]
+        side_inner_curl = [
+            (-3.47, -0.20), (-3.30, -0.10), (-3.30, 0.10), (-3.47, 0.20)
+        ]
+        for side, mirror_x in (("left", False), ("right", True)):
+            detail_curve(
+                f"{side} sculpted clasp",
+                mirrored(side_clasp, mirror_x=mirror_x),
+                highlight,
+                thickness=0.020,
+            )
+            detail_curve(
+                f"{side} clasp inner curl",
+                mirrored(side_inner_curl, mirror_x=mirror_x),
+                accent,
+                thickness=0.017,
+            )
+            detail_gem(
+                f"{side} clasp jewel",
+                -3.42 if not mirror_x else 3.42,
+                0.0,
+                size=0.070,
+                mat=highlight,
+            )
+
+        for side, dx in (("left", -3.39), ("right", 3.39)):
+            for stitch_index, dy in enumerate((-0.72, -0.62, -0.52, 0.52, 0.62, 0.72)):
+                detail_box(
+                    f"{side} gold stitch {stitch_index}",
+                    dx,
+                    dy,
+                    0.045,
+                    0.018,
+                    accent,
+                    0.025,
+                )
     else:
         # Common stays intentionally utilitarian, but its inset field rails
         # make it read as a manufactured card rather than an empty slab.
@@ -632,11 +837,11 @@ def build_scene():
             "highlight": material("Epic amethyst armor", (0.53, 0.26, 0.62), metallic=0.60, roughness=0.22),
         },
         "legendary": {
-            "shell": material("Legendary blackened shell", (0.025, 0.021, 0.010), metallic=0.76, roughness=0.24),
-            "face": material("Legendary obsidian face", (0.045, 0.038, 0.018), metallic=0.42, roughness=0.36),
-            "edge": material("Legendary dark bronze edge", (0.015, 0.010, 0.003), metallic=0.72, roughness=0.25),
-            "accent": material("Legendary aged gold inlay", (0.42, 0.26, 0.045), metallic=0.82, roughness=0.22),
-            "highlight": material("Legendary bright gold armor", (0.68, 0.46, 0.09), metallic=0.90, roughness=0.16),
+            "shell": material("Legendary blackened shell", (0.007, 0.006, 0.004), metallic=0.30, roughness=0.52),
+            "face": material("Legendary matte obsidian face", (0.009, 0.008, 0.005), metallic=0.08, roughness=0.70),
+            "edge": material("Legendary dark bronze edge", (0.003, 0.0025, 0.0015), metallic=0.42, roughness=0.42),
+            "accent": material("Legendary aged gold inlay", (0.34, 0.20, 0.030), metallic=0.80, roughness=0.26),
+            "highlight": material("Legendary bright gold emboss", (0.68, 0.43, 0.075), metallic=0.91, roughness=0.18),
         },
     }
 
