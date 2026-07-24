@@ -183,9 +183,10 @@
 }
 
 .quest-deck-layout {
-    height: 340px;
+    height: 330px;
 }
 
+.quest-card-cycle-layer,
 .quest-card-render-layer {
     position: absolute;
     inset: 0;
@@ -193,6 +194,12 @@
     height: 100%;
     transform-origin: 50% 24%;
     pointer-events: none;
+}
+
+.quest-card-pose-layer {
+    position: absolute;
+    inset: 0;
+    transform-origin: 50% 24%;
 }
 
 .quest-card-body-render {
