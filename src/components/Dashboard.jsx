@@ -309,7 +309,7 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
                     <span className="text-xs font-mono uppercase tracking-widest opacity-50">Grid Offline</span>
                 </div>
             ) : (
-                <div className="relative h-0 w-0 -translate-y-[6vh] scale-75 sm:translate-y-0 sm:scale-100">
+                <div className="relative h-0 w-0 -translate-y-[8vh] scale-75 sm:translate-y-0 sm:scale-100">
                     <AnimatePresence mode='popLayout'>
                         {nodes.map((node, i) => {
                             if (i >= positions.length) return null; // Cap at 7 visible

@@ -132,12 +132,20 @@ const QuestDeckCard = ({
                 initial: (action) => action === 'previous'
                     ? { y: -180, opacity: 0, scale: 1.02 }
                     : { y: 24, opacity: 0, scale: 0.98 },
-                animate: { x: 0, y: 0, scale: 1, opacity: 1 },
+                animate: {
+                    x: 0,
+                    y: 0,
+                    scale: 1,
+                    opacity: 1,
+                    transition: { type: 'spring', stiffness: 260, damping: 30 }
+                },
                 exit: (action) => {
                     if (action === 'complete') return { x: 430, rotate: 17, opacity: 0, transition: { duration: 0.24 } };
                     if (action === 'dismiss') return { x: -430, rotate: -17, opacity: 0, transition: { duration: 0.24 } };
-                    if (action === 'previous') return { y: 250, opacity: 0, transition: { duration: 0.24 } };
-                    return { y: -330, opacity: 0, transition: { duration: 0.24 } };
+                    if (action === 'previous') {
+                        return { y: 250, opacity: 0, transition: { duration: 0.30, ease: [0.22, 1, 0.36, 1] } };
+                    }
+                    return { y: -330, opacity: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } };
                 }
             }}
             transition={SPRING_CONFIG}
@@ -148,7 +156,13 @@ const QuestDeckCard = ({
             <img className="quest-card-body-render" src={cardRender} alt="" draggable="false" />
 
             {isTop && (
-                <div className={clsx('quest-deck-card', 'is-render-hit-stage', quest.difficulty || 'easy', isEditingBrief && 'is-editing')}>
+                <div className={clsx(
+                    'quest-deck-card',
+                    'is-render-hit-stage',
+                    quest.difficulty || 'easy',
+                    showDetails && 'is-details-open',
+                    isEditingBrief && 'is-editing'
+                )}>
                     <motion.div style={{ opacity: completeOpacity }} className="quest-swipe-plate quest-complete-plate">
                         <span><CheckCircle size={22} /> COMPLETE</span>
                     </motion.div>
@@ -229,6 +243,8 @@ const QuestDeck = ({
     slideDirection = 'next'
 }) => {
     const visibleQuests = quests.slice(0, 3);
+    const activeQuest = visibleQuests[0];
+    const stackedQuests = visibleQuests.slice(1);
 
     if (quests.length === 0) {
         return (
@@ -244,13 +260,14 @@ const QuestDeck = ({
 
     return (
         <div className="quest-deck-scene">
-            <AnimatePresence custom={slideDirection}>
-                {visibleQuests.map((quest, index) => (
+            {stackedQuests.map((quest, stackIndex) => {
+                const index = stackIndex + 1;
+                return (
                     <QuestDeckCard
-                        key={quest.id}
+                        key={`stack-${quest.id}`}
                         quest={quest}
                         index={index}
-                        isTop={index === 0}
+                        isTop={false}
                         onComplete={onComplete}
                         onDismiss={onDelete}
                         onSkip={onSkip}
@@ -260,7 +277,26 @@ const QuestDeck = ({
                         onDeckGestureEnd={onDeckGestureEnd}
                         custom={slideDirection}
                     />
-                ))}
+                );
+            })}
+
+            <AnimatePresence custom={slideDirection} initial={false}>
+                {activeQuest && (
+                    <QuestDeckCard
+                        key={`active-${activeQuest.id}`}
+                        quest={activeQuest}
+                        index={0}
+                        isTop
+                        onComplete={onComplete}
+                        onDismiss={onDelete}
+                        onSkip={onSkip}
+                        onUpdate={onUpdate}
+                        onPrevious={onPrevious}
+                        onDeckGestureStart={onDeckGestureStart}
+                        onDeckGestureEnd={onDeckGestureEnd}
+                        custom={slideDirection}
+                    />
+                )}
             </AnimatePresence>
         </div>
     );

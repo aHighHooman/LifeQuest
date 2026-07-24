@@ -236,10 +236,10 @@ def physical_card(name, location, rotation_z, materials, shadow, rarity):
         detail_box("field top index", 0.0, 2.36, 1.25, 0.045, highlight)
         detail_box("field lower index", 0.0, -2.36, 0.72, 0.04, accent)
 
-    shadow_x, shadow_y = rotated_offset(0.07, -0.09, angle)
+    shadow_x, shadow_y = rotated_offset(0.035, -0.045, angle)
     shadow_card = add_box(
         f"{name} contact shadow",
-        (8.10, 5.80, 0.018),
+        (8.02, 5.72, 0.012),
         (x + shadow_x, y + shadow_y, z - 0.105),
         shadow,
         bevel=0.20,
@@ -290,7 +290,7 @@ def build_scene():
         pass
 
     table = tabletop_material()
-    card_shadow = material("Card layer contact shadow", (0.0, 0.0, 0.0), roughness=1.0, alpha=0.26)
+    card_shadow = material("Card layer contact shadow", (0.0, 0.0, 0.0), roughness=1.0, alpha=0.10)
     rarity_materials = {
         "easy": {
             "shell": material("Common field shell", (0.012, 0.027, 0.016), metallic=0.18, roughness=0.50),

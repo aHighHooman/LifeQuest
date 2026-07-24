@@ -164,7 +164,7 @@
 
 .quest-deck-scene {
     position: fixed;
-    top: calc(env(safe-area-inset-top) + 2rem);
+    top: calc(env(safe-area-inset-top) + 0.75rem);
     left: 50%;
     z-index: 10;
     width: min(100vw, 540px);
@@ -183,7 +183,7 @@
 }
 
 .quest-deck-layout {
-    height: 390px;
+    height: 340px;
 }
 
 .quest-card-render-layer {
@@ -296,13 +296,14 @@
 
 .quest-card-details {
     position: absolute;
-    top: 158px;
+    top: 112px;
     right: 27px;
-    bottom: 26px;
+    bottom: 18px;
     left: 27px;
     display: flex;
+    min-height: 0;
     flex-direction: column;
-    padding-top: 15px;
+    padding-top: 8px;
     border-top: 1px solid rgba(255, 255, 255, .045);
 }
 
@@ -317,7 +318,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 15px;
+    margin-bottom: 8px;
     color: var(--accent);
     font-size: 9px;
     letter-spacing: .15em;
@@ -339,7 +340,7 @@
 .quest-brief-heading {
     display: flex;
     justify-content: space-between;
-    margin: 14px 0 7px;
+    margin: 8px 0 4px;
     color: #707571;
     font-size: 8px;
     letter-spacing: .16em;
@@ -348,6 +349,7 @@
 .quest-brief-heading small { color: #565b57; font-size: 7px; font-style: italic; letter-spacing: .04em; text-transform: none; }
 
 .quest-brief-copy {
+    min-height: 0;
     flex: 1;
     overflow-y: auto;
     margin: 0;
@@ -357,6 +359,12 @@
     font-size: 10px;
     font-style: italic;
     line-height: 1.55;
+}
+
+.quest-deck-card.is-details-open .quest-card-title {
+    top: 53px;
+    font-size: 23px;
+    line-height: 1;
 }
 
 .quest-brief-editor { display: flex; min-height: 0; flex: 1; flex-direction: column; }
