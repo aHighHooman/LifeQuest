@@ -63,7 +63,10 @@ const QuestDeckCard = ({
         } else if (horizontal && (info.offset.x < -distanceThreshold || info.velocity.x < -velocityThreshold)) {
             onDismiss(quest.id);
         } else if (!horizontal && (info.offset.y < -distanceThreshold || info.velocity.y < -velocityThreshold)) {
-            onSkip(quest.id);
+            onSkip(quest.id, {
+                offsetX: info.offset.x,
+                velocityX: info.velocity.x
+            });
         } else if (!horizontal && (info.offset.y > distanceThreshold || info.velocity.y > velocityThreshold)) {
             if (onPrevious) onPrevious();
         }
@@ -124,10 +127,31 @@ const QuestDeckCard = ({
                 exit: (context) => {
                     const action = typeof context === 'string' ? context : context?.action;
                     const deckSize = typeof context === 'object' ? context.deckSize : 4;
+                    const upwardArcX = typeof context === 'object' ? context.cycleArcX : 8;
+                    const upwardArcPosition = `${upwardArcX}%`;
                     if (action === 'complete') return { x: 430, rotate: 17, opacity: 0, transition: { duration: 0.24 } };
                     if (action === 'dismiss') return { x: -430, rotate: -17, opacity: 0, transition: { duration: 0.24 } };
                     if (action === 'previous') {
-                        return { y: 250, opacity: 0, transition: { duration: 0.30, ease: [0.22, 1, 0.36, 1] } };
+                        if (deckSize <= 1) {
+                            return {
+                                x: 0,
+                                y: 0,
+                                rotate: 0,
+                                scale: 1,
+                                opacity: 1,
+                                zIndex: 30,
+                                transition: { type: 'spring', stiffness: 260, damping: 30 }
+                            };
+                        }
+                        return {
+                            x: ['0%', '-8%', '-3.90%'],
+                            y: ['0%', '4%', '2.35%'],
+                            rotate: [0, -8, -3.3],
+                            scale: [1, 0.97, 1],
+                            zIndex: [30, 30, 27],
+                            opacity: 1,
+                            transition: { duration: 0.52, times: [0, 0.42, 1], ease: [0.22, 1, 0.36, 1] }
+                        };
                     }
                     if (deckSize <= 1) {
                         return {
@@ -142,9 +166,9 @@ const QuestDeckCard = ({
                     }
                     if (deckSize === 2) {
                         return {
-                            x: ['0%', '8%', '-3.90%'],
+                            x: ['0%', upwardArcPosition, '-3.90%'],
                             y: ['0%', '-3%', '2.35%'],
-                            rotate: [0, 8, -3.3],
+                            rotate: [0, upwardArcX, -3.3],
                             scale: [1, 0.97, 1],
                             zIndex: [30, 30, 27],
                             opacity: 1,
@@ -153,9 +177,9 @@ const QuestDeckCard = ({
                     }
                     if (deckSize === 3) {
                         return {
-                            x: ['0%', '8%', '-9.24%'],
+                            x: ['0%', upwardArcPosition, '-9.24%'],
                             y: ['0%', '-3%', '4.46%'],
-                            rotate: [0, 8, 3.7],
+                            rotate: [0, upwardArcX, 3.7],
                             scale: [1, 0.97, 1],
                             zIndex: [30, 30, 27],
                             opacity: 1,
@@ -163,9 +187,9 @@ const QuestDeckCard = ({
                         };
                     }
                     return {
-                        x: ['0%', '8%', '-9.24%'],
+                        x: ['0%', upwardArcPosition, '-9.24%'],
                         y: ['0%', '-3%', '4.46%'],
-                        rotate: [0, 8, 3.7],
+                        rotate: [0, upwardArcX, 3.7],
                         scale: [1, 0.97, 1],
                         zIndex: [30, 30, 26],
                         opacity: 1,
@@ -301,12 +325,13 @@ const QuestDeck = ({
     onDeckGestureEnd,
     cyclingQuestId,
     onCycleComplete,
+    cycleArcX,
     slideDirection = 'next'
 }) => {
     const visibleQuests = quests.slice(0, 3);
     const activeQuest = visibleQuests[0];
     const stackedQuests = visibleQuests.slice(1);
-    const transitionContext = { action: slideDirection, deckSize: quests.length };
+    const transitionContext = { action: slideDirection, deckSize: quests.length, cycleArcX };
 
     if (quests.length === 0) {
         return (
@@ -430,6 +455,7 @@ const QuestBoard = () => {
     // Animation State
     const [slideDirection, setSlideDirection] = useState('next');
     const [cyclingQuestId, setCyclingQuestId] = useState(null);
+    const [cycleArcX, setCycleArcX] = useState(0);
     const deckGestureActive = useRef(false);
 
     const startDeckGesture = () => {
@@ -469,8 +495,12 @@ const QuestBoard = () => {
     const activeQuestIds = useMemo(() => baseActiveQuests.map((quest) => quest.id), [baseActiveQuests]);
     const questDeckOrder = useDeckOrder(activeQuestIds);
 
-    const handleSkip = (id) => {
+    const handleSkip = (id, gesture = {}) => {
         setSlideDirection('next');
+        const projectedX = (gesture.offsetX || 0) + (gesture.velocityX || 0) * 0.025;
+        const viewportWidth = Math.max(window.innerWidth, 1);
+        const responsiveArcX = Math.max(-8, Math.min(8, (projectedX / viewportWidth) * 100));
+        setCycleArcX(Math.abs(responsiveArcX) < 0.75 ? 0 : responsiveArcX);
         if (baseActiveQuests.length > 1) {
             setCyclingQuestId(id);
         }
@@ -479,6 +509,10 @@ const QuestBoard = () => {
 
     const handlePrevious = () => {
         setSlideDirection('previous');
+        const currentTopId = questDeckOrder.orderedIds[0];
+        if (baseActiveQuests.length > 1 && currentTopId) {
+            setCyclingQuestId(currentTopId);
+        }
         questDeckOrder.prev();
     };
 
@@ -551,6 +585,7 @@ const QuestBoard = () => {
                     onDeckGestureEnd={endDeckGesture}
                     cyclingQuestId={cyclingQuestId}
                     onCycleComplete={() => setCyclingQuestId(null)}
+                    cycleArcX={cycleArcX}
                     slideDirection={slideDirection}
                 />
             </div>
