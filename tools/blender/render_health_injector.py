@@ -535,6 +535,7 @@ def build_scene():
     # Twelve-coin composition arranged in explicit physical layers. Base coins are
     # spaced so their meshes do not intersect; raised coins overlap only in the
     # camera projection and have enough height to rest on the layer beneath.
+    coin_y_offset = -2.60
     coin_layout = [
         # Base layer
         (-4.10, -3.05, 0.125, 2.0, -1.0, -13.0, 0.47, False),
@@ -553,7 +554,7 @@ def build_scene():
     for index, (coin_x, coin_y, coin_z, tilt_x, tilt_y, turn_z, radius, reeded_edge) in enumerate(coin_layout):
         sculpted_coin(
             f"Antique gold coin {index}",
-            (coin_x, coin_y, coin_z),
+            (coin_x, coin_y + coin_y_offset, coin_z),
             (math.radians(tilt_x), math.radians(tilt_y), math.radians(turn_z)),
             gold,
             gold_side,
@@ -565,7 +566,7 @@ def build_scene():
 
     # The top coin keeps its center readable for the live balance while retaining
     # the same beaded perimeter, inset rings, thickness, and worn material.
-    top_coin_x, top_coin_y = -3.05, -2.28
+    top_coin_x, top_coin_y = -3.05, -2.28 + coin_y_offset
     sculpted_coin(
         "Balance display coin",
         (top_coin_x, top_coin_y, 0.580),
@@ -586,7 +587,7 @@ def build_scene():
         90.0,
         (1.0, 0.72, 0.40),
         5.5,
-        (-2.8, -2.1, 0.0),
+        (-2.8, -4.7, 0.0),
     )
 
     add_area_light(

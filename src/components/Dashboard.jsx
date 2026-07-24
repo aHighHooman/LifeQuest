@@ -82,7 +82,7 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick })
                     type="button"
                     onClick={onCoinsClick}
                     aria-label={`Open budget. ${coinLabel} coins.`}
-                    className="pointer-events-auto absolute left-[14.8%] top-[58.4%] flex h-[4%] w-[8.8%] items-center justify-center rounded-full border-0 bg-transparent p-0 font-game font-black leading-none text-[#f6d37a] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80"
+                    className="pointer-events-auto absolute left-[14.8%] top-[70.2%] flex h-[4%] w-[8.8%] items-center justify-center rounded-full border-0 bg-transparent p-0 font-game font-black leading-none text-[#f6d37a] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.15, duration: 0.45 }}
@@ -309,7 +309,7 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
                     <span className="text-xs font-mono uppercase tracking-widest opacity-50">Grid Offline</span>
                 </div>
             ) : (
-                <div className="relative w-0 h-0 scale-75 sm:scale-100">
+                <div className="relative h-0 w-0 -translate-y-[6vh] scale-75 sm:translate-y-0 sm:scale-100">
                     <AnimatePresence mode='popLayout'>
                         {nodes.map((node, i) => {
                             if (i >= positions.length) return null; // Cap at 7 visible
