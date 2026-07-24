@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { CheckCircle, Trash2, Plus, Sword, Settings, Calendar, X, RotateCcw } from 'lucide-react';
@@ -6,13 +6,47 @@ import clsx from 'clsx';
 import { SPRING_CONFIG } from '../constants/animations';
 import { isWithinDays, getTodayISO, toLocalISOString } from '../utils/dateUtils';
 import { useDeckOrder } from '../hooks/useDeckOrder';
+import questTabletopBase from '../assets/quests/quest-tabletop-base-blender.webp';
+import easyActiveRender from '../assets/quests/quest-card-active-easy-blender.webp';
+import easyMiddleRender from '../assets/quests/quest-card-middle-easy-blender.webp';
+import easyRearRender from '../assets/quests/quest-card-rear-easy-blender.webp';
+import mediumActiveRender from '../assets/quests/quest-card-active-medium-blender.webp';
+import mediumMiddleRender from '../assets/quests/quest-card-middle-medium-blender.webp';
+import mediumRearRender from '../assets/quests/quest-card-rear-medium-blender.webp';
+import hardActiveRender from '../assets/quests/quest-card-active-hard-blender.webp';
+import hardMiddleRender from '../assets/quests/quest-card-middle-hard-blender.webp';
+import hardRearRender from '../assets/quests/quest-card-rear-hard-blender.webp';
+import legendaryActiveRender from '../assets/quests/quest-card-active-legendary-blender.webp';
+import legendaryMiddleRender from '../assets/quests/quest-card-middle-legendary-blender.webp';
+import legendaryRearRender from '../assets/quests/quest-card-rear-legendary-blender.webp';
 import './QuestBoard.css';
 
-const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onUpdate, onPrevious, custom }) => {
+const CARD_RENDER_SLOTS = {
+    easy: [easyActiveRender, easyMiddleRender, easyRearRender],
+    medium: [mediumActiveRender, mediumMiddleRender, mediumRearRender],
+    hard: [hardActiveRender, hardMiddleRender, hardRearRender],
+    legendary: [legendaryActiveRender, legendaryMiddleRender, legendaryRearRender]
+};
+
+const QuestDeckCard = ({
+    quest,
+    index,
+    onComplete,
+    onDismiss,
+    onSkip,
+    isTop,
+    onUpdate,
+    onPrevious,
+    onDeckGestureStart,
+    onDeckGestureEnd,
+    custom
+}) => {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
-    const rotate = useTransform(x, [-200, 200], [-30, 30]);
+    const rotate = useTransform(x, [-220, 220], [-18, 18]);
     const highlightX = useTransform(x, [-180, 180], ['15%', '85%']);
+    const completeOpacity = useTransform(x, [35, 125], [0, 1]);
+    const dismissOpacity = useTransform(x, [-125, -35], [1, 0]);
 
     // Background colors for swipe feedback
     const [showDetails, setShowDetails] = useState(false);
@@ -20,18 +54,19 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
     const [localBrief, setLocalBrief] = useState(quest.missionBrief || '');
 
     const handleDragEnd = (event, info) => {
-        const swipeThreshold = 100;
-        if (info.offset.x > swipeThreshold) {
+        const distanceThreshold = 88;
+        const velocityThreshold = 620;
+        const horizontal = Math.abs(info.offset.x) >= Math.abs(info.offset.y);
+        if (horizontal && (info.offset.x > distanceThreshold || info.velocity.x > velocityThreshold)) {
             onComplete(quest.id);
-        } else if (info.offset.x < -swipeThreshold) {
+        } else if (horizontal && (info.offset.x < -distanceThreshold || info.velocity.x < -velocityThreshold)) {
             onDismiss(quest.id);
-        } else if (info.offset.y < -swipeThreshold) {
-            // Swipe Up - Skip/Cycle (Reorder)
+        } else if (!horizontal && (info.offset.y < -distanceThreshold || info.velocity.y < -velocityThreshold)) {
             onSkip(quest.id);
-        } else if (info.offset.y > swipeThreshold) {
-            // Swipe Down - Previous
+        } else if (!horizontal && (info.offset.y > distanceThreshold || info.velocity.y > velocityThreshold)) {
             if (onPrevious) onPrevious();
         }
+        onDeckGestureEnd?.();
     };
 
     const toggleDetails = () => {
@@ -61,15 +96,18 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
     };
     const material = materials[quest.difficulty] || materials.easy;
 
+    const rarity = CARD_RENDER_SLOTS[quest.difficulty] ? quest.difficulty : 'easy';
+    const rarityRenders = CARD_RENDER_SLOTS[rarity];
+    const cardRender = rarityRenders[index] || rarityRenders[rarityRenders.length - 1];
+
     return (
         <motion.div
+            className="quest-card-render-layer"
             style={{
                 x,
-                y: isTop ? y : 0,
+                y,
                 rotate: isTop ? rotate : 0,
-                zIndex: 100 - index,
-                scale: 1 - index * 0.05,
-                top: index * 10,
+                zIndex: 30 - index,
                 '--light-x': highlightX
             }}
             drag={isTop && !isEditingBrief ? true : false}
@@ -77,132 +115,120 @@ const QuestDeckCard = ({ quest, index, onComplete, onDismiss, onSkip, isTop, onU
             dragElastic={0.6}
             dragPropagation={false}
             data-no-swipe="true"
+            onDragStart={onDeckGestureStart}
             onDragEnd={handleDragEnd}
-            onTap={toggleDetails}
-
+            onTap={isTop ? toggleDetails : undefined}
             onPanStart={(e) => e.stopPropagation()}
             onPan={(e) => e.stopPropagation()}
             onPanEnd={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-
+            onPointerDown={(e) => {
+                onDeckGestureStart?.();
+                e.stopPropagation();
+            }}
+            onPointerUp={onDeckGestureEnd}
+            onPointerCancel={onDeckGestureEnd}
             custom={custom}
             variants={{
-                initial: (direction) => {
-                    if (direction === -1) {
-                        return { y: -300, opacity: 0, scale: 1.1 };
-                    }
-                    return { scale: 0.9, y: 40, opacity: 0 };
-                },
-                animate: {
-                    y: index * 10,
-                    scale: 1 - index * 0.05,
-                    opacity: index > 2 ? 0 : 1
-                },
-                exit: (direction) => {
-                    if (direction === 1) {
-                        // Skip/Complete: fly up
-                        return { y: -400, opacity: 0, transition: { duration: 0.2 } };
-                    }
-                    // Reverse/Previous: usually we don't 'exit' cards unless they fall off the stack
-                    // But if we did, maybe they drop down?
-                    return { y: 200, opacity: 0 };
+                initial: (action) => action === 'previous'
+                    ? { y: -180, opacity: 0, scale: 1.02 }
+                    : { y: 24, opacity: 0, scale: 0.98 },
+                animate: { x: 0, y: 0, scale: 1, opacity: 1 },
+                exit: (action) => {
+                    if (action === 'complete') return { x: 430, rotate: 17, opacity: 0, transition: { duration: 0.24 } };
+                    if (action === 'dismiss') return { x: -430, rotate: -17, opacity: 0, transition: { duration: 0.24 } };
+                    if (action === 'previous') return { y: 250, opacity: 0, transition: { duration: 0.24 } };
+                    return { y: -330, opacity: 0, transition: { duration: 0.24 } };
                 }
             }}
             transition={SPRING_CONFIG}
             initial="initial"
             animate="animate"
             exit="exit"
-            className={clsx(
-                'quest-deck-card',
-                quest.difficulty || 'easy',
-                isTop && 'is-top',
-                isEditingBrief && 'is-editing'
-            )}
         >
-            <div className="quest-card-depth" />
-            <div className="quest-card-specular" />
+            <img className="quest-card-body-render" src={cardRender} alt="" draggable="false" />
 
-            {/* Swipe Feedback Overlays */}
-            <motion.div style={{ opacity: useTransform(x, [0, 100], [0, 1]) }} className="quest-swipe-plate quest-complete-plate">
-                <span><CheckCircle size={22} /> COMPLETE</span>
-            </motion.div>
-            <motion.div style={{ opacity: useTransform(x, [-100, 0], [1, 0]) }} className="quest-swipe-plate quest-dismiss-plate">
-                <span><Trash2 size={22} /> DISMISS</span>
-            </motion.div>
-
-            <div className="quest-card-face select-none">
-                <h3 className="quest-card-title">{quest.title}</h3>
-
-                <div className="quest-card-content">
-                    {showDetails ? (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="quest-card-details"
-                        >
-                            <div className="quest-material-note">
-                                <span>{material.label} · {material.material}</span>
-                                <small>{material.code}</small>
-                            </div>
-                            <div className="quest-due-date">
-                                <Calendar size={14} />
-                                <span>DUE</span>
-                                <strong>{quest.dueDate ? new Date(quest.dueDate).toLocaleDateString() : 'NO LIMIT'}</strong>
-                            </div>
-
-                            <div className="quest-brief-heading">
-                                <span>MISSION BRIEF</span>
-                                {!isEditingBrief && (
-                                    <small>Long press to edit</small>
-                                )}
-                            </div>
-
-                            {isEditingBrief ? (
-                                <div className="quest-brief-editor">
-                                    <textarea
-                                        value={localBrief}
-                                        onChange={(e) => setLocalBrief(e.target.value)}
-                                        onClick={(e) => e.stopPropagation()} // Prevent card toggle
-                                        className="quest-brief-textarea"
-                                        placeholder="Enter mission details..."
-                                        autoFocus
-                                    />
-                                    <button
-                                        onClick={saveBrief}
-                                        className="quest-brief-save"
-                                    >
-                                        <CheckCircle size={12} /> Save
-                                    </button>
-                                </div>
-                            ) : (
-                                <motion.div
-                                    onPointerDown={(e) => {
-                                        const timer = setTimeout(() => {
-                                            handleBriefLongPress();
-                                        }, 800);
-                                        e.target.dataset.longPressTimer = timer;
-                                    }}
-                                    onPointerUp={(e) => {
-                                        clearTimeout(e.target.dataset.longPressTimer);
-                                    }}
-                                    onPointerLeave={(e) => {
-                                        clearTimeout(e.target.dataset.longPressTimer);
-                                    }}
-                                    className="quest-brief-copy custom-scrollbar"
-                                >
-                                    {quest.missionBrief ? quest.missionBrief : "Complete this objective to earn rewards."}
+            {isTop && (
+                <div className={clsx('quest-deck-card', 'is-render-hit-stage', quest.difficulty || 'easy', isEditingBrief && 'is-editing')}>
+                    <motion.div style={{ opacity: completeOpacity }} className="quest-swipe-plate quest-complete-plate">
+                        <span><CheckCircle size={22} /> COMPLETE</span>
+                    </motion.div>
+                    <motion.div style={{ opacity: dismissOpacity }} className="quest-swipe-plate quest-dismiss-plate">
+                        <span><Trash2 size={22} /> DISMISS</span>
+                    </motion.div>
+                    <div className="quest-card-face select-none">
+                        <div className="quest-rarity-insignia" aria-label={`${material.label} rarity`}>
+                            <span className="quest-rarity-glyph" aria-hidden="true">
+                                <i /><i /><i />
+                            </span>
+                            <span>{material.label}</span>
+                            <small>{material.code}</small>
+                        </div>
+                        <h3 className="quest-card-title">{quest.title}</h3>
+                        <div className="quest-card-content">
+                            {showDetails && (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="quest-card-details">
+                                    <div className="quest-material-note">
+                                        <span>{material.label} · {material.material}</span>
+                                        <small>{material.code}</small>
+                                    </div>
+                                    <div className="quest-due-date">
+                                        <Calendar size={14} />
+                                        <span>DUE</span>
+                                        <strong>{quest.dueDate ? new Date(quest.dueDate).toLocaleDateString() : 'NO LIMIT'}</strong>
+                                    </div>
+                                    <div className="quest-brief-heading">
+                                        <span>MISSION BRIEF</span>
+                                        {!isEditingBrief && <small>Long press to edit</small>}
+                                    </div>
+                                    {isEditingBrief ? (
+                                        <div className="quest-brief-editor">
+                                            <textarea
+                                                value={localBrief}
+                                                onChange={(e) => setLocalBrief(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="quest-brief-textarea"
+                                                placeholder="Enter mission details..."
+                                                autoFocus
+                                            />
+                                            <button onClick={saveBrief} className="quest-brief-save">
+                                                <CheckCircle size={12} /> Save
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <motion.div
+                                            onPointerDown={(e) => {
+                                                const timer = setTimeout(handleBriefLongPress, 800);
+                                                e.target.dataset.longPressTimer = timer;
+                                            }}
+                                            onPointerUp={(e) => clearTimeout(e.target.dataset.longPressTimer)}
+                                            onPointerLeave={(e) => clearTimeout(e.target.dataset.longPressTimer)}
+                                            className="quest-brief-copy custom-scrollbar"
+                                        >
+                                            {quest.missionBrief || "Complete this objective to earn rewards."}
+                                        </motion.div>
+                                    )}
                                 </motion.div>
                             )}
-                        </motion.div>
-                    ) : null}
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
         </motion.div>
     );
 };
 
-const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate, onPrevious, slideDirection = 1 }) => {
-    const visibleQuests = quests.slice(0, 4);
+const QuestDeck = ({
+    quests,
+    onComplete,
+    onDelete,
+    onSkip,
+    onUpdate,
+    onPrevious,
+    onDeckGestureStart,
+    onDeckGestureEnd,
+    slideDirection = 'next'
+}) => {
+    const visibleQuests = quests.slice(0, 3);
 
     if (quests.length === 0) {
         return (
@@ -217,7 +243,7 @@ const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate, onPrevious,
     }
 
     return (
-        <div className="relative h-[320px] w-full max-w-md mx-auto perspective-1000 mb-8">
+        <div className="quest-deck-scene">
             <AnimatePresence custom={slideDirection}>
                 {visibleQuests.map((quest, index) => (
                     <QuestDeckCard
@@ -230,6 +256,8 @@ const QuestDeck = ({ quests, onComplete, onDelete, onSkip, onUpdate, onPrevious,
                         onSkip={onSkip}
                         onUpdate={onUpdate}
                         onPrevious={onPrevious}
+                        onDeckGestureStart={onDeckGestureStart}
+                        onDeckGestureEnd={onDeckGestureEnd}
                         custom={slideDirection}
                     />
                 ))}
@@ -301,7 +329,18 @@ const QuestBoard = () => {
     const [isCreationOpen, setIsCreationOpen] = useState(false);
 
     // Animation State
-    const [slideDirection, setSlideDirection] = useState(1); // 1 = Next/Skip, -1 = Previous/Reverse
+    const [slideDirection, setSlideDirection] = useState('next');
+    const deckGestureActive = useRef(false);
+
+    const startDeckGesture = () => {
+        deckGestureActive.current = true;
+    };
+
+    const endDeckGesture = () => {
+        window.setTimeout(() => {
+            deckGestureActive.current = false;
+        }, 0);
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -331,13 +370,23 @@ const QuestBoard = () => {
     const questDeckOrder = useDeckOrder(activeQuestIds);
 
     const handleSkip = (id) => {
-        setSlideDirection(1);
+        setSlideDirection('next');
         questDeckOrder.next(id);
     };
 
     const handlePrevious = () => {
-        setSlideDirection(-1);
+        setSlideDirection('previous');
         questDeckOrder.prev();
+    };
+
+    const handleComplete = (id) => {
+        setSlideDirection('complete');
+        completeQuest(id);
+    };
+
+    const handleDelete = (id) => {
+        setSlideDirection('dismiss');
+        deleteQuest(id);
     };
 
     // Filter Logic (memoized)
@@ -364,14 +413,18 @@ const QuestBoard = () => {
 
     return (
         <motion.div
-            className="pb-4 md:pb-0 relative flex flex-col w-full touch-none"
+            className="quest-board-tabletop-surface pb-4 md:pb-0 relative flex flex-col w-full touch-none"
             onPanEnd={(event, info) => {
-                if (event.target.closest('[data-no-swipe="true"]')) return;
+                if (deckGestureActive.current) return;
+                if (event.target instanceof Element && event.target.closest('[data-no-swipe="true"]')) return;
                 if (info.offset.y > 80 && !isCreationOpen && window.scrollY < 50) {
                     setIsCreationOpen(true);
                 }
             }}
         >
+            <div className="quest-board-tabletop-scene" aria-hidden="true">
+                <img src={questTabletopBase} alt="" draggable="false" />
+            </div>
             <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
                 <div>
                     <h2 className="quest-board-title text-3xl font-game font-bold tracking-widest uppercase">Active Quests</h2>
@@ -383,14 +436,16 @@ const QuestBoard = () => {
             </div>
 
             {/* 1. THE CARDS (Moved to Top) */}
-            <div className="mb-0 z-10 relative">
+            <div className="quest-deck-layout mb-0 z-10 relative">
                 <QuestDeck
                     quests={activeQuests}
-                    onComplete={completeQuest}
-                    onDelete={deleteQuest}
+                    onComplete={handleComplete}
+                    onDelete={handleDelete}
                     onSkip={handleSkip}
                     onUpdate={updateQuest}
                     onPrevious={handlePrevious}
+                    onDeckGestureStart={startDeckGesture}
+                    onDeckGestureEnd={endDeckGesture}
                     slideDirection={slideDirection}
                 />
             </div>
