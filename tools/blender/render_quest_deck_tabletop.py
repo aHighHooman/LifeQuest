@@ -343,52 +343,95 @@ def add_token(
     objects.append(base)
 
     token_top = base_depth / 2
-    for lip_name, lip_radius, lip_width, lip_z in (
-        ("raised outer face lip", 0.374, 0.021, token_top + 0.010),
-        ("lower side edge ridge", 0.382, 0.014, -token_top + 0.025),
-    ):
-        bpy.ops.mesh.primitive_torus_add(
-            major_radius=lip_radius,
-            minor_radius=lip_width,
-            major_segments=96,
-            minor_segments=12,
-            location=(0.0, 0.0, lip_z),
-        )
-        lip = bpy.context.object
-        lip.name = f"{name} {lip_name}"
-        lip.parent = token_root
-        lip.data.materials.append(rim_mat)
-        objects.append(lip)
+    lip_segments = 96
+    lip_inner_radius = 0.342
+    lip_outer_radius = 0.392
+    lip_bottom = token_top + 0.004
+    lip_top = token_top + 0.064
+    lip_vertices = []
+    for z in (lip_bottom, lip_top):
+        for radius in (lip_outer_radius, lip_inner_radius):
+            lip_vertices.extend(
+                (
+                    math.cos((index / lip_segments) * math.tau) * radius,
+                    math.sin((index / lip_segments) * math.tau) * radius,
+                    z,
+                )
+                for index in range(lip_segments)
+            )
+    outer_bottom = 0
+    inner_bottom = lip_segments
+    outer_top = lip_segments * 2
+    inner_top = lip_segments * 3
+    lip_faces = []
+    for index in range(lip_segments):
+        next_index = (index + 1) % lip_segments
+        lip_faces.extend((
+            (
+                outer_bottom + index,
+                outer_bottom + next_index,
+                outer_top + next_index,
+                outer_top + index,
+            ),
+            (
+                inner_bottom + next_index,
+                inner_bottom + index,
+                inner_top + index,
+                inner_top + next_index,
+            ),
+            (
+                outer_top + index,
+                outer_top + next_index,
+                inner_top + next_index,
+                inner_top + index,
+            ),
+            (
+                outer_bottom + next_index,
+                outer_bottom + index,
+                inner_bottom + index,
+                inner_bottom + next_index,
+            ),
+        ))
+    lip_mesh = bpy.data.meshes.new(f"{name} raised stamped rim mesh")
+    lip_mesh.from_pydata(lip_vertices, [], lip_faces)
+    lip_mesh.update()
+    lip = bpy.data.objects.new(f"{name} raised stamped outer rim", lip_mesh)
+    bpy.context.collection.objects.link(lip)
+    lip.parent = token_root
+    lip.data.materials.append(rim_mat)
+    lip_bevel = lip.modifiers.new(name="Stamped rim softened edge", type="BEVEL")
+    lip_bevel.width = 0.010
+    lip_bevel.segments = 3
+    objects.append(lip)
+
+    bpy.ops.mesh.primitive_torus_add(
+        major_radius=0.382,
+        minor_radius=0.014,
+        major_segments=96,
+        minor_segments=12,
+        location=(0.0, 0.0, -token_top + 0.025),
+    )
+    lower_ridge = bpy.context.object
+    lower_ridge.name = f"{name} lower side edge ridge"
+    lower_ridge.parent = token_root
+    lower_ridge.data.materials.append(rim_mat)
+    objects.append(lower_ridge)
 
     face_offset_y = 0.070
     bpy.ops.mesh.primitive_cylinder_add(
         vertices=96,
-        radius=0.348,
-        depth=0.026,
-        location=(0.0, face_offset_y, token_top + 0.013),
+        radius=0.330,
+        depth=0.012,
+        location=(0.0, face_offset_y, token_top - 0.006),
     )
     face = bpy.context.object
     face.name = f"{name} graphite inset face"
     face.parent = token_root
     face.data.materials.append(face_mat)
     face_bevel = face.modifiers.new(name="Inset face bevel", type="BEVEL")
-    face_bevel.width = 0.022
+    face_bevel.width = 0.012
     face_bevel.segments = 4
     objects.append(face)
-
-    for ring_index, (ring_radius, ring_width) in enumerate(((0.331, 0.018),)):
-        bpy.ops.mesh.primitive_torus_add(
-            major_radius=ring_radius,
-            minor_radius=ring_width,
-            major_segments=96,
-            minor_segments=12,
-            location=(0.0, face_offset_y, token_top + 0.040),
-        )
-        rim = bpy.context.object
-        rim.name = f"{name} luminous line-art rim {ring_index}"
-        rim.parent = token_root
-        rim.data.materials.append(rim_mat)
-        objects.append(rim)
 
     def symbol_stroke(part, points, width=0.022):
         curve_data = bpy.data.curves.new(f"{name} {part} curve", type="CURVE")
@@ -399,7 +442,7 @@ def add_token(
         spline = curve_data.splines.new("POLY")
         spline.points.add(len(points) - 1)
         for point, (px, py) in zip(spline.points, points):
-            point.co = (px, py + face_offset_y, token_top + 0.052, 1.0)
+            point.co = (px, py, token_top + 0.052, 1.0)
         symbol_piece = bpy.data.objects.new(f"{name} luminous {part}", curve_data)
         bpy.context.collection.objects.link(symbol_piece)
         symbol_piece.parent = token_root

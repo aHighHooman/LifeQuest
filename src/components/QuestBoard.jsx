@@ -820,7 +820,7 @@ const QuestBoard = () => {
             </AnimatePresence>
 
             {/* 3. LOGS & HISTORY (Moved from Radial) */}
-            <div className="px-4 grid grid-cols-2 gap-8 mt-2 mb-24 md:mb-8">
+            <div className="px-4 grid grid-cols-2 gap-8 -mt-4 mb-24 md:mt-2 md:mb-8">
                 <button
                     type="button"
                     onClick={() => setShowVictoryLog(true)}
