@@ -14,11 +14,18 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick })
     const displayPercentage = Math.round(percentage);
     const activeSegments = Math.round(percentage / 10);
     const coinLabel = String(coins);
+    // AppContent reserves the status-bar safe area for interactive content. The
+    // artwork is a screen backdrop, though, so it must cancel that inset or the
+    // shell gradient becomes visible as a strip above the scene on iOS.
+    const screenBackdropTop = 'calc(-0.5rem - env(safe-area-inset-top))';
 
     return (
         <>
             {/* The Blender plate is the dashboard's ground plane, not a floating prop vignette. */}
-            <div className="pointer-events-none absolute left-1/2 top-0 z-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
+            <div
+                className="pointer-events-none absolute left-1/2 z-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden"
+                style={{ top: screenBackdropTop }}
+            >
                 <img
                     src={healthInjectorScene}
                     alt=""
@@ -28,7 +35,10 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick })
             </div>
 
             {/* This second, transparent coordinate plane keeps only the physical screen interactive. */}
-            <div className="pointer-events-none absolute left-1/2 top-0 z-30 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2">
+            <div
+                className="pointer-events-none absolute left-1/2 z-30 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2"
+                style={{ top: screenBackdropTop }}
+            >
             <motion.button
                 type="button"
                 onClick={onCapacityClick}

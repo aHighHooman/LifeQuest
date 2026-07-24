@@ -605,13 +605,14 @@ def build_scene():
         4.0,
         (1.0, 6.0, 0.5),
     )
+    reservoir_world = rig.matrix_world @ Vector((-2.0, 0.0, 0.0))
     add_area_light(
         "Crimson reservoir spill",
-        (-2.0, 5.8, 1.8),
+        (reservoir_world.x, reservoir_world.y, 1.8),
         38.0,
         (1.0, 0.006, 0.02),
         1.3,
-        (-2.0, 5.6, 0.0),
+        (reservoir_world.x, reservoir_world.y - 0.2, 0.0),
     )
 
     camera_data = bpy.data.cameras.new("Dashboard tabletop camera")
