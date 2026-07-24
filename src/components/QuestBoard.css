@@ -17,6 +17,8 @@
 }
 
 .quest-board-tabletop-scene img {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
@@ -43,6 +45,21 @@
     font-weight: 800;
     letter-spacing: .08em;
     text-shadow: none;
+}
+
+.quest-log-hotspot {
+    min-height: 82px;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.quest-log-hotspot:focus-visible {
+    outline: 1px solid rgba(116, 161, 139, .6);
+    outline-offset: 4px;
 }
 
 .quest-add-button {

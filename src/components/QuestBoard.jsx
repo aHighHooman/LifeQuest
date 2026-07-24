@@ -19,6 +19,18 @@ import hardRearRender from '../assets/quests/quest-card-rear-hard-blender.webp';
 import legendaryActiveRender from '../assets/quests/quest-card-active-legendary-blender.webp';
 import legendaryMiddleRender from '../assets/quests/quest-card-middle-legendary-blender.webp';
 import legendaryRearRender from '../assets/quests/quest-card-rear-legendary-blender.webp';
+import victoryLogPile1 from '../assets/quests/quest-log-victory-1-blender.webp';
+import victoryLogPile2 from '../assets/quests/quest-log-victory-2-blender.webp';
+import victoryLogPile3 from '../assets/quests/quest-log-victory-3-blender.webp';
+import victoryLogPile4 from '../assets/quests/quest-log-victory-4-blender.webp';
+import victoryLogPile5 from '../assets/quests/quest-log-victory-5-blender.webp';
+import victoryLogPile6 from '../assets/quests/quest-log-victory-6-blender.webp';
+import discardLogPile1 from '../assets/quests/quest-log-discard-1-blender.webp';
+import discardLogPile2 from '../assets/quests/quest-log-discard-2-blender.webp';
+import discardLogPile3 from '../assets/quests/quest-log-discard-3-blender.webp';
+import discardLogPile4 from '../assets/quests/quest-log-discard-4-blender.webp';
+import discardLogPile5 from '../assets/quests/quest-log-discard-5-blender.webp';
+import discardLogPile6 from '../assets/quests/quest-log-discard-6-blender.webp';
 import './QuestBoard.css';
 
 const CARD_RENDER_SLOTS = {
@@ -103,12 +115,9 @@ const QuestDeckCard = ({
     const rarity = CARD_RENDER_SLOTS[quest.difficulty] ? quest.difficulty : 'easy';
     const rarityRenders = CARD_RENDER_SLOTS[rarity];
     const cardRender = rarityRenders[index] || rarityRenders[rarityRenders.length - 1];
-    const transitionAction = typeof custom === 'string' ? custom : custom?.action;
     const promotionPose = !isTop
         ? (!isCycleDestination && index === 1 ? { x: '-4.73%', y: '2.34%', rotate: 7 } : false)
-        : (transitionAction === 'previous'
-            ? { y: -180, scale: 1.02, opacity: 1 }
-            : { x: '-3.90%', y: '2.35%', rotate: -3.3, opacity: 1 });
+        : { x: '-3.90%', y: '2.35%', rotate: -3.3, opacity: 1 };
 
     return (
         <motion.div
@@ -143,12 +152,15 @@ const QuestDeckCard = ({
                                 transition: { type: 'spring', stiffness: 260, damping: 30 }
                             };
                         }
+                        const previousDestination = deckSize === 2
+                            ? { x: '-3.90%', y: '2.35%', rotate: -3.3 }
+                            : { x: '-9.24%', y: '4.46%', rotate: 3.7 };
                         return {
-                            x: ['0%', '-8%', '-3.90%'],
-                            y: ['0%', '4%', '2.35%'],
-                            rotate: [0, -8, -3.3],
+                            x: ['0%', '-8%', previousDestination.x],
+                            y: ['0%', '4%', previousDestination.y],
+                            rotate: [0, -8, previousDestination.rotate],
                             scale: [1, 0.97, 1],
-                            zIndex: [30, 30, 27],
+                            zIndex: [30, 30, deckSize === 2 ? 27 : 26],
                             opacity: 1,
                             transition: { duration: 0.52, times: [0, 0.42, 1], ease: [0.22, 1, 0.36, 1] }
                         };
@@ -313,6 +325,8 @@ const QuestDeckCard = ({
         </motion.div>
     );
 };
+const VICTORY_LOG_PILES = [null, victoryLogPile1, victoryLogPile2, victoryLogPile3, victoryLogPile4, victoryLogPile5, victoryLogPile6];
+const DISCARD_LOG_PILES = [null, discardLogPile1, discardLogPile2, discardLogPile3, discardLogPile4, discardLogPile5, discardLogPile6];
 
 const QuestDeck = ({
     quests,
@@ -513,7 +527,9 @@ const QuestBoard = () => {
         if (baseActiveQuests.length > 1 && currentTopId) {
             setCyclingQuestId(currentTopId);
         }
-        questDeckOrder.prev();
+        if (currentTopId) {
+            questDeckOrder.next(currentTopId);
+        }
     };
 
     const handleComplete = (id) => {
@@ -547,6 +563,8 @@ const QuestBoard = () => {
         quests.filter(q => q.discarded && isWithinDays(q.discardedAt, 7)),
         [quests]
     );
+    const victoryPileRender = VICTORY_LOG_PILES[Math.min(recentVictories.length, 6)];
+    const discardPileRender = DISCARD_LOG_PILES[Math.min(discardedQuests.length, 6)];
 
     return (
         <motion.div
@@ -561,6 +579,8 @@ const QuestBoard = () => {
         >
             <div className="quest-board-tabletop-scene" aria-hidden="true">
                 <img src={questTabletopBase} alt="" draggable="false" />
+                {victoryPileRender && <img src={victoryPileRender} alt="" draggable="false" />}
+                {discardPileRender && <img src={discardPileRender} alt="" draggable="false" />}
             </div>
             <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
                 <div>
@@ -801,60 +821,18 @@ const QuestBoard = () => {
 
             {/* 3. LOGS & HISTORY (Moved from Radial) */}
             <div className="px-4 grid grid-cols-2 gap-8 mt-2 mb-24 md:mb-8">
-                {/* VICTORY LOG (LEFT) */}
-                <div
+                <button
+                    type="button"
                     onClick={() => setShowVictoryLog(true)}
-                    className="transition-all cursor-pointer group flex flex-col relative overflow-hidden opacity-70 hover:opacity-100"
-                >
-                    <div className="flex items-center gap-3 mb-2">
-                        <span className="text-xs font-bold text-emerald-600/70 uppercase tracking-widest group-hover:text-emerald-400 transition-colors">Victory Log</span>
-                        <span className="text-emerald-400/70 text-xs font-mono font-bold">{recentVictories.length}</span>
-                    </div>
-
-                    <div className="flex gap-[-8px] relative h-10 items-center">
-                        {recentVictories.length === 0 && (
-                            <div className="text-emerald-900/40 text-xs italic">No clear records</div>
-                        )}
-                        {recentVictories.slice(0, 5).map((q, i) => (
-                            <div
-                                key={q.id}
-                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -ml-3 first:ml-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-emerald-900', 'text-emerald-800', 'text-emerald-600', 'text-emerald-500', 'text-emerald-400'][i] || 'text-emerald-400'}`}
-                                title={q.title}
-                            >
-                                <CheckCircle size={20} />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* DISCARDED LOG (RIGHT) */}
-                <div
+                    className="quest-log-hotspot quest-log-hotspot-victory"
+                    aria-label={`Open victory log. ${recentVictories.length} recent victories.`}
+                />
+                <button
+                    type="button"
                     onClick={() => setShowDiscardedLog(true)}
-                    className="transition-all cursor-pointer group flex flex-col items-end relative overflow-hidden opacity-50 hover:opacity-80"
-                >
-                    <div className="flex items-center gap-3 mb-2 flex-row-reverse">
-                        <span className="text-xs font-bold text-red-600/70 uppercase tracking-widest group-hover:text-red-400 transition-colors">Discarded</span>
-                        <span className="text-red-400/60 text-xs font-mono font-bold">{discardedQuests.length}</span>
-                    </div>
-
-                    <div className="flex gap-[-8px] relative h-10 items-center justify-end flex-row-reverse">
-                        {discardedQuests.length === 0 && (
-                            <div className="text-red-900/30 text-xs italic">Bin empty</div>
-                        )}
-                        {discardedQuests.slice(0, 5).map((q, i) => (
-                            <div
-                                key={q.id}
-                                className={`w-8 h-8 rounded-full border border-slate-950 bg-slate-900 flex items-center justify-center shadow-lg relative -mr-3 first:mr-0 transition-all group-hover:scale-110 hover:!scale-125 z-10 hover:z-20 ${['text-red-950', 'text-red-900', 'text-red-700', 'text-red-500', 'text-red-400'][i] || 'text-red-400'}`}
-                                title={q.title}
-                            >
-                                <Trash2 size={20} />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-
-
+                    className="quest-log-hotspot quest-log-hotspot-discarded"
+                    aria-label={`Open discarded log. ${discardedQuests.length} recently discarded quests.`}
+                />
             </div>
 
             <AnimatePresence>

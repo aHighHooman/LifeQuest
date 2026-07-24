@@ -10,6 +10,13 @@ OUTPUT_DIR = ROOT / "src" / "assets" / "quests"
 RENDER_PATH = OUTPUT_DIR / "quest-deck-tabletop-blender.webp"
 BLEND_PATH = OUTPUT_DIR / "quest-deck-tabletop.blend"
 BASE_RENDER_PATH = OUTPUT_DIR / "quest-tabletop-base-blender.webp"
+LOG_PILE_RENDER_PATHS = {
+    kind: {
+        count: OUTPUT_DIR / f"quest-log-{kind}-{count}-blender.webp"
+        for count in range(1, 7)
+    }
+    for kind in ("victory", "discard")
+}
 RARITIES = ("easy", "medium", "hard", "legendary")
 SLOTS = ("rear", "middle", "active")
 CARD_RENDER_PATHS = {
@@ -26,7 +33,7 @@ def reset_scene():
     bpy.ops.object.delete(use_global=False)
 
 
-def material(name, color, *, metallic=0.0, roughness=0.5, alpha=1.0):
+def material(name, color, *, metallic=0.0, roughness=0.5, alpha=1.0, emission=None, emission_strength=0.0):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     shader = mat.node_tree.nodes.get("Principled BSDF")
@@ -34,6 +41,12 @@ def material(name, color, *, metallic=0.0, roughness=0.5, alpha=1.0):
     shader.inputs["Metallic"].default_value = metallic
     shader.inputs["Roughness"].default_value = roughness
     shader.inputs["Alpha"].default_value = alpha
+    emission_color = shader.inputs.get("Emission Color") or shader.inputs.get("Emission")
+    emission_power = shader.inputs.get("Emission Strength")
+    if emission and emission_color:
+        emission_color.default_value = (*emission, 1.0)
+    if emission_power:
+        emission_power.default_value = emission_strength
     if alpha < 1.0 and hasattr(mat, "surface_render_method"):
         mat.surface_render_method = "DITHERED"
     return mat
@@ -265,6 +278,268 @@ def add_area_light(name, location, energy, color, size, target):
     point_at(obj, target)
 
 
+def add_table_text(name, body, location, mat, *, size=0.42, spacing=1.12):
+    curve = bpy.data.curves.new(type="FONT", name=f"{name} lettering")
+    curve.body = body
+    curve.align_x = "CENTER"
+    curve.align_y = "CENTER"
+    curve.size = size
+    curve.space_character = spacing
+    curve.extrude = 0.012
+    curve.bevel_depth = 0.006
+    curve.bevel_resolution = 3
+    font_path = Path("C:/Windows/Fonts/bahnschrift.ttf")
+    if font_path.exists():
+        curve.font = bpy.data.fonts.load(str(font_path))
+    obj = bpy.data.objects.new(name, curve)
+    bpy.context.collection.objects.link(obj)
+    obj.location = location
+    obj.data.materials.append(mat)
+    return obj
+
+
+def add_token(
+    name,
+    location,
+    angle_degrees,
+    base_mat,
+    face_mat,
+    rim_mat,
+    symbol_mat,
+    shadow_mat,
+    ground_shadow_mat,
+    symbol,
+    *,
+    tilt_x=0.0,
+    tilt_y=0.0,
+):
+    x, y, stack_height = location
+    table_top = -0.105
+    base_depth = 0.20
+    objects = []
+    bpy.ops.object.empty_add(
+        type="PLAIN_AXES",
+        location=(x, y, table_top + base_depth / 2 + stack_height),
+        rotation=(math.radians(tilt_x), math.radians(tilt_y), math.radians(angle_degrees)),
+    )
+    token_root = bpy.context.object
+    token_root.name = f"{name} flat seated token root"
+
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=96,
+        radius=0.40,
+        depth=base_depth,
+        location=(0.0, 0.0, 0.0),
+    )
+    base = bpy.context.object
+    base.name = f"{name} thick dark-grey minted body"
+    base.parent = token_root
+    base.data.materials.append(base_mat)
+    bevel = base.modifiers.new(name="Rounded minted edge", type="BEVEL")
+    bevel.width = 0.045
+    bevel.segments = 5
+    for polygon in base.data.polygons:
+        polygon.use_smooth = abs(polygon.normal.z) < 0.5
+    objects.append(base)
+
+    token_top = base_depth / 2
+    for lip_name, lip_radius, lip_width, lip_z in (
+        ("raised outer face lip", 0.374, 0.021, token_top + 0.010),
+        ("lower side edge ridge", 0.382, 0.014, -token_top + 0.025),
+    ):
+        bpy.ops.mesh.primitive_torus_add(
+            major_radius=lip_radius,
+            minor_radius=lip_width,
+            major_segments=96,
+            minor_segments=12,
+            location=(0.0, 0.0, lip_z),
+        )
+        lip = bpy.context.object
+        lip.name = f"{name} {lip_name}"
+        lip.parent = token_root
+        lip.data.materials.append(rim_mat)
+        objects.append(lip)
+
+    face_offset_y = 0.035
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=96,
+        radius=0.348,
+        depth=0.026,
+        location=(0.0, face_offset_y, token_top + 0.013),
+    )
+    face = bpy.context.object
+    face.name = f"{name} graphite inset face"
+    face.parent = token_root
+    face.data.materials.append(face_mat)
+    face_bevel = face.modifiers.new(name="Inset face bevel", type="BEVEL")
+    face_bevel.width = 0.022
+    face_bevel.segments = 4
+    objects.append(face)
+
+    for ring_index, (ring_radius, ring_width) in enumerate(((0.331, 0.018),)):
+        bpy.ops.mesh.primitive_torus_add(
+            major_radius=ring_radius,
+            minor_radius=ring_width,
+            major_segments=96,
+            minor_segments=12,
+            location=(0.0, face_offset_y, token_top + 0.040),
+        )
+        rim = bpy.context.object
+        rim.name = f"{name} luminous line-art rim {ring_index}"
+        rim.parent = token_root
+        rim.data.materials.append(rim_mat)
+        objects.append(rim)
+
+    def symbol_stroke(part, points, width=0.022):
+        curve_data = bpy.data.curves.new(f"{name} {part} curve", type="CURVE")
+        curve_data.dimensions = "3D"
+        curve_data.resolution_u = 2
+        curve_data.bevel_depth = width
+        curve_data.bevel_resolution = 4
+        spline = curve_data.splines.new("POLY")
+        spline.points.add(len(points) - 1)
+        for point, (px, py) in zip(spline.points, points):
+            point.co = (px, py + face_offset_y, token_top + 0.052, 1.0)
+        symbol_piece = bpy.data.objects.new(f"{name} luminous {part}", curve_data)
+        bpy.context.collection.objects.link(symbol_piece)
+        symbol_piece.parent = token_root
+        symbol_piece.data.materials.append(symbol_mat)
+        objects.append(symbol_piece)
+
+    if symbol == "check":
+        circle_points = [
+            (
+                math.cos(math.radians(angle)) * 0.215,
+                math.sin(math.radians(angle)) * 0.215,
+            )
+            for angle in range(48, 371, 9)
+        ]
+        symbol_stroke("broken completion circle", circle_points, 0.023)
+        symbol_stroke(
+            "completion check",
+            [(-0.125, -0.005), (-0.030, -0.090), (0.165, 0.115)],
+            0.027,
+        )
+    else:
+        symbol_stroke(
+            "trash can body",
+            [(-0.135, 0.055), (-0.120, -0.165), (0.120, -0.165), (0.135, 0.055)],
+            0.023,
+        )
+        symbol_stroke("trash can lid", [(-0.185, 0.075), (0.185, 0.075)], 0.025)
+        symbol_stroke(
+            "trash can handle",
+            [(-0.070, 0.080), (-0.055, 0.155), (0.055, 0.155), (0.070, 0.080)],
+            0.023,
+        )
+        symbol_stroke("trash can left slot", [(-0.052, 0.005), (-0.052, -0.105)], 0.017)
+        symbol_stroke("trash can right slot", [(0.052, 0.005), (0.052, -0.105)], 0.017)
+
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=64,
+        radius=0.43,
+        depth=0.008,
+        location=(x + 0.035, y - 0.050, table_top + 0.006),
+    )
+    ground_shadow = bpy.context.object
+    ground_shadow.name = f"{name} soft tabletop cast shadow"
+    ground_shadow.scale.x = 0.96
+    ground_shadow.scale.y = 0.78
+    ground_shadow.data.materials.append(ground_shadow_mat)
+    objects.insert(0, ground_shadow)
+
+    is_stacked = stack_height > 0.0
+    if is_stacked:
+        shadow_z = table_top + base_depth + 0.030 + max(0.0, stack_height - 0.14)
+        bpy.ops.mesh.primitive_cylinder_add(
+            vertices=64,
+            radius=0.41,
+            depth=0.008,
+            location=(x, y - 0.012, shadow_z),
+        )
+        overlap_shadow = bpy.context.object
+        overlap_shadow.name = f"{name} tight inter-token contact shadow"
+        overlap_shadow.scale.x = 0.92
+        overlap_shadow.scale.y = 0.82
+        overlap_shadow.data.materials.append(shadow_mat)
+        objects.insert(0, overlap_shadow)
+    return objects
+
+
+def build_log_markers():
+    victory_text = material("Victory table inlay", (0.020, 0.25, 0.18), metallic=0.28, roughness=0.48)
+    discard_text = material("Discard table inlay", (0.31, 0.035, 0.050), metallic=0.25, roughness=0.50)
+    labels = [
+        add_table_text("Engraved victory log label", "VICTORY LOG", (-3.48, 1.18, -0.096), victory_text),
+        add_table_text("Engraved discarded label", "DISCARDED", (3.48, 1.18, -0.096), discard_text),
+    ]
+
+    graphite_side = material("Token charcoal edge", (0.080, 0.095, 0.110), metallic=0.62, roughness=0.34)
+    graphite_face = material("Token dark graphite face", (0.040, 0.050, 0.062), metallic=0.42, roughness=0.42)
+    graphite_rim = material("Token machined graphite line rim", (0.13, 0.15, 0.17), metallic=0.58, roughness=0.32)
+    victory_graphite_side = material(
+        "Victory token charcoal edge", (0.035, 0.045, 0.055), metallic=0.24, roughness=0.56
+    )
+    victory_graphite_face = material(
+        "Victory token dark graphite face", (0.018, 0.025, 0.032), metallic=0.12, roughness=0.64
+    )
+    victory_graphite_rim = material(
+        "Victory token machined graphite line rim", (0.065, 0.080, 0.095), metallic=0.28, roughness=0.50
+    )
+    victory_line = material(
+        "Victory luminous green line art",
+        (0.020, 0.30, 0.22),
+        metallic=0.42,
+        roughness=0.20,
+        emission=(0.020, 0.56, 0.39),
+        emission_strength=1.0,
+    )
+    discard_line = material(
+        "Discard luminous red line art",
+        (0.34, 0.025, 0.045),
+        metallic=0.42,
+        roughness=0.20,
+        emission=(0.68, 0.035, 0.070),
+        emission_strength=1.8,
+    )
+    token_shadow = material("Token contact shadow", (0.0, 0.0, 0.0), roughness=1.0, alpha=0.24)
+    token_ground_shadow = material(
+        "Token soft tabletop cast shadow", (0.0, 0.0, 0.0), roughness=1.0, alpha=0.10
+    )
+
+    victory_groups = []
+    discard_groups = []
+    for index in range(6):
+        stack_height = index * 0.14
+        victory_groups.append(add_token(
+            f"Victory neat stack token {index + 1}",
+            (-4.10 + index * 0.48, 0.56, stack_height),
+            -4.0,
+            victory_graphite_side,
+            victory_graphite_face,
+            victory_graphite_rim,
+            victory_line,
+            token_shadow,
+            token_ground_shadow,
+            "check",
+            tilt_y=0.0 if index == 0 else 5.0,
+        ))
+        discard_groups.append(add_token(
+            f"Discard neat stack token {index + 1}",
+            (4.10 - index * 0.48, 0.56, stack_height),
+            4.0,
+            graphite_side,
+            graphite_face,
+            graphite_rim,
+            discard_line,
+            token_shadow,
+            token_ground_shadow,
+            "discard",
+            tilt_y=0.0 if index == 0 else -5.0,
+        ))
+    return labels, victory_groups, discard_groups
+
+
 def build_scene():
     reset_scene()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -323,6 +598,7 @@ def build_scene():
     }
 
     add_box("Workbench", (30.0, 30.0, 0.35), (0.0, 0.0, -0.28), table, bevel=0.12)
+    log_label_objects, victory_token_groups, discard_token_groups = build_log_markers()
 
     # All cards share exactly the same modeled dimensions. Their Z coordinates
     # put each lower face directly beneath the next shell rather than floating.
@@ -367,11 +643,22 @@ def build_scene():
         for layer in rarity_layers.values()
         for obj in layer["objects"]
     ]
-    all_mesh_objects = [obj for obj in scene.objects if obj.type == "MESH"]
+    all_log_token_objects = [
+        obj
+        for groups in (victory_token_groups, discard_token_groups)
+        for group in groups
+        for obj in group
+    ]
+    all_renderable_objects = [obj for obj in scene.objects if obj.type in {"MESH", "FONT", "CURVE"}]
+    tabletop_objects = [
+        obj
+        for obj in all_renderable_objects
+        if obj not in all_card_objects and obj not in all_log_token_objects
+    ]
 
     def show_only(objects):
         visible = set(objects)
-        for obj in all_mesh_objects:
+        for obj in all_renderable_objects:
             obj.hide_render = obj not in visible
 
     def render_to(path, *, transparent):
@@ -389,20 +676,32 @@ def build_scene():
         card_layers["legendary"]["active"],
     )
     reference_objects = [obj for layer in reference_layers for obj in layer["objects"]]
-    show_only([obj for obj in all_mesh_objects if obj not in all_card_objects] + reference_objects)
+    reference_tokens = [
+        obj
+        for groups in (victory_token_groups[:4], discard_token_groups[:4])
+        for group in groups
+        for obj in group
+    ]
+    show_only(tabletop_objects + reference_objects + reference_tokens)
     render_to(RENDER_PATH, transparent=False)
 
     # Runtime passes share the exact same camera, geometry, lighting, and pixel
     # coordinates. React composites them without recreating any card geometry.
-    show_only([obj for obj in all_mesh_objects if obj not in all_card_objects])
+    show_only(tabletop_objects)
     render_to(BASE_RENDER_PATH, transparent=False)
+
+    for kind, groups in (("victory", victory_token_groups), ("discard", discard_token_groups)):
+        for count in range(1, 7):
+            pile_objects = [obj for group in groups[:count] for obj in group]
+            show_only(pile_objects)
+            render_to(LOG_PILE_RENDER_PATHS[kind][count], transparent=True)
 
     for rarity, rarity_layers in card_layers.items():
         for slot, layer in rarity_layers.items():
             show_only(layer["objects"])
             render_to(CARD_RENDER_PATHS[rarity][slot], transparent=True)
 
-    show_only([obj for obj in all_mesh_objects if obj not in all_card_objects] + reference_objects)
+    show_only(tabletop_objects + reference_objects + reference_tokens)
     scene.render.filepath = str(RENDER_PATH)
     scene.render.film_transparent = False
     scene.render.image_settings.color_mode = "RGB"
@@ -410,6 +709,7 @@ def build_scene():
     print(f"Saved blend: {BLEND_PATH}")
     print(f"Saved composite: {RENDER_PATH}")
     print(f"Saved base: {BASE_RENDER_PATH}")
+    print(f"Saved log piles: {LOG_PILE_RENDER_PATHS}")
     print(f"Saved card passes: {CARD_RENDER_PATHS}")
 
 
