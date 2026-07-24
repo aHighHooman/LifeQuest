@@ -19,12 +19,14 @@ import hardRearRender from '../assets/quests/quest-card-rear-hard-blender.webp';
 import legendaryActiveRender from '../assets/quests/quest-card-active-legendary-blender.webp';
 import legendaryMiddleRender from '../assets/quests/quest-card-middle-legendary-blender.webp';
 import legendaryRearRender from '../assets/quests/quest-card-rear-legendary-blender.webp';
+import victoryLogPile0 from '../assets/quests/quest-log-victory-0-blender.webp';
 import victoryLogPile1 from '../assets/quests/quest-log-victory-1-blender.webp';
 import victoryLogPile2 from '../assets/quests/quest-log-victory-2-blender.webp';
 import victoryLogPile3 from '../assets/quests/quest-log-victory-3-blender.webp';
 import victoryLogPile4 from '../assets/quests/quest-log-victory-4-blender.webp';
 import victoryLogPile5 from '../assets/quests/quest-log-victory-5-blender.webp';
 import victoryLogPile6 from '../assets/quests/quest-log-victory-6-blender.webp';
+import discardLogPile0 from '../assets/quests/quest-log-discard-0-blender.webp';
 import discardLogPile1 from '../assets/quests/quest-log-discard-1-blender.webp';
 import discardLogPile2 from '../assets/quests/quest-log-discard-2-blender.webp';
 import discardLogPile3 from '../assets/quests/quest-log-discard-3-blender.webp';
@@ -325,8 +327,8 @@ const QuestDeckCard = ({
         </motion.div>
     );
 };
-const VICTORY_LOG_PILES = [null, victoryLogPile1, victoryLogPile2, victoryLogPile3, victoryLogPile4, victoryLogPile5, victoryLogPile6];
-const DISCARD_LOG_PILES = [null, discardLogPile1, discardLogPile2, discardLogPile3, discardLogPile4, discardLogPile5, discardLogPile6];
+const VICTORY_LOG_PILES = [victoryLogPile0, victoryLogPile1, victoryLogPile2, victoryLogPile3, victoryLogPile4, victoryLogPile5, victoryLogPile6];
+const DISCARD_LOG_PILES = [discardLogPile0, discardLogPile1, discardLogPile2, discardLogPile3, discardLogPile4, discardLogPile5, discardLogPile6];
 
 const QuestDeck = ({
     quests,
@@ -579,8 +581,6 @@ const QuestBoard = () => {
         >
             <div className="quest-board-tabletop-scene" aria-hidden="true">
                 <img src={questTabletopBase} alt="" draggable="false" />
-                {victoryPileRender && <img src={victoryPileRender} alt="" draggable="false" />}
-                {discardPileRender && <img src={discardPileRender} alt="" draggable="false" />}
             </div>
             <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
                 <div>
@@ -826,13 +826,17 @@ const QuestBoard = () => {
                     onClick={() => setShowVictoryLog(true)}
                     className="quest-log-hotspot quest-log-hotspot-victory"
                     aria-label={`Open victory log. ${recentVictories.length} recent victories.`}
-                />
+                >
+                    <img className="quest-log-strip" src={victoryPileRender} alt="" draggable="false" />
+                </button>
                 <button
                     type="button"
                     onClick={() => setShowDiscardedLog(true)}
                     className="quest-log-hotspot quest-log-hotspot-discarded"
                     aria-label={`Open discarded log. ${discardedQuests.length} recently discarded quests.`}
-                />
+                >
+                    <img className="quest-log-strip" src={discardPileRender} alt="" draggable="false" />
+                </button>
             </div>
 
             <AnimatePresence>

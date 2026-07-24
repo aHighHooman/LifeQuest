@@ -13,7 +13,7 @@ BASE_RENDER_PATH = OUTPUT_DIR / "quest-tabletop-base-blender.webp"
 LOG_PILE_RENDER_PATHS = {
     kind: {
         count: OUTPUT_DIR / f"quest-log-{kind}-{count}-blender.webp"
-        for count in range(1, 7)
+        for count in range(0, 7)
     }
     for kind in ("victory", "discard")
 }
@@ -315,7 +315,7 @@ def add_token(
 ):
     x, y, stack_height = location
     table_top = -0.105
-    base_depth = 0.20
+    base_depth = 0.40
     objects = []
     bpy.ops.object.empty_add(
         type="PLAIN_AXES",
@@ -360,7 +360,7 @@ def add_token(
         lip.data.materials.append(rim_mat)
         objects.append(lip)
 
-    face_offset_y = 0.035
+    face_offset_y = 0.070
     bpy.ops.mesh.primitive_cylinder_add(
         vertices=96,
         radius=0.348,
@@ -450,7 +450,7 @@ def add_token(
 
     is_stacked = stack_height > 0.0
     if is_stacked:
-        shadow_z = table_top + base_depth + 0.030 + max(0.0, stack_height - 0.14)
+        shadow_z = table_top + base_depth + 0.030 + max(0.0, stack_height - 0.28)
         bpy.ops.mesh.primitive_cylinder_add(
             vertices=64,
             radius=0.41,
@@ -510,7 +510,7 @@ def build_log_markers():
     victory_groups = []
     discard_groups = []
     for index in range(6):
-        stack_height = index * 0.14
+        stack_height = index * 0.28
         victory_groups.append(add_token(
             f"Victory neat stack token {index + 1}",
             (-4.10 + index * 0.48, 0.03, stack_height),
@@ -649,11 +649,16 @@ def build_scene():
         for group in groups
         for obj in group
     ]
+    all_log_label_objects = list(log_label_objects)
     all_renderable_objects = [obj for obj in scene.objects if obj.type in {"MESH", "FONT", "CURVE"}]
     tabletop_objects = [
         obj
         for obj in all_renderable_objects
-        if obj not in all_card_objects and obj not in all_log_token_objects
+        if (
+            obj not in all_card_objects
+            and obj not in all_log_token_objects
+            and obj not in all_log_label_objects
+        )
     ]
 
     def show_only(objects):
@@ -682,26 +687,42 @@ def build_scene():
         for group in groups
         for obj in group
     ]
-    show_only(tabletop_objects + reference_objects + reference_tokens)
+    show_only(tabletop_objects + all_log_label_objects + reference_objects + reference_tokens)
     render_to(RENDER_PATH, transparent=False)
 
-    # Runtime passes share the exact same camera, geometry, lighting, and pixel
-    # coordinates. React composites them without recreating any card geometry.
+    # Keep the table itself viewport-sized. Log labels and tokens are rendered
+    # separately so React can anchor them below the responsive card stage.
     show_only(tabletop_objects)
     render_to(BASE_RENDER_PATH, transparent=False)
 
-    for kind, groups in (("victory", victory_token_groups), ("discard", discard_token_groups)):
-        for count in range(1, 7):
+    full_resolution = (scene.render.resolution_x, scene.render.resolution_y)
+    full_camera_location = camera.location.copy()
+    full_ortho_scale = camera_data.ortho_scale
+    scene.render.resolution_x = 450
+    scene.render.resolution_y = 240
+    camera_data.ortho_scale = 4.20
+    for kind, groups, label, center_x in (
+        ("victory", victory_token_groups, log_label_objects[0], -3.25),
+        ("discard", discard_token_groups, log_label_objects[1], 3.25),
+    ):
+        camera.location = (center_x, 0.28, 24.0)
+        point_at(camera, (center_x, 0.28, 0.0))
+        for count in range(0, 7):
             pile_objects = [obj for group in groups[:count] for obj in group]
-            show_only(pile_objects)
+            show_only([label] + pile_objects)
             render_to(LOG_PILE_RENDER_PATHS[kind][count], transparent=True)
+
+    scene.render.resolution_x, scene.render.resolution_y = full_resolution
+    camera.location = full_camera_location
+    camera_data.ortho_scale = full_ortho_scale
+    point_at(camera, (0.0, 0.0, 0.0))
 
     for rarity, rarity_layers in card_layers.items():
         for slot, layer in rarity_layers.items():
             show_only(layer["objects"])
             render_to(CARD_RENDER_PATHS[rarity][slot], transparent=True)
 
-    show_only(tabletop_objects + reference_objects + reference_tokens)
+    show_only(tabletop_objects + all_log_label_objects + reference_objects + reference_tokens)
     scene.render.filepath = str(RENDER_PATH)
     scene.render.film_transparent = False
     scene.render.image_settings.color_mode = "RGB"
