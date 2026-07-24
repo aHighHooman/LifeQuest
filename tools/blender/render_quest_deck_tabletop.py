@@ -470,8 +470,8 @@ def build_log_markers():
     victory_text = material("Victory table inlay", (0.020, 0.25, 0.18), metallic=0.28, roughness=0.48)
     discard_text = material("Discard table inlay", (0.31, 0.035, 0.050), metallic=0.25, roughness=0.50)
     labels = [
-        add_table_text("Engraved victory log label", "VICTORY LOG", (-3.48, 1.18, -0.096), victory_text),
-        add_table_text("Engraved discarded label", "DISCARDED", (3.48, 1.18, -0.096), discard_text),
+        add_table_text("Engraved victory log label", "VICTORY LOG", (-3.48, 0.65, -0.096), victory_text),
+        add_table_text("Engraved discarded label", "DISCARDED", (3.48, 0.65, -0.096), discard_text),
     ]
 
     graphite_side = material("Token charcoal edge", (0.080, 0.095, 0.110), metallic=0.62, roughness=0.34)
@@ -513,7 +513,7 @@ def build_log_markers():
         stack_height = index * 0.14
         victory_groups.append(add_token(
             f"Victory neat stack token {index + 1}",
-            (-4.10 + index * 0.48, 0.56, stack_height),
+            (-4.10 + index * 0.48, 0.03, stack_height),
             -4.0,
             victory_graphite_side,
             victory_graphite_face,
@@ -526,7 +526,7 @@ def build_log_markers():
         ))
         discard_groups.append(add_token(
             f"Discard neat stack token {index + 1}",
-            (4.10 - index * 0.48, 0.56, stack_height),
+            (4.10 - index * 0.48, 0.03, stack_height),
             4.0,
             graphite_side,
             graphite_face,
