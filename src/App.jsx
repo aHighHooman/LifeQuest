@@ -6,6 +6,7 @@ import { checkVersionAndEnsurePersistence } from './utils/persistence';
 import { motion as Motion } from 'framer-motion';
 import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
 import Navigation from './components/Navigation';
+import { isLlmInterfaceLocation } from './utils/llmInterface';
 
 const screenLoaders = {
   dashboard: () => import('./components/Dashboard'),
@@ -33,6 +34,7 @@ const QuestBoard = React.lazy(() => loadScreen('quests'));
 const HabitTracker = React.lazy(() => loadScreen('protocols'));
 const BudgetView = React.lazy(() => loadScreen('budget'));
 const CalorieTracker = React.lazy(() => loadScreen('calories'));
+const LlmInterface = React.lazy(() => import('./components/LlmInterface'));
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -117,6 +119,7 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
 function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const pendingTabSwitchRef = useRef(null);
+  const isLlmInterface = isLlmInterfaceLocation();
 
   useEffect(() => {
     // Check for version updates and ensure persistence validity on app launch
@@ -136,7 +139,9 @@ function App() {
   return (
     <BudgetProvider>
       <GameProvider>
-        <AppContent currentTab={currentTab} setCurrentTab={handleTabChange} pendingTabSwitchRef={pendingTabSwitchRef} />
+        {isLlmInterface
+          ? <AppErrorBoundary><React.Suspense fallback={null}><LlmInterface /></React.Suspense></AppErrorBoundary>
+          : <AppContent currentTab={currentTab} setCurrentTab={handleTabChange} pendingTabSwitchRef={pendingTabSwitchRef} />}
       </GameProvider>
     </BudgetProvider>
   );
