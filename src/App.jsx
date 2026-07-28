@@ -7,6 +7,7 @@ import { motion as Motion } from 'framer-motion';
 import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
 import Navigation from './components/Navigation';
 import { isLlmInterfaceLocation } from './utils/llmInterface';
+import { CloudSyncProvider } from './context/CloudSyncContext.jsx';
 
 const screenLoaders = {
   dashboard: () => import('./components/Dashboard'),
@@ -136,12 +137,14 @@ function App() {
     });
   }, []);
 
-  return (
+    return (
     <BudgetProvider>
       <GameProvider>
-        {isLlmInterface
-          ? <AppErrorBoundary><React.Suspense fallback={null}><LlmInterface /></React.Suspense></AppErrorBoundary>
-          : <AppContent currentTab={currentTab} setCurrentTab={handleTabChange} pendingTabSwitchRef={pendingTabSwitchRef} />}
+        <CloudSyncProvider>
+          {isLlmInterface
+            ? <AppErrorBoundary><React.Suspense fallback={null}><LlmInterface /></React.Suspense></AppErrorBoundary>
+            : <AppContent currentTab={currentTab} setCurrentTab={handleTabChange} pendingTabSwitchRef={pendingTabSwitchRef} />}
+        </CloudSyncProvider>
       </GameProvider>
     </BudgetProvider>
   );

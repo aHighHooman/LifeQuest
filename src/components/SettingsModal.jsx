@@ -7,6 +7,7 @@ import {
     summarizePortableSnapshot
 } from '../utils/portableState.js';
 import { HOME_SCREEN_ICON_IDS, getHomeScreenIcon, normalizeHomeScreenIconId } from '../utils/homeScreenIcons.js';
+import CloudAccountSettings from './CloudAccountSettings.jsx';
 
 const SettingsModal = ({ isOpen, onClose }) => {
     const {
@@ -306,6 +307,11 @@ const SettingsModal = ({ isOpen, onClose }) => {
                             iPhone uses <span className="font-mono text-slate-100">apple-touch-icon</span> for this flow. Existing home screen shortcuts keep their old icon until removed and added again.
                         </div>
                     </div>
+
+                    <CloudAccountSettings
+                        exportAppState={exportAppState}
+                        importAppState={importAppState}
+                    />
 
                     <div className="space-y-5">
                         <div className="border-b border-slate-800 pb-2">

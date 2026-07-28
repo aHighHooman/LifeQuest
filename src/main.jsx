@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import { beginTrackedSpan, initPerfMonitor } from './utils/perfMonitor'
+import { AuthProvider } from './context/AuthContext.jsx'
 
 const renderFatalError = (message) => {
   const root = document.getElementById('root');
@@ -37,7 +38,9 @@ try {
 
   createRoot(document.getElementById('root')).render(
     <StrictMode>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </StrictMode>,
   )
 } catch (error) {
