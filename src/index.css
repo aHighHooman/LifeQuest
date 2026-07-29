@@ -22,11 +22,11 @@
   }
 
   .dashboard-hud-layout {
-    padding-top: var(--dashboard-grid-padding-mobile);
+    padding-top: calc(var(--dashboard-grid-padding-mobile) - var(--tabletop-content-inset));
   }
 
   .dashboard-hex-positioner {
-    transform: translate(var(--dashboard-hex-mobile-x), var(--dashboard-hex-mobile-y)) scale(var(--dashboard-hex-mobile-scale));
+    transform: translateY(var(--dashboard-hex-mobile-y)) scale(var(--dashboard-hex-mobile-scale));
   }
 
   .text-shadow {
@@ -98,7 +98,7 @@
 
 @media (min-width: 640px) {
   .dashboard-hud-layout {
-    padding-top: var(--dashboard-grid-padding-desktop);
+    padding-top: calc(var(--dashboard-grid-padding-desktop) - var(--tabletop-content-inset));
   }
 
   .dashboard-hex-positioner {

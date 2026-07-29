@@ -12,7 +12,7 @@ import dashboardTabletop from './assets/tabletop/lifequest-dashboard-perspective
 import questTabletop from './assets/tabletop/lifequest-quests-perspective.webp';
 import dashboardToQuests from './assets/tabletop/lifequest-dashboard-to-quests.mp4';
 import questsToDashboard from './assets/tabletop/lifequest-quests-to-dashboard.mp4';
-import { getTabletopTransitionUiState } from './utils/tabletopLayout';
+import { getTabletopTransitionUiState, TABLETOP_TRANSITION } from './utils/tabletopLayout';
 
 const screenLoaders = {
   dashboard: () => import('./components/Dashboard'),
@@ -43,9 +43,6 @@ const CalorieTracker = React.lazy(() => loadScreen('calories'));
 const LlmInterface = React.lazy(() => import('./components/LlmInterface'));
 
 const TABLETOP_TABS = new Set(['dashboard', 'quests']);
-const TABLETOP_CAMERA_PLAYBACK_RATE = 1.8;
-const TABLETOP_INTERFACE_DURATION = 1 / TABLETOP_CAMERA_PLAYBACK_RATE;
-const TABLETOP_INTERFACE_EASE = [0.45, 0, 0.2, 1];
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -85,10 +82,15 @@ class AppErrorBoundary extends React.Component {
 function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, onCameraMoveEnd }) {
   const dashboardIsActive = currentTab === 'dashboard';
   const questIsActive = currentTab === 'quests';
+  const [playingCameraMoveId, setPlayingCameraMoveId] = useState(null);
   const {
     interfaceDashboardIsActive,
     shouldAnimateInterface
-  } = getTabletopTransitionUiState({ currentTab, cameraMove });
+  } = getTabletopTransitionUiState({
+    currentTab,
+    cameraMove,
+    playingCameraMoveId
+  });
 
   return (
     <main className="absolute inset-0 z-10 overflow-visible">
@@ -116,14 +118,23 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
             preload="auto"
             aria-hidden="true"
             onLoadedMetadata={(event) => {
-              event.currentTarget.defaultPlaybackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
-              event.currentTarget.playbackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
+              event.currentTarget.defaultPlaybackRate = TABLETOP_TRANSITION.playbackRate;
+              event.currentTarget.playbackRate = TABLETOP_TRANSITION.playbackRate;
             }}
             onPlay={(event) => {
-              event.currentTarget.playbackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
+              event.currentTarget.playbackRate = TABLETOP_TRANSITION.playbackRate;
             }}
-            onEnded={() => onCameraMoveEnd(cameraMove.id)}
-            onError={() => onCameraMoveEnd(cameraMove.id)}
+            onPlaying={() => {
+              setPlayingCameraMoveId(cameraMove.id);
+            }}
+            onEnded={() => {
+              setPlayingCameraMoveId(null);
+              onCameraMoveEnd(cameraMove.id);
+            }}
+            onError={() => {
+              setPlayingCameraMoveId(null);
+              onCameraMoveEnd(cameraMove.id);
+            }}
             className="pointer-events-none absolute inset-0 z-10 block h-full w-full object-cover"
           />
         )}
@@ -136,8 +147,8 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
           animate={{ left: interfaceDashboardIsActive ? '-100%' : '0%' }}
           transition={shouldAnimateInterface
             ? {
-                duration: TABLETOP_INTERFACE_DURATION,
-                ease: TABLETOP_INTERFACE_EASE
+                duration: TABLETOP_TRANSITION.interfaceDurationSeconds,
+                ease: TABLETOP_TRANSITION.ease
               }
             : { duration: 0 }}
         >

@@ -42,11 +42,18 @@ export const DASHBOARD_HEX_LAYOUT = {
     dy: 128,
     mobileInnerScale: 0.67,
     mobileOuterScale: 0.9,
-    mobileTranslateXVw: 14.1,
-    mobileTranslateYVh: -8,
+    mobileTranslateXVw: 0,
+    mobileTranslateYVh: -9,
     mobilePaddingTopVh: 36,
     desktopInnerScale: 0.52,
     desktopPaddingTopVh: 45
+};
+
+export const TABLETOP_TRANSITION = {
+    sourceDurationSeconds: 1,
+    playbackRate: 1.8,
+    interfaceDurationSeconds: 1 / 1.8,
+    ease: [0.45, 0, 0.2, 1]
 };
 
 export const getDashboardHexPositions = () => {
@@ -63,7 +70,18 @@ export const getDashboardHexPositions = () => {
     ];
 };
 
-export const getTabletopTransitionUiState = ({ currentTab, cameraMove }) => ({
-    interfaceDashboardIsActive: currentTab === 'dashboard',
-    shouldAnimateInterface: Boolean(cameraMove)
-});
+export const getTabletopTransitionUiState = ({
+    currentTab,
+    cameraMove,
+    playingCameraMoveId
+}) => {
+    const cameraMoveIsPlaying = cameraMove?.id === playingCameraMoveId;
+    const visibleTab = cameraMove && !cameraMoveIsPlaying
+        ? cameraMove.fromTab
+        : currentTab;
+
+    return {
+        interfaceDashboardIsActive: visibleTab === 'dashboard',
+        shouldAnimateInterface: cameraMoveIsPlaying
+    };
+};

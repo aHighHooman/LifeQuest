@@ -325,7 +325,6 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
                     className="dashboard-hex-positioner relative h-0 w-0"
                     style={{
                         '--dashboard-hex-mobile-scale': DASHBOARD_HEX_LAYOUT.mobileInnerScale,
-                        '--dashboard-hex-mobile-x': `${DASHBOARD_HEX_LAYOUT.mobileTranslateXVw}vw`,
                         '--dashboard-hex-mobile-y': `${DASHBOARD_HEX_LAYOUT.mobileTranslateYVh}vh`,
                         '--dashboard-hex-desktop-scale': DASHBOARD_HEX_LAYOUT.desktopInnerScale
                     }}
