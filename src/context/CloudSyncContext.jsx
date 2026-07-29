@@ -28,6 +28,11 @@ const emptyConflict = {
     cloudRevisionId: null
 };
 
+const metadataMatchesIdentity = (metadata, user, dataUid) => (
+    metadata?.uid === user?.uid
+    && (metadata.dataUid || metadata.uid) === dataUid
+);
+
 export const useCloudSync = () => {
     const context = useContext(CloudSyncContext);
     if (!context) throw new Error('useCloudSync must be used within CloudSyncProvider.');
@@ -35,7 +40,7 @@ export const useCloudSync = () => {
 };
 
 export const CloudSyncProvider = ({ children }) => {
-    const { user } = useAuth();
+    const { user, dataUid } = useAuth();
     const { exportAppState, importAppState } = useGame();
     const [enabled, setEnabled] = useState(false);
     const [status, setStatus] = useState('paused');
@@ -47,10 +52,11 @@ export const CloudSyncProvider = ({ children }) => {
     const reconciliationKeyRef = useRef(null);
 
     const persistMeta = useCallback((next = {}) => {
-        if (!user) return;
+        if (!user || !dataUid) return;
 
         const metadata = {
             uid: user.uid,
+            dataUid,
             enabled,
             revisionId: revisionRef.current,
             stateChecksum: stateChecksumRef.current,
@@ -59,7 +65,7 @@ export const CloudSyncProvider = ({ children }) => {
         };
 
         safeSet(CLOUD_SYNC_META_KEY, metadata);
-    }, [enabled, lastSyncedAt, user]);
+    }, [dataUid, enabled, lastSyncedAt, user]);
 
     const markSynced = useCallback((manifest, stateChecksum = manifest.stateChecksum) => {
         const syncedAt = new Date().toISOString();
@@ -79,17 +85,17 @@ export const CloudSyncProvider = ({ children }) => {
     const saveLocalSnapshot = useCallback(async (snapshot, expectedRevisionId) => {
         const result = await saveCloudSnapshot({
             db: firebaseDb,
-            uid: user.uid,
+            uid: dataUid,
             snapshot,
             expectedRevisionId,
             kind: 'lifequest'
         });
         markSynced(result, result.stateChecksum);
         return result;
-    }, [markSynced, user]);
+    }, [dataUid, markSynced]);
 
     const reconcile = useCallback(async () => {
-        if (!enabled || !firebaseDb || !user || inFlightRef.current) return;
+        if (!enabled || !firebaseDb || !user || !dataUid || inFlightRef.current) return;
         if (!navigator.onLine) {
             setStatus('offline');
             return;
@@ -102,8 +108,10 @@ export const CloudSyncProvider = ({ children }) => {
             const localSnapshot = exportAppState();
             const localChecksum = await hashPortableSnapshotState(localSnapshot);
             const storedMeta = safeGet(CLOUD_SYNC_META_KEY, null);
-            const validStoredMeta = storedMeta?.uid === user.uid ? storedMeta : null;
-            const cloud = await loadCloudSnapshot({ db: firebaseDb, uid: user.uid });
+            const validStoredMeta = metadataMatchesIdentity(storedMeta, user, dataUid)
+                ? storedMeta
+                : null;
+            const cloud = await loadCloudSnapshot({ db: firebaseDb, uid: dataUid });
 
             if (!cloud || cloud.manifest.kind === 'dummy') {
                 const expectedRevisionId = cloud?.manifest.revisionId || null;
@@ -152,12 +160,19 @@ export const CloudSyncProvider = ({ children }) => {
         } finally {
             inFlightRef.current = false;
         }
-    }, [enabled, exportAppState, importAppState, markSynced, saveLocalSnapshot, user]);
+    }, [dataUid, enabled, exportAppState, importAppState, markSynced, saveLocalSnapshot, user]);
 
     useEffect(() => {
         reconciliationKeyRef.current = null;
+        const storedMeta = safeGet(CLOUD_SYNC_META_KEY, null);
 
-        if (!user) {
+        if (!user || !dataUid) {
+            if (storedMeta) {
+                safeSet(CLOUD_SYNC_META_KEY, {
+                    ...storedMeta,
+                    enabled: false
+                });
+            }
             setEnabled(false);
             setStatus('paused');
             setLastSyncedAt(null);
@@ -166,26 +181,37 @@ export const CloudSyncProvider = ({ children }) => {
             return;
         }
 
-        const storedMeta = safeGet(CLOUD_SYNC_META_KEY, null);
-        const isEnabledForUser = storedMeta?.uid === user.uid && storedMeta.enabled === true;
-
-        revisionRef.current = storedMeta?.uid === user.uid ? storedMeta.revisionId || null : null;
-        stateChecksumRef.current = storedMeta?.uid === user.uid ? storedMeta.stateChecksum || null : null;
-        setLastSyncedAt(storedMeta?.uid === user.uid ? storedMeta.lastSyncedAt || null : null);
-        setEnabled(isEnabledForUser);
-        setStatus(isEnabledForUser ? 'checking' : 'paused');
-    }, [user]);
+        const validStoredMeta = metadataMatchesIdentity(storedMeta, user, dataUid)
+            ? storedMeta
+            : null;
+        revisionRef.current = validStoredMeta?.revisionId || null;
+        stateChecksumRef.current = validStoredMeta?.stateChecksum || null;
+        setLastSyncedAt(validStoredMeta?.lastSyncedAt || null);
+        safeSet(CLOUD_SYNC_META_KEY, {
+            ...(validStoredMeta || {}),
+            uid: user.uid,
+            dataUid,
+            enabled: false,
+            revisionId: validStoredMeta?.revisionId || null,
+            stateChecksum: validStoredMeta?.stateChecksum || null,
+            lastSyncedAt: validStoredMeta?.lastSyncedAt || null
+        });
+        setEnabled(false);
+        setStatus('paused');
+    }, [dataUid, user]);
 
     useEffect(() => {
-        const reconciliationKey = enabled && user ? `${user.uid}:enabled` : null;
+        const reconciliationKey = enabled && user && dataUid
+            ? `${user.uid}:${dataUid}:enabled`
+            : null;
         if (!reconciliationKey || reconciliationKeyRef.current === reconciliationKey) return;
 
         reconciliationKeyRef.current = reconciliationKey;
         reconcile();
-    }, [enabled, reconcile, user]);
+    }, [dataUid, enabled, reconcile, user]);
 
     useEffect(() => {
-        if (!enabled || !user || !firebaseDb || status !== 'synced') return undefined;
+        if (!enabled || !user || !dataUid || !firebaseDb || status !== 'synced') return undefined;
 
         const timeoutId = window.setTimeout(async () => {
             if (inFlightRef.current) return;
@@ -205,7 +231,7 @@ export const CloudSyncProvider = ({ children }) => {
                 await saveLocalSnapshot(snapshot, revisionRef.current);
             } catch (error) {
                 if (error instanceof CloudSnapshotConflictError) {
-                    const cloud = await loadCloudSnapshot({ db: firebaseDb, uid: user.uid });
+                    const cloud = await loadCloudSnapshot({ db: firebaseDb, uid: dataUid });
                     setConflict({
                         cloudSnapshot: cloud?.snapshot || null,
                         cloudRevisionId: cloud?.manifest.revisionId || null
@@ -221,7 +247,7 @@ export const CloudSyncProvider = ({ children }) => {
         }, CLOUD_SAVE_DEBOUNCE_MS);
 
         return () => window.clearTimeout(timeoutId);
-    }, [enabled, exportAppState, saveLocalSnapshot, status, user]);
+    }, [dataUid, enabled, exportAppState, saveLocalSnapshot, status, user]);
 
     useEffect(() => {
         const handleOnline = () => {
@@ -240,11 +266,11 @@ export const CloudSyncProvider = ({ children }) => {
     }, [enabled, reconcile]);
 
     const enable = useCallback(() => {
-        if (!user) return;
+        if (!user || !dataUid) return;
         setEnabled(true);
         setStatus('checking');
         persistMeta({ enabled: true });
-    }, [persistMeta, user]);
+    }, [dataUid, persistMeta, user]);
 
     const disable = useCallback(() => {
         setEnabled(false);
@@ -266,7 +292,7 @@ export const CloudSyncProvider = ({ children }) => {
     }, [conflict, importAppState, markSynced]);
 
     const useDeviceCopy = useCallback(async () => {
-        if (!user || !conflict.cloudRevisionId) return;
+        if (!user || !dataUid || !conflict.cloudRevisionId) return;
 
         inFlightRef.current = true;
         setStatus('saving');
@@ -278,7 +304,7 @@ export const CloudSyncProvider = ({ children }) => {
         } finally {
             inFlightRef.current = false;
         }
-    }, [conflict.cloudRevisionId, exportAppState, saveLocalSnapshot, user]);
+    }, [conflict.cloudRevisionId, dataUid, exportAppState, saveLocalSnapshot, user]);
 
     const value = useMemo(() => ({
         enabled,

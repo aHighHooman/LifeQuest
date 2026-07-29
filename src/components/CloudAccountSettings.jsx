@@ -20,11 +20,12 @@ const AUTH_ERROR_MESSAGES = {
     'auth/invalid-credential': 'The email or password is incorrect.',
     'auth/invalid-email': 'Enter a valid email address.',
     'auth/too-many-requests': 'Firebase temporarily blocked sign-in attempts. Wait a while and try again.',
-    'auth/user-disabled': 'This Firebase account has been disabled.'
+    'auth/user-disabled': 'This Firebase account has been disabled.',
+    'auth/unauthorized-surface': 'This account is not authorized for the normal LifeQuest interface.'
 };
 
 const CloudAccountSettings = ({ exportAppState, importAppState }) => {
-    const { user, status, isConfigured, signIn, signOut } = useAuth();
+    const { user, dataUid, status, isConfigured, signIn, signOut } = useAuth();
     const cloudSync = useCloudSync();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -48,7 +49,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
         try {
             await signIn(email, password);
             setPassword('');
-            setMessage('Signed in. Cloud state access is not implemented or enabled yet.');
+            setMessage('Signed in. Protected cloud controls are available below.');
         } catch (error) {
             setMessage(AUTH_ERROR_MESSAGES[error?.code] || 'Sign-in failed. Check Firebase Authentication setup and try again.');
         } finally {
@@ -71,13 +72,13 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
     };
 
     const handleSecurityTest = async () => {
-        if (!firebaseDb || !user) return;
+        if (!firebaseDb || !user || !dataUid) return;
 
         setSecurityStatus('testing');
         setMessage('');
 
         try {
-            const snapshot = await getDoc(doc(firebaseDb, 'users', user.uid, 'sync', 'current'));
+            const snapshot = await getDoc(doc(firebaseDb, 'users', dataUid, 'sync', 'current'));
             setSecurityStatus('passed');
             setMessage(snapshot.exists()
                 ? 'Protected Firestore access confirmed. A cloud manifest already exists.'
@@ -92,7 +93,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
     };
 
     const handleWriteDummy = async () => {
-        if (!firebaseDb || !user) return;
+        if (!firebaseDb || !user || !dataUid) return;
 
         setDummyStatus('writing');
         setMessage('');
@@ -100,7 +101,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
         try {
             const result = await saveCloudSnapshot({
                 db: firebaseDb,
-                uid: user.uid,
+                uid: dataUid,
                 expectedRevisionId: cloudRevisionId,
                 kind: 'dummy',
                 snapshot: {
@@ -122,13 +123,13 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
     };
 
     const handleReadDummy = async () => {
-        if (!firebaseDb || !user) return;
+        if (!firebaseDb || !user || !dataUid) return;
 
         setDummyStatus('reading');
         setMessage('');
 
         try {
-            const result = await loadCloudSnapshot({ db: firebaseDb, uid: user.uid });
+            const result = await loadCloudSnapshot({ db: firebaseDb, uid: dataUid });
             if (!result) {
                 setCloudRevisionId(null);
                 setDummyStatus('empty');
@@ -153,7 +154,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
     };
 
     const handlePrepareRealUpload = async () => {
-        if (!firebaseDb || !user) return;
+        if (!firebaseDb || !user || !dataUid) return;
 
         setTransferStatus('preparing');
         setMessage('');
@@ -161,7 +162,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
         setPreparedLocalSummary(null);
 
         try {
-            const existingCloud = await loadCloudSnapshot({ db: firebaseDb, uid: user.uid });
+            const existingCloud = await loadCloudSnapshot({ db: firebaseDb, uid: dataUid });
             const snapshot = exportAppState();
             const bytes = encodeSnapshot(snapshot).byteLength;
 
@@ -181,7 +182,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
     };
 
     const handleUploadRealSnapshot = async () => {
-        if (!firebaseDb || !user || !preparedLocalSnapshot) return;
+        if (!firebaseDb || !user || !dataUid || !preparedLocalSnapshot) return;
 
         const confirmed = window.confirm(
             'Upload the previewed LifeQuest state to your private Firestore account? This sends quests, habits, statistics, calorie history, coin history, budget, groceries, and settings.'
@@ -194,7 +195,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
         try {
             const result = await saveCloudSnapshot({
                 db: firebaseDb,
-                uid: user.uid,
+                uid: dataUid,
                 snapshot: preparedLocalSnapshot,
                 expectedRevisionId: cloudRevisionId,
                 kind: 'lifequest'
@@ -214,7 +215,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
     };
 
     const handleInspectRealCloud = async () => {
-        if (!firebaseDb || !user) return;
+        if (!firebaseDb || !user || !dataUid) return;
 
         setTransferStatus('inspecting');
         setMessage('');
@@ -222,7 +223,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
         setCloudSummary(null);
 
         try {
-            const result = await loadCloudSnapshot({ db: firebaseDb, uid: user.uid });
+            const result = await loadCloudSnapshot({ db: firebaseDb, uid: dataUid });
             if (!result) {
                 setCloudRevisionId(null);
                 setTransferStatus('empty');

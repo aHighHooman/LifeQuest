@@ -1,10 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { buildLlmSnapshot, getDayTimeRemaining } from '../utils/llmInterface';
+import { useAuth } from '../context/AuthContext.jsx';
+import { useCloudSync } from '../context/CloudSyncContext.jsx';
+import { firebaseDb } from '../services/firebase.js';
+import { loadCloudSnapshot } from '../utils/cloudSnapshot.js';
+import {
+    AUTH_SURFACES,
+    getLifeQuestAccountAccess
+} from '../constants/cloudAccess.js';
+import {
+    applyCloudSnapshotToDevice,
+    buildLlmSnapshot,
+    getDayTimeRemaining
+} from '../utils/llmInterface';
 
 const inputClassName = 'w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white';
 const buttonClassName = 'rounded border border-slate-500 bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50';
 const dangerButtonClassName = 'rounded border border-red-700 bg-red-950 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-900';
+const AUTH_ERROR_MESSAGES = {
+    'auth/invalid-credential': 'The email or password is incorrect.',
+    'auth/invalid-email': 'Enter a valid email address.',
+    'auth/too-many-requests': 'Firebase temporarily blocked sign-in attempts. Wait before trying again.',
+    'auth/user-disabled': 'This Firebase account has been disabled.',
+    'auth/unauthorized-surface': 'This account is not authorized for the LifeQuest LLM interface.'
+};
 
 const formatTimeRemaining = ({ hours, minutes, seconds }) =>
     `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -99,10 +118,29 @@ const LlmInterface = () => {
         completeHabit,
         skipHabitCycle,
         toggleHabitActivation,
-        deleteHabit
+        deleteHabit,
+        importAppState
     } = useGame();
+    const {
+        user,
+        dataUid,
+        status: authStatus,
+        isConfigured: isAuthConfigured,
+        signIn,
+        signOut
+    } = useAuth();
+    const {
+        enabled: isCloudSyncEnabled,
+        status: cloudSyncStatus,
+        lastSyncedAt,
+        enable: enableCloudSync,
+        disable: disableCloudSync
+    } = useCloudSync();
     const [now, setNow] = useState(() => new Date());
     const [message, setMessage] = useState('Ready.');
+    const [isAuthBusy, setIsAuthBusy] = useState(false);
+    const [pendingCloudSyncUid, setPendingCloudSyncUid] = useState(null);
+    const [cloudReadyUid, setCloudReadyUid] = useState(null);
 
     useEffect(() => {
         const intervalId = window.setInterval(() => setNow(new Date()), 1000);
@@ -128,12 +166,31 @@ const LlmInterface = () => {
         };
     }, []);
 
+    useEffect(() => {
+        if (!pendingCloudSyncUid || user?.uid !== pendingCloudSyncUid) return undefined;
+
+        // Let CloudSyncProvider finish processing the new authenticated user first.
+        const timeoutId = window.setTimeout(() => {
+            enableCloudSync();
+            setPendingCloudSyncUid(null);
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [enableCloudSync, pendingCloudSyncUid, user]);
+
+    useEffect(() => {
+        if (user) return;
+        setCloudReadyUid(null);
+        setPendingCloudSyncUid(null);
+    }, [user]);
+
     const snapshot = useMemo(
         () => buildLlmSnapshot({ stats, quests, habits }, now),
         [stats, quests, habits, now]
     );
     const jsonSnapshot = useMemo(() => JSON.stringify(snapshot, null, 2), [snapshot]);
     const timeRemaining = getDayTimeRemaining(now);
+    const isCloudDataReady = Boolean(user && dataUid && cloudReadyUid === user.uid);
 
     const runAction = (action, successMessage) => {
         action();
@@ -185,20 +242,183 @@ const LlmInterface = () => {
         runAction(() => deleteHabit(id), `Permanently deleted protocol "${title}".`);
     };
 
+    const loadAuthenticatedCloudState = async (authenticatedUser) => {
+        if (!firebaseDb || !authenticatedUser) {
+            throw new Error('Firebase cloud storage is not configured.');
+        }
+
+        const access = getLifeQuestAccountAccess(authenticatedUser.uid, AUTH_SURFACES.LLM);
+        if (!access) {
+            throw new Error('This account is not authorized for the LifeQuest LLM interface.');
+        }
+
+        const cloud = await loadCloudSnapshot({
+            db: firebaseDb,
+            uid: access.dataUid
+        });
+
+        const result = applyCloudSnapshotToDevice(cloud, importAppState);
+
+        if (result.status === 'empty') {
+            setCloudReadyUid(null);
+            throw new Error('The owner account does not have a LifeQuest cloud copy yet. Upload or synchronize it from the normal interface before using the LLM interface.');
+        }
+
+        setCloudReadyUid(authenticatedUser.uid);
+        setPendingCloudSyncUid(authenticatedUser.uid);
+        setMessage(`Signed in and loaded the verified cloud copy. Previous device data was backed up locally as ${result.backupKey}. Cloud sync is being enabled.`);
+    };
+
+    const handleSignInAndLoad = async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const data = new FormData(form);
+        const email = `${data.get('email') || ''}`.trim();
+        const password = `${data.get('password') || ''}`;
+
+        setIsAuthBusy(true);
+        setCloudReadyUid(null);
+        setMessage('Signing in to Firebase and checking the cloud copy…');
+
+        try {
+            const credential = await signIn(email, password);
+            form.reset();
+            await loadAuthenticatedCloudState(credential.user);
+        } catch (error) {
+            setMessage(
+                AUTH_ERROR_MESSAGES[error?.code]
+                || error?.message
+                || 'Sign-in or cloud loading failed. Device data was not changed.'
+            );
+        } finally {
+            setIsAuthBusy(false);
+        }
+    };
+
+    const handleReloadCloud = async () => {
+        if (!user) return;
+
+        setIsAuthBusy(true);
+        setCloudReadyUid(null);
+        setMessage('Checking and loading the latest verified cloud copy…');
+
+        try {
+            if (isCloudSyncEnabled) disableCloudSync();
+            await loadAuthenticatedCloudState(user);
+        } catch (error) {
+            setMessage(error?.message || 'The cloud copy could not be loaded. Device data was not changed.');
+        } finally {
+            setIsAuthBusy(false);
+        }
+    };
+
+    const handleSignOut = async () => {
+        setIsAuthBusy(true);
+        setMessage('Signing out…');
+
+        try {
+            if (isCloudSyncEnabled) disableCloudSync();
+            await signOut();
+            setPendingCloudSyncUid(null);
+            setCloudReadyUid(null);
+            setMessage('Signed out. LifeQuest data and actions are locked.');
+        } catch {
+            setMessage('Sign-out failed. Try again.');
+        } finally {
+            setIsAuthBusy(false);
+        }
+    };
+
     return (
-        <main className="h-screen overflow-y-auto bg-slate-950 text-slate-100">
+        <main data-interface="lifequest-llm-text-v2" className="h-screen overflow-y-auto bg-slate-950 text-slate-100">
             <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
                 <header>
                     <h1 className="text-3xl font-bold">LifeQuest Text Interface</h1>
                     <p className="mt-2 max-w-3xl text-sm text-slate-300">
-                        Semantic, low-decoration access to dashboard, quest, and protocol state and actions.
-                        This URL is unlisted but is not authentication.
+                        Semantic HTML access to authentication, cloud state, dashboard, quests, protocols, and actions.
+                        Text-based browser agents can use this page without screenshots. Access requires the dedicated LLM Firebase account.
                     </p>
                     <p className="mt-2 font-mono text-xs text-slate-400">Snapshot generated: {snapshot.interface.generatedAt}</p>
                     <div className="mt-4"><StatusMessage message={message} /></div>
                 </header>
 
-                <section aria-labelledby="dashboard-heading" className="mt-8 border-t border-slate-700 pt-6">
+                <nav aria-label="Text interface sections" className="mt-6 border-y border-slate-700 py-3 text-sm">
+                    <span className="mr-3 text-slate-400">Sections:</span>
+                    <a className="mr-3 underline" href="#account">Account and cloud</a>
+                    {isCloudDataReady ? (
+                        <>
+                            <a className="mr-3 underline" href="#dashboard">Dashboard and today</a>
+                            <a className="mr-3 underline" href="#quests">Quests</a>
+                            <a className="mr-3 underline" href="#protocols">Protocols</a>
+                            <a className="underline" href="#machine-state">Optional JSON</a>
+                        </>
+                    ) : null}
+                </nav>
+
+                <section id="account" aria-labelledby="account-heading" aria-busy={isAuthBusy} className="mt-8 border-t border-slate-700 pt-6">
+                    <h2 id="account-heading" className="text-2xl font-bold">Account and cloud</h2>
+                    <p className="mt-1 text-sm text-slate-400">
+                        Signing in with the dedicated LLM account immediately verifies and loads the owner&apos;s LifeQuest cloud copy.
+                        A local backup is created before device data is replaced. The password is sent directly to Firebase Authentication and is not included in page state or JSON.
+                    </p>
+                    <dl className="mt-4 grid gap-x-5 gap-y-1 text-sm sm:grid-cols-2">
+                        <div><dt className="inline text-slate-400">Authentication status: </dt><dd className="inline">{authStatus}</dd></div>
+                        <div><dt className="inline text-slate-400">Cloud sync status: </dt><dd className="inline">{cloudSyncStatus}</dd></div>
+                        <div><dt className="inline text-slate-400">Cloud sync enabled: </dt><dd className="inline">{isCloudSyncEnabled ? 'yes' : 'no'}</dd></div>
+                        <div><dt className="inline text-slate-400">Last synchronized: </dt><dd className="inline">{lastSyncedAt || 'never on this device'}</dd></div>
+                        <div><dt className="inline text-slate-400">Verified cloud data loaded: </dt><dd className="inline">{isCloudDataReady ? 'yes' : 'no'}</dd></div>
+                    </dl>
+
+                    {!isAuthConfigured ? (
+                        <EmptyMessage>Firebase authentication is unavailable in this build, so this interface cannot unlock LifeQuest data.</EmptyMessage>
+                    ) : authStatus === 'loading' ? (
+                        <p className="mt-4 text-sm">Checking the saved Firebase session…</p>
+                    ) : user ? (
+                        <div className="mt-4">
+                            <dl className="space-y-1 text-sm">
+                                <div><dt className="inline text-slate-400">Signed-in email: </dt><dd className="inline">{user.email || 'not provided'}</dd></div>
+                                <div><dt className="inline text-slate-400">Firebase user ID: </dt><dd className="inline break-all font-mono">{user.uid}</dd></div>
+                            </dl>
+                            <div className="mt-3 flex flex-wrap gap-2" aria-label="Authenticated account actions">
+                                <button className={buttonClassName} type="button" disabled={isAuthBusy} onClick={handleReloadCloud}>
+                                    Load latest cloud copy
+                                </button>
+                                <button className={buttonClassName} type="button" disabled={isAuthBusy} onClick={handleSignOut}>
+                                    Sign out
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <form aria-label="Firebase sign in and cloud load" className="mt-4 grid gap-3 rounded border border-slate-700 p-4" onSubmit={handleSignInAndLoad}>
+                            <h3 className="font-bold">Sign in and load cloud data</h3>
+                            <label htmlFor="llm-account-email">Email</label>
+                            <input
+                                id="llm-account-email"
+                                className={inputClassName}
+                                name="email"
+                                type="email"
+                                autoComplete="username"
+                                required
+                            />
+                            <label htmlFor="llm-account-password">Password</label>
+                            <input
+                                id="llm-account-password"
+                                className={inputClassName}
+                                name="password"
+                                type="password"
+                                autoComplete="current-password"
+                                required
+                            />
+                            <button className={buttonClassName} type="submit" disabled={isAuthBusy}>
+                                {isAuthBusy ? 'Signing in and loading…' : 'Sign in and load cloud data'}
+                            </button>
+                        </form>
+                    )}
+                </section>
+
+                {isCloudDataReady ? (
+                    <>
+                <section id="dashboard" aria-labelledby="dashboard-heading" className="mt-8 border-t border-slate-700 pt-6">
                     <h2 id="dashboard-heading" className="text-2xl font-bold">Dashboard</h2>
                     <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Health remaining</dt><dd className="text-xl font-bold">{snapshot.dashboard.health.current} / {snapshot.dashboard.health.maximum}</dd></div>
@@ -225,16 +445,16 @@ const LlmInterface = () => {
                     </section>
                 </section>
 
-                <section aria-labelledby="quests-heading" className="mt-8 border-t border-slate-700 pt-6">
+                <section id="quests" aria-labelledby="quests-heading" className="mt-8 border-t border-slate-700 pt-6">
                     <h2 id="quests-heading" className="text-2xl font-bold">Quests ({snapshot.quests.length})</h2>
                     <form aria-label="Create quest" className="mt-4 grid gap-3 rounded border border-slate-700 p-4 sm:grid-cols-2" onSubmit={handleCreateQuest}>
                         <h3 className="font-bold sm:col-span-2">Create quest</h3>
-                        <label>Title<input className={inputClassName} name="title" required /></label>
-                        <label>Difficulty<select className={inputClassName} name="difficulty" defaultValue="easy"><option value="easy">easy</option><option value="medium">medium</option><option value="hard">hard</option><option value="legendary">legendary</option></select></label>
-                        <label>Due date<input className={inputClassName} name="dueDate" type="date" /></label>
-                        <label>Custom XP (optional)<input className={inputClassName} min="0" name="customXp" type="number" /></label>
-                        <label>Custom coins (optional)<input className={inputClassName} min="0" name="customGold" type="number" /></label>
-                        <label className="sm:col-span-2">Mission brief<textarea className={inputClassName} name="missionBrief" rows="3" /></label>
+                        <label htmlFor="llm-quest-title">Title</label><input id="llm-quest-title" className={inputClassName} name="title" required />
+                        <label htmlFor="llm-quest-difficulty">Difficulty</label><select id="llm-quest-difficulty" className={inputClassName} name="difficulty" defaultValue="easy"><option value="easy">easy</option><option value="medium">medium</option><option value="hard">hard</option><option value="legendary">legendary</option></select>
+                        <label htmlFor="llm-quest-due-date">Due date</label><input id="llm-quest-due-date" className={inputClassName} name="dueDate" type="date" />
+                        <label htmlFor="llm-quest-custom-xp">Custom XP (optional)</label><input id="llm-quest-custom-xp" className={inputClassName} min="0" name="customXp" type="number" />
+                        <label htmlFor="llm-quest-custom-gold">Custom coins (optional)</label><input id="llm-quest-custom-gold" className={inputClassName} min="0" name="customGold" type="number" />
+                        <label htmlFor="llm-quest-brief" className="sm:col-span-2">Mission brief</label><textarea id="llm-quest-brief" className={`${inputClassName} sm:col-span-2`} name="missionBrief" rows="3" />
                         <button className={`${buttonClassName} sm:col-span-2`} type="submit">Create quest</button>
                     </form>
                     {snapshot.quests.length ? (
@@ -254,15 +474,15 @@ const LlmInterface = () => {
                     ) : <div className="mt-4"><EmptyMessage>No quests exist.</EmptyMessage></div>}
                 </section>
 
-                <section aria-labelledby="protocols-heading" className="mt-8 border-t border-slate-700 pt-6">
+                <section id="protocols" aria-labelledby="protocols-heading" className="mt-8 border-t border-slate-700 pt-6">
                     <h2 id="protocols-heading" className="text-2xl font-bold">Protocols ({snapshot.protocols.length})</h2>
                     <form aria-label="Create protocol" className="mt-4 grid gap-3 rounded border border-slate-700 p-4 sm:grid-cols-2" onSubmit={handleCreateProtocol}>
                         <h3 className="font-bold sm:col-span-2">Create protocol</h3>
-                        <label>Title<input className={inputClassName} name="title" required /></label>
-                        <label>Frequency<select className={inputClassName} name="frequency" defaultValue="daily"><option value="daily">daily</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="interval">interval</option></select></label>
-                        <label>Interval days<input className={inputClassName} defaultValue="1" min="1" name="frequencyParam" type="number" /></label>
-                        <label>Completion coin reward<input className={inputClassName} defaultValue="0" min="0" name="completionReward" type="number" /></label>
-                        <label>Passive daily coin reward<input className={inputClassName} defaultValue="0" min="0" name="passiveReward" type="number" /></label>
+                        <label htmlFor="llm-protocol-title">Title</label><input id="llm-protocol-title" className={inputClassName} name="title" required />
+                        <label htmlFor="llm-protocol-frequency">Frequency</label><select id="llm-protocol-frequency" className={inputClassName} name="frequency" defaultValue="daily"><option value="daily">daily</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="interval">interval</option></select>
+                        <label htmlFor="llm-protocol-interval">Interval days</label><input id="llm-protocol-interval" className={inputClassName} defaultValue="1" min="1" name="frequencyParam" type="number" />
+                        <label htmlFor="llm-protocol-completion-reward">Completion coin reward</label><input id="llm-protocol-completion-reward" className={inputClassName} defaultValue="0" min="0" name="completionReward" type="number" />
+                        <label htmlFor="llm-protocol-passive-reward">Passive daily coin reward</label><input id="llm-protocol-passive-reward" className={inputClassName} defaultValue="0" min="0" name="passiveReward" type="number" />
                         <button className={`${buttonClassName} sm:col-span-2`} type="submit">Create protocol</button>
                     </form>
                     {snapshot.protocols.length ? (
@@ -281,11 +501,25 @@ const LlmInterface = () => {
                     ) : <div className="mt-4"><EmptyMessage>No protocols exist.</EmptyMessage></div>}
                 </section>
 
-                <section aria-labelledby="json-heading" className="mt-8 border-t border-slate-700 pb-16 pt-6">
+                <section id="machine-state" aria-labelledby="json-heading" className="mt-8 border-t border-slate-700 pb-16 pt-6">
                     <h2 id="json-heading" className="text-2xl font-bold">Machine-readable state</h2>
-                    <p className="mt-1 text-sm text-slate-400">The same dashboard, today, quest, and protocol data as JSON.</p>
-                    <pre id="lifequest-state-json" data-format="application/json" className="mt-4 overflow-x-auto whitespace-pre-wrap rounded border border-slate-700 bg-black p-4 text-xs text-slate-200">{jsonSnapshot}</pre>
+                    <p className="mt-1 text-sm text-slate-400">
+                        This duplicates the readable state above, so it is collapsed by default to reduce text-agent context usage.
+                    </p>
+                    <details className="mt-4">
+                        <summary className="cursor-pointer font-semibold">Show complete JSON snapshot</summary>
+                        <pre id="lifequest-state-json" data-format="application/json" className="mt-4 overflow-x-auto whitespace-pre-wrap rounded border border-slate-700 bg-black p-4 text-xs text-slate-200">{jsonSnapshot}</pre>
+                    </details>
                 </section>
+                    </>
+                ) : (
+                    <section id="locked" aria-labelledby="locked-heading" className="mt-8 border-t border-slate-700 pb-16 pt-6">
+                        <h2 id="locked-heading" className="text-2xl font-bold">LifeQuest data locked</h2>
+                        <p className="mt-2 text-sm text-slate-300">
+                            Authenticate with the dedicated LLM account and load its verified owner cloud copy to reveal state and actions.
+                        </p>
+                    </section>
+                )}
             </div>
         </main>
     );

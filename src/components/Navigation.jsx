@@ -35,6 +35,8 @@ const animateToTab = (targetTabId, innerRotationMV, outerRotationMV) => {
 const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const contentViewportRef = useRef(null);
+    const locksContentScroll = ['dashboard', 'quests', 'budget', 'protocols'].includes(currentTab);
+    const locksNativePan = currentTab === 'dashboard' || currentTab === 'quests';
 
     // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
 
@@ -179,12 +181,12 @@ const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
             className="flex-1 w-full flex flex-col min-h-0 relative select-none"
             onPan={onPan}
             onPanEnd={onPanEnd}
-            style={{ touchAction: currentTab === 'dashboard' ? 'none' : 'pan-y' }}
+            style={{ touchAction: locksNativePan ? 'none' : 'pan-y' }}
         >
             {/* Main Content Content (Injected) */}
             <div className={clsx(
                 "flex-1 w-full min-h-0 relative z-10 select-text overscroll-none",
-                (currentTab === 'dashboard' || currentTab === 'budget' || currentTab === 'protocols') ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
+                locksContentScroll ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
             )}
                 ref={contentViewportRef}
             >

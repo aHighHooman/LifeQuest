@@ -27,6 +27,19 @@ export const getDayTimeRemaining = (now = new Date()) => {
     };
 };
 
+export const applyCloudSnapshotToDevice = (cloud, importAppState) => {
+    if (!cloud) {
+        return { status: 'empty', backupKey: null };
+    }
+
+    if (cloud.manifest?.kind !== 'lifequest') {
+        throw new Error('The cloud account does not contain a supported LifeQuest snapshot. Device data was not changed.');
+    }
+
+    const { backupKey } = importAppState(cloud.snapshot);
+    return { status: 'loaded', backupKey };
+};
+
 export const buildLlmSnapshot = ({ stats = {}, quests = [], habits = [] }, now = new Date()) => {
     const todayKey = toLocalDateKey(now);
     const normalizedQuests = quests.map((quest) => ({

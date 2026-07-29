@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     LLM_INTERFACE_ROUTE,
+    applyCloudSnapshotToDevice,
     buildLlmSnapshot,
     getDayTimeRemaining,
     isLlmInterfaceLocation
@@ -53,5 +54,31 @@ describe('LLM interface helpers', () => {
         expect(snapshot.dashboard.today.quests).toHaveLength(1);
         expect(snapshot.dashboard.today.protocols).toHaveLength(1);
         expect(snapshot.protocols[0].completedToday).toBe(false);
+    });
+
+    it('only imports supported LifeQuest cloud snapshots', () => {
+        const importedSnapshots = [];
+        const importAppState = (snapshot) => {
+            importedSnapshots.push(snapshot);
+            return { backupKey: 'lq_backup_test' };
+        };
+
+        expect(applyCloudSnapshotToDevice(null, importAppState)).toEqual({
+            status: 'empty',
+            backupKey: null
+        });
+        expect(() => applyCloudSnapshotToDevice({
+            manifest: { kind: 'dummy' },
+            snapshot: { containsLifeQuestState: false }
+        }, importAppState)).toThrow('does not contain a supported LifeQuest snapshot');
+
+        expect(applyCloudSnapshotToDevice({
+            manifest: { kind: 'lifequest' },
+            snapshot: { formatVersion: 3, quests: [] }
+        }, importAppState)).toEqual({
+            status: 'loaded',
+            backupKey: 'lq_backup_test'
+        });
+        expect(importedSnapshots).toEqual([{ formatVersion: 3, quests: [] }]);
     });
 });
