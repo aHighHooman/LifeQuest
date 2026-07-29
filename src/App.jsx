@@ -121,9 +121,9 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
 
       <div className="absolute left-1/2 top-0 h-full w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
         <Motion.div
-          className="absolute left-0 top-0 z-10 flex aspect-[9/10] w-[200%] will-change-transform"
+          className="absolute top-0 z-10 flex aspect-[9/10] w-[200%] will-change-[left]"
           initial={false}
-          animate={{ x: dashboardIsActive ? '-50%' : '0%' }}
+          animate={{ left: dashboardIsActive ? '-100%' : '0%' }}
           transition={cameraMove
             ? {
                 duration: TABLETOP_INTERFACE_DURATION,

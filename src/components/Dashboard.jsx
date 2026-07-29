@@ -170,7 +170,6 @@ const HexNode = ({ node, onClick, index, position }) => {
     // SCALED UP SIZE: w-36 h-40
     return (
         <motion.div
-            layout
             initial={{ scale: 0, opacity: 0, x: position.x, y: position.y }}
             animate={{ scale: 1, opacity: 1, x: position.x, y: position.y }}
             transition={{

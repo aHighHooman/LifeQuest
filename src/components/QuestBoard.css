@@ -226,8 +226,8 @@
     }
 }
 
-/* In the unified two-column tabletop, the transformed stage is wider than one
-   screen. Keep the live Quest deck anchored to its own half of that stage. */
+/* In the unified two-column tabletop, the stage is wider than one screen.
+   Keep the live Quest deck anchored to its own half of that stage. */
 .shared-tabletop-panel .quest-deck-scene {
     position: absolute;
 }
