@@ -3,11 +3,15 @@ import { GameProvider } from './context/GameContext';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
-import { motion as Motion } from 'framer-motion';
+import { AnimatePresence, motion as Motion } from 'framer-motion';
 import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
 import Navigation from './components/Navigation';
 import { isLlmInterfaceLocation } from './utils/llmInterface';
 import { CloudSyncProvider } from './context/CloudSyncContext.jsx';
+import dashboardTabletop from './assets/tabletop/lifequest-dashboard-perspective.webp';
+import questTabletop from './assets/tabletop/lifequest-quests-perspective.webp';
+import dashboardToQuests from './assets/tabletop/lifequest-dashboard-to-quests.mp4';
+import questsToDashboard from './assets/tabletop/lifequest-quests-to-dashboard.mp4';
 
 const screenLoaders = {
   dashboard: () => import('./components/Dashboard'),
@@ -36,6 +40,11 @@ const HabitTracker = React.lazy(() => loadScreen('protocols'));
 const BudgetView = React.lazy(() => loadScreen('budget'));
 const CalorieTracker = React.lazy(() => loadScreen('calories'));
 const LlmInterface = React.lazy(() => import('./components/LlmInterface'));
+
+const TABLETOP_TABS = new Set(['dashboard', 'quests']);
+const TABLETOP_CAMERA_PLAYBACK_RATE = 1.8;
+const TABLETOP_INTERFACE_DURATION = 1 / TABLETOP_CAMERA_PLAYBACK_RATE;
+const TABLETOP_INTERFACE_EASE = [0.45, 0, 0.2, 1];
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -72,8 +81,106 @@ class AppErrorBoundary extends React.Component {
   }
 }
 
-function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
+function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, onCameraMoveEnd }) {
+  const dashboardIsActive = currentTab === 'dashboard';
+  const questIsActive = currentTab === 'quests';
+
+  return (
+    <main className="absolute inset-0 z-10 overflow-visible">
+      <div className="absolute left-1/2 top-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
+        <img
+          src={dashboardIsActive ? dashboardTabletop : questTabletop}
+          alt=""
+          draggable="false"
+          className="pointer-events-none absolute inset-0 block h-full w-full select-none object-cover"
+        />
+
+        {cameraMove && (
+          <video
+            key={cameraMove.id}
+            src={cameraMove.source}
+            poster={cameraMove.poster}
+            autoPlay
+            muted
+            playsInline
+            preload="auto"
+            aria-hidden="true"
+            onLoadedMetadata={(event) => {
+              event.currentTarget.defaultPlaybackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
+              event.currentTarget.playbackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
+            }}
+            onPlay={(event) => {
+              event.currentTarget.playbackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
+            }}
+            onEnded={() => onCameraMoveEnd(cameraMove.id)}
+            onError={() => onCameraMoveEnd(cameraMove.id)}
+            className="pointer-events-none absolute inset-0 z-10 block h-full w-full object-cover"
+          />
+        )}
+      </div>
+
+      <div className="absolute left-1/2 top-0 h-full w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
+        <Motion.div
+          className="absolute left-0 top-0 z-10 flex aspect-[9/10] w-[200%] will-change-transform"
+          initial={false}
+          animate={{ x: dashboardIsActive ? '-50%' : '0%' }}
+          transition={cameraMove
+            ? {
+                duration: TABLETOP_INTERFACE_DURATION,
+                ease: TABLETOP_INTERFACE_EASE
+              }
+            : { duration: 0 }}
+        >
+          <section
+            className="shared-tabletop-panel relative h-full w-1/2 shrink-0 overflow-visible"
+            aria-hidden={!questIsActive}
+            style={{ pointerEvents: questIsActive ? 'auto' : 'none' }}
+          >
+            <Profiler id="screen:quests" onRender={onProfileRender}>
+              <React.Suspense fallback={null}>
+                <QuestBoard showTabletopBackdrop={false} />
+              </React.Suspense>
+            </Profiler>
+          </section>
+
+          <section
+            className="shared-tabletop-panel relative h-full w-1/2 shrink-0 overflow-visible"
+            aria-hidden={!dashboardIsActive}
+            style={{ pointerEvents: dashboardIsActive ? 'auto' : 'none' }}
+          >
+            <Profiler id="screen:dashboard" onRender={onProfileRender}>
+              <React.Suspense fallback={null}>
+                <Dashboard
+                  onTabChange={setCurrentTab}
+                  onOpenSettings={onOpenSettings}
+                  showTabletopBackdrop={false}
+                />
+              </React.Suspense>
+            </Profiler>
+          </section>
+        </Motion.div>
+
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-20"
+          style={{
+            background: 'radial-gradient(ellipse 92% 84% at 50% 40%, transparent 58%, rgba(0, 0, 0, 0.18) 100%)'
+          }}
+        />
+      </div>
+    </main>
+  );
+}
+
+function AppContent({
+  currentTab,
+  setCurrentTab,
+  pendingTabSwitchRef,
+  tabletopCameraMove,
+  onTabletopCameraMoveEnd
+}) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const isTabletop = TABLETOP_TABS.has(currentTab);
 
   useEffect(() => {
     endTrackedSpan('app-bootstrap', { initialTab: currentTab });
@@ -89,27 +196,46 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
 
   return (
     <AppErrorBoundary>
-      <div className={`h-screen bg-game-bg text-game-text bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] ${currentTab === 'quests' ? 'from-[#1d3b32] via-[#0b1714] to-black' : 'from-slate-800 via-game-bg to-black'} bg-fixed font-sans selection:bg-game-accent selection:text-slate-900 overflow-hidden flex flex-col`}>
+      <div className="relative flex h-screen flex-col overflow-hidden bg-[#020706] font-sans text-game-text selection:bg-game-accent selection:text-slate-900">
+        {!isTabletop && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-game-bg to-black"
+          />
+        )}
+
         <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
         <Navigation currentTab={currentTab} onTabChange={setCurrentTab} onPreloadTab={preloadScreen}>
-          <div className={`relative z-10 mx-auto flex min-h-full w-full max-w-none flex-col px-0 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-2 md:max-w-4xl md:pl-24 md:pr-8 md:pt-[calc(0.75rem+env(safe-area-inset-top))] ${currentTab === 'calories' ? 'bg-black md:bg-transparent' : ''}`}>
-            <Motion.main
-              className="flex-1 flex flex-col relative z-10"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Profiler id={`screen:${currentTab}`} onRender={onProfileRender}>
-                <React.Suspense fallback={null}>
-                  {currentTab === 'dashboard' && <Dashboard onTabChange={setCurrentTab} onOpenSettings={() => setIsSettingsOpen(true)} />}
-                  {currentTab === 'quests' && <QuestBoard />}
-                  {currentTab === 'protocols' && <HabitTracker />}
-                  {currentTab === 'budget' && <BudgetView />}
-                  {currentTab === 'calories' && <CalorieTracker />}
-                </React.Suspense>
-              </Profiler>
-            </Motion.main>
+          <div className={`relative z-10 mx-auto flex h-full min-h-full w-full max-w-none flex-col px-0 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-2 md:max-w-4xl md:pl-24 md:pr-8 md:pt-[calc(0.75rem+env(safe-area-inset-top))] ${currentTab === 'calories' ? 'bg-black md:bg-transparent' : ''}`}>
+            {isTabletop ? (
+              <TabletopStage
+                currentTab={currentTab}
+                setCurrentTab={setCurrentTab}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                cameraMove={tabletopCameraMove}
+                onCameraMoveEnd={onTabletopCameraMoveEnd}
+              />
+            ) : (
+            <AnimatePresence initial={false} mode="wait">
+              <Motion.main
+                key={currentTab}
+                className="absolute inset-0 z-10 flex flex-col will-change-transform"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.32, ease: 'easeOut' }}
+              >
+                <Profiler id={`screen:${currentTab}`} onRender={onProfileRender}>
+                  <React.Suspense fallback={null}>
+                    {currentTab === 'protocols' && <HabitTracker />}
+                    {currentTab === 'budget' && <BudgetView />}
+                    {currentTab === 'calories' && <CalorieTracker />}
+                  </React.Suspense>
+                </Profiler>
+              </Motion.main>
+            </AnimatePresence>
+            )}
           </div>
         </Navigation>
       </div>
@@ -119,7 +245,9 @@ function AppContent({ currentTab, setCurrentTab, pendingTabSwitchRef }) {
 
 function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [tabletopCameraMove, setTabletopCameraMove] = useState(null);
   const pendingTabSwitchRef = useRef(null);
+  const cameraMoveIdRef = useRef(0);
   const isLlmInterface = isLlmInterfaceLocation();
 
   useEffect(() => {
@@ -128,13 +256,32 @@ function App() {
   }, []);
 
   const handleTabChange = useCallback((nextTab) => {
-    setCurrentTab(prevTab => {
-      if (prevTab === nextTab) return prevTab;
+    if (currentTab === nextTab) return;
 
-      pendingTabSwitchRef.current = nextTab;
-      beginTrackedSpan('tab-switch', { from: prevTab, to: nextTab });
-      return nextTab;
-    });
+    const prefersReducedMotion = typeof window !== 'undefined'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const isTabletopMove = TABLETOP_TABS.has(currentTab) && TABLETOP_TABS.has(nextTab);
+    if (isTabletopMove && !prefersReducedMotion) {
+      cameraMoveIdRef.current += 1;
+      const toQuests = nextTab === 'quests';
+      setTabletopCameraMove({
+        id: cameraMoveIdRef.current,
+        source: toQuests ? dashboardToQuests : questsToDashboard,
+        poster: toQuests ? dashboardTabletop : questTabletop
+      });
+    } else {
+      setTabletopCameraMove(null);
+    }
+
+    pendingTabSwitchRef.current = nextTab;
+    beginTrackedSpan('tab-switch', { from: currentTab, to: nextTab });
+    setCurrentTab(nextTab);
+  }, [currentTab]);
+
+  const handleTabletopCameraMoveEnd = useCallback((cameraMoveId) => {
+    setTabletopCameraMove((activeMove) => (
+      activeMove?.id === cameraMoveId ? null : activeMove
+    ));
   }, []);
 
     return (
@@ -143,7 +290,15 @@ function App() {
         <CloudSyncProvider>
           {isLlmInterface
             ? <AppErrorBoundary><React.Suspense fallback={null}><LlmInterface /></React.Suspense></AppErrorBoundary>
-            : <AppContent currentTab={currentTab} setCurrentTab={handleTabChange} pendingTabSwitchRef={pendingTabSwitchRef} />}
+            : (
+              <AppContent
+                currentTab={currentTab}
+                setCurrentTab={handleTabChange}
+                pendingTabSwitchRef={pendingTabSwitchRef}
+                tabletopCameraMove={tabletopCameraMove}
+                onTabletopCameraMoveEnd={handleTabletopCameraMoveEnd}
+              />
+            )}
         </CloudSyncProvider>
       </GameProvider>
     </BudgetProvider>

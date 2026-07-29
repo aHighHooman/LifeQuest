@@ -10,29 +10,33 @@ import { getTodayISO } from '../utils/dateUtils';
 import { isHabitDueForFocus } from '../domain/gameState';
 import healthInjectorScene from '../assets/dashboard/health-injector-tabletop-blender.webp';
 
-const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick }) => {
+const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, showBackdrop = true }) => {
     const displayPercentage = Math.round(percentage);
     const activeSegments = Math.round(percentage / 10);
     const coinLabel = String(coins);
     // AppContent reserves the status-bar safe area for interactive content. The
     // artwork is a screen backdrop, though, so it must cancel that inset or the
     // shell gradient becomes visible as a strip above the scene on iOS.
-    const screenBackdropTop = 'calc(-0.5rem - env(safe-area-inset-top))';
+    const screenBackdropTop = showBackdrop
+        ? 'calc(-0.5rem - env(safe-area-inset-top))'
+        : '0px';
 
     return (
         <>
             {/* The Blender plate is the dashboard's ground plane, not a floating prop vignette. */}
-            <div
-                className="pointer-events-none absolute left-1/2 z-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden"
-                style={{ top: screenBackdropTop }}
-            >
-                <img
-                    src={healthInjectorScene}
-                    alt=""
-                    draggable="false"
-                    className="block h-full w-full select-none"
-                />
-            </div>
+            {showBackdrop && (
+                <div
+                    className="pointer-events-none absolute left-1/2 z-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden"
+                    style={{ top: screenBackdropTop }}
+                >
+                    <img
+                        src={healthInjectorScene}
+                        alt=""
+                        draggable="false"
+                        className="block h-full w-full select-none"
+                    />
+                </div>
+            )}
 
             {/* This second, transparent coordinate plane keeps only the physical screen interactive. */}
             <div
@@ -43,7 +47,7 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick })
                 type="button"
                 onClick={onCapacityClick}
                 aria-label={`Open health tracker. Capacity ${displayPercentage} percent.`}
-                className="pointer-events-auto absolute left-[46.5%] top-[17.7%] flex h-[5.8%] w-[27%] origin-center rotate-[30deg] cursor-pointer flex-col justify-center overflow-hidden border-0 bg-transparent px-[1.4%] font-game text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/80"
+                className="pointer-events-auto absolute left-[47.4%] top-[22.5%] flex h-[3.8%] w-[27%] origin-center rotate-[30deg] cursor-pointer flex-col justify-center overflow-hidden border-0 bg-transparent px-[1.2%] font-game text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/80"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.55, ease: 'easeOut' }}
@@ -330,7 +334,7 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
     );
 };
 
-const Dashboard = ({ onTabChange, onOpenSettings }) => {
+const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true }) => {
     const { stats, quests, habits, completeQuest, completeHabit } = useGame();
     const { calories } = useGameCalories();
     const [showStats, setShowStats] = useState(false);
@@ -409,6 +413,7 @@ const Dashboard = ({ onTabChange, onOpenSettings }) => {
                 coins={stats.gold}
                 onCapacityClick={() => onTabChange('calories')}
                 onCoinsClick={() => onTabChange('budget')}
+                showBackdrop={showTabletopBackdrop}
             />
 
             {/* TUNING PARAMETER: Top Offset (Move content down) 

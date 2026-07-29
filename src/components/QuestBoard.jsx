@@ -445,7 +445,7 @@ const LogModal = ({ title, items, onClose, type, onRestore }) => {
     );
 };
 
-const QuestBoard = () => {
+const QuestBoard = ({ showTabletopBackdrop = true }) => {
     const { quests, addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, undoCompleteQuest } = useGame();
 
     // Form States
@@ -572,9 +572,11 @@ const QuestBoard = () => {
                 }
             }}
         >
-            <div className="quest-board-tabletop-scene" aria-hidden="true">
-                <img src={questTabletopBase} alt="" draggable="false" />
-            </div>
+            {showTabletopBackdrop && (
+                <div className="quest-board-tabletop-scene" aria-hidden="true">
+                    <img src={questTabletopBase} alt="" draggable="false" />
+                </div>
+            )}
             <div className="flex justify-between items-center mb-5 px-6" style={{ touchAction: 'none' }}>
                 <div>
                     <h2 className="quest-board-title text-3xl font-game font-bold tracking-widest uppercase">Active Quests</h2>
