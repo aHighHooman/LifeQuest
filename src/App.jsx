@@ -84,9 +84,19 @@ class AppErrorBoundary extends React.Component {
 function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, onCameraMoveEnd }) {
   const dashboardIsActive = currentTab === 'dashboard';
   const questIsActive = currentTab === 'quests';
+  const [playingCameraMoveId, setPlayingCameraMoveId] = useState(null);
+  const cameraMoveIsPlaying = cameraMove?.id === playingCameraMoveId;
+  const interfaceDashboardIsActive = cameraMove && !cameraMoveIsPlaying
+    ? cameraMove.fromTab === 'dashboard'
+    : dashboardIsActive;
 
   return (
     <main className="absolute inset-0 z-10 overflow-visible">
+      <div className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0" aria-hidden="true">
+        <video src={dashboardToQuests} preload="auto" muted playsInline />
+        <video src={questsToDashboard} preload="auto" muted playsInline />
+      </div>
+
       <div className="absolute left-1/2 top-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
         <img
           src={dashboardIsActive ? dashboardTabletop : questTabletop}
@@ -108,12 +118,20 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
             onLoadedMetadata={(event) => {
               event.currentTarget.defaultPlaybackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
               event.currentTarget.playbackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
+              setPlayingCameraMoveId(cameraMove.id);
             }}
             onPlay={(event) => {
               event.currentTarget.playbackRate = TABLETOP_CAMERA_PLAYBACK_RATE;
+              setPlayingCameraMoveId(cameraMove.id);
             }}
-            onEnded={() => onCameraMoveEnd(cameraMove.id)}
-            onError={() => onCameraMoveEnd(cameraMove.id)}
+            onEnded={() => {
+              setPlayingCameraMoveId(null);
+              onCameraMoveEnd(cameraMove.id);
+            }}
+            onError={() => {
+              setPlayingCameraMoveId(null);
+              onCameraMoveEnd(cameraMove.id);
+            }}
             className="pointer-events-none absolute inset-0 z-10 block h-full w-full object-cover"
           />
         )}
@@ -123,8 +141,8 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
         <Motion.div
           className="absolute top-0 z-10 flex aspect-[9/10] w-[200%] will-change-[left]"
           initial={false}
-          animate={{ left: dashboardIsActive ? '-100%' : '0%' }}
-          transition={cameraMove
+          animate={{ left: interfaceDashboardIsActive ? '-100%' : '0%' }}
+          transition={cameraMoveIsPlaying
             ? {
                 duration: TABLETOP_INTERFACE_DURATION,
                 ease: TABLETOP_INTERFACE_EASE
@@ -132,7 +150,7 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
             : { duration: 0 }}
         >
           <section
-            className="shared-tabletop-panel relative h-full w-1/2 shrink-0 overflow-visible"
+            className="shared-tabletop-panel relative top-[calc(0.5rem+env(safe-area-inset-top))] h-full w-1/2 shrink-0 overflow-visible md:top-[calc(0.75rem+env(safe-area-inset-top))]"
             aria-hidden={!questIsActive}
             style={{ pointerEvents: questIsActive ? 'auto' : 'none' }}
           >
@@ -144,7 +162,7 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
           </section>
 
           <section
-            className="shared-tabletop-panel relative h-full w-1/2 shrink-0 overflow-visible"
+            className="shared-tabletop-panel relative top-[calc(0.5rem+env(safe-area-inset-top))] h-full w-1/2 shrink-0 overflow-visible md:top-[calc(0.75rem+env(safe-area-inset-top))]"
             aria-hidden={!dashboardIsActive}
             style={{ pointerEvents: dashboardIsActive ? 'auto' : 'none' }}
           >
@@ -266,6 +284,7 @@ function App() {
       const toQuests = nextTab === 'quests';
       setTabletopCameraMove({
         id: cameraMoveIdRef.current,
+        fromTab: currentTab,
         source: toQuests ? dashboardToQuests : questsToDashboard,
         poster: toQuests ? dashboardTabletop : questTabletop
       });

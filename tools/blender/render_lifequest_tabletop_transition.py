@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BLEND_PATH = ROOT / "src" / "assets" / "tabletop" / "lifequest-tabletop-wide.blend"
 OUTPUT_DIR = ROOT / "src" / "assets" / "tabletop"
 FRAME_DIR = OUTPUT_DIR / "_transition_frames"
+REVERSE_FRAME_DIR = OUTPUT_DIR / "_transition_frames_reverse"
 PREVIEW_DIR = OUTPUT_DIR / "_transition_preview"
 ANIMATION_BLEND_PATH = OUTPUT_DIR / "lifequest-tabletop-transition.blend"
 DASHBOARD_STILL = OUTPUT_DIR / "lifequest-dashboard-perspective.webp"
@@ -25,6 +26,33 @@ QUEST_STILL = OUTPUT_DIR / "lifequest-quests-perspective.webp"
 PANEL_CENTER = 4.95
 FRAME_END = 30
 FPS = 30
+INTERFACE_EASE = (0.45, 0.0, 0.2, 1.0)
+START_HOLD_FRAMES = 1
+
+
+def cubic_bezier_progress(progress, control_points=INTERFACE_EASE):
+    """Return CSS cubic-bezier progress for a normalized point in time."""
+    x1, y1, x2, y2 = control_points
+
+    def sample_curve(t, point1, point2):
+        inverse = 1.0 - t
+        return (
+            3.0 * inverse * inverse * t * point1
+            + 3.0 * inverse * t * t * point2
+            + t * t * t
+        )
+
+    low = 0.0
+    high = 1.0
+    for _ in range(18):
+        midpoint = (low + high) * 0.5
+        if sample_curve(midpoint, x1, x2) < progress:
+            low = midpoint
+        else:
+            high = midpoint
+
+    curve_time = (low + high) * 0.5
+    return sample_curve(curve_time, y1, y2)
 
 
 def camera_rotation(location, target):
@@ -44,7 +72,7 @@ def set_camera_key(camera, frame, location, target, lens):
     camera.data.keyframe_insert(data_path="lens", frame=frame)
 
 
-def configure_animation():
+def configure_animation(reverse=False):
     bpy.ops.wm.open_mainfile(filepath=str(BLEND_PATH))
     scene = bpy.context.scene
     camera = scene.camera
@@ -62,36 +90,32 @@ def configure_animation():
     # gaze between workspaces. There is deliberately no lateral dolly, height
     # bob, lens breathing, roll, or depth-of-field flourish.
     observer_location = (0.0, -0.35, 45.0)
-    set_camera_key(
-        camera, 1,
-        observer_location,
-        (PANEL_CENTER, 0.7, 0.15),
-        47.0,
+    # Match the live tabletop strip exactly: both use the same normalized
+    # cubic-bezier curve and one-second timeline. Keying every rendered frame
+    # avoids Blender's independent automatic handle timing and keeps the
+    # physical camera turn subordinate to the interface motion.
+    dashboard_target = Vector((PANEL_CENTER, 0.7, 0.15))
+    quest_target = Vector((-5.8, 0.7, 0.15))
+    start_target, end_target = (
+        (quest_target, dashboard_target)
+        if reverse
+        else (dashboard_target, quest_target)
     )
-    set_camera_key(
-        camera, 8,
-        observer_location,
-        (2.8, 0.9, 0.2),
-        47.0,
-    )
-    set_camera_key(
-        camera, 16,
-        observer_location,
-        (0.0, 1.0, 0.2),
-        47.0,
-    )
-    set_camera_key(
-        camera, 23,
-        observer_location,
-        (-3.2, 0.9, 0.2),
-        47.0,
-    )
-    set_camera_key(
-        camera, FRAME_END,
-        observer_location,
-        (-5.8, 0.7, 0.15),
-        47.0,
-    )
+    for frame in range(1, FRAME_END + 1):
+        moving_frame_count = FRAME_END - 1 - START_HOLD_FRAMES
+        normalized_time = max(
+            0.0,
+            (frame - 1 - START_HOLD_FRAMES) / moving_frame_count,
+        )
+        interface_progress = cubic_bezier_progress(normalized_time)
+        target = start_target.lerp(end_target, interface_progress)
+        set_camera_key(
+            camera,
+            frame,
+            observer_location,
+            target,
+            47.0,
+        )
 
     scene.frame_start = 1
     scene.frame_end = FRAME_END
@@ -105,7 +129,8 @@ def configure_animation():
     scene.render.film_transparent = False
 
     bpy.context.preferences.filepaths.save_version = 0
-    bpy.ops.wm.save_as_mainfile(filepath=str(ANIMATION_BLEND_PATH))
+    if not reverse:
+        bpy.ops.wm.save_as_mainfile(filepath=str(ANIMATION_BLEND_PATH))
     return scene
 
 
@@ -117,9 +142,9 @@ def render_preview(scene):
         bpy.ops.render.render(write_still=True)
 
 
-def render_animation(scene):
-    FRAME_DIR.mkdir(parents=True, exist_ok=True)
-    scene.render.filepath = str(FRAME_DIR / "frame-")
+def render_animation(scene, frame_dir=FRAME_DIR):
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    scene.render.filepath = str(frame_dir / "frame-")
     bpy.ops.render.render(animation=True)
 
 
@@ -136,9 +161,11 @@ def render_rest_stills(scene):
 
 if __name__ == "__main__":
     mode = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "preview"
-    configured_scene = configure_animation()
+    configured_scene = configure_animation(reverse=mode == "animation-reverse")
     if mode == "animation":
         render_rest_stills(configured_scene)
         render_animation(configured_scene)
+    elif mode == "animation-reverse":
+        render_animation(configured_scene, REVERSE_FRAME_DIR)
     else:
         render_preview(configured_scene)

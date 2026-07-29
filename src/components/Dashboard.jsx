@@ -312,7 +312,7 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
                     <span className="text-xs font-mono uppercase tracking-widest opacity-50">Grid Offline</span>
                 </div>
             ) : (
-                <div className="relative h-0 w-0 -translate-y-[8vh] scale-75 sm:translate-y-0 sm:scale-100">
+                <div className="relative h-0 w-0 -translate-y-[8vh] scale-75 sm:translate-y-0 sm:scale-[0.52]">
                     <AnimatePresence mode='popLayout'>
                         {nodes.map((node, i) => {
                             if (i >= positions.length) return null; // Cap at 7 visible
@@ -419,7 +419,7 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
                 Adjust pt-[x] to move the entire structure down from the top.
                 e.g. pt-[20vh] (higher), pt-[30vh] (lower).
             */}
-            <div className="flex-1 flex flex-col items-center justify-start relative h-full pt-[26vh]">
+            <div className="relative flex h-full flex-1 flex-col items-center justify-start pt-[36vh] sm:pt-[45vh]">
 
                 {/* Main HUD Group */}
                 <div
@@ -433,8 +433,7 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
                             e.stopPropagation();
                             onOpenSettings();
                         }}
-                        className="pointer-events-auto absolute left-1/2 top-0 z-20 flex w-40 cursor-pointer flex-col items-center justify-center"
-                        style={{ transform: 'translate(-50%, 360px)' }}
+                        className="pointer-events-auto absolute left-1/2 top-0 z-20 flex w-40 -translate-x-1/2 translate-y-[360px] cursor-pointer flex-col items-center justify-center sm:translate-y-[300px]"
                     >
                         <p className="text-game-muted w-full text-center font-game text-xs uppercase tracking-[0.2em] opacity-70">
                             System Online
