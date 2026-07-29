@@ -3,7 +3,7 @@ import { GameProvider } from './context/GameContext';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
-import { AnimatePresence, motion as Motion } from 'framer-motion';
+import { AnimatePresence, motion as Motion, useMotionValue } from 'framer-motion';
 import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
 import Navigation from './components/Navigation';
 import { isLlmInterfaceLocation } from './utils/llmInterface';
@@ -12,7 +12,10 @@ import dashboardTabletop from './assets/tabletop/lifequest-dashboard-perspective
 import questTabletop from './assets/tabletop/lifequest-quests-perspective.webp';
 import dashboardToQuests from './assets/tabletop/lifequest-dashboard-to-quests.mp4';
 import questsToDashboard from './assets/tabletop/lifequest-quests-to-dashboard.mp4';
-import { getTabletopTransitionUiState, TABLETOP_TRANSITION } from './utils/tabletopLayout';
+import {
+  getTabletopInterfaceLeftPercent,
+  TABLETOP_TRANSITION
+} from './utils/tabletopLayout';
 
 const screenLoaders = {
   dashboard: () => import('./components/Dashboard'),
@@ -82,15 +85,59 @@ class AppErrorBoundary extends React.Component {
 function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, onCameraMoveEnd }) {
   const dashboardIsActive = currentTab === 'dashboard';
   const questIsActive = currentTab === 'quests';
-  const [playingCameraMoveId, setPlayingCameraMoveId] = useState(null);
-  const {
-    interfaceDashboardIsActive,
-    shouldAnimateInterface
-  } = getTabletopTransitionUiState({
-    currentTab,
-    cameraMove,
-    playingCameraMoveId
-  });
+  const interfaceLeft = useMotionValue(dashboardIsActive ? '-100%' : '0%');
+  const interfaceFrameRequestRef = useRef(null);
+
+  const cancelInterfaceFrameSync = useCallback(() => {
+    const activeRequest = interfaceFrameRequestRef.current;
+    if (!activeRequest) return;
+
+    if (activeRequest.type === 'video') {
+      activeRequest.video.cancelVideoFrameCallback(activeRequest.id);
+    } else {
+      cancelAnimationFrame(activeRequest.id);
+    }
+    interfaceFrameRequestRef.current = null;
+  }, []);
+
+  const setInterfaceToTab = useCallback((tab) => {
+    interfaceLeft.set(tab === 'dashboard' ? '-100%' : '0%');
+  }, [interfaceLeft]);
+
+  const startInterfaceFrameSync = useCallback((video, activeMove) => {
+    cancelInterfaceFrameSync();
+
+    const updateInterface = (_timestamp, metadata) => {
+      const mediaTimeSeconds = metadata?.mediaTime ?? video.currentTime;
+      const leftPercent = getTabletopInterfaceLeftPercent({
+        fromTab: activeMove.fromTab,
+        mediaTimeSeconds
+      });
+      interfaceLeft.set(`${leftPercent}%`);
+
+      if (video.ended || video.paused) {
+        interfaceFrameRequestRef.current = null;
+        return;
+      }
+
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        const id = video.requestVideoFrameCallback(updateInterface);
+        interfaceFrameRequestRef.current = { type: 'video', video, id };
+      } else {
+        const id = requestAnimationFrame(updateInterface);
+        interfaceFrameRequestRef.current = { type: 'animation', id };
+      }
+    };
+
+    updateInterface(undefined, { mediaTime: video.currentTime });
+  }, [cancelInterfaceFrameSync, interfaceLeft]);
+
+  useEffect(() => {
+    cancelInterfaceFrameSync();
+    setInterfaceToTab(cameraMove?.fromTab ?? currentTab);
+  }, [cameraMove, cancelInterfaceFrameSync, currentTab, setInterfaceToTab]);
+
+  useEffect(() => cancelInterfaceFrameSync, [cancelInterfaceFrameSync]);
 
   return (
     <main className="absolute inset-0 z-10 overflow-visible">
@@ -124,15 +171,17 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
             onPlay={(event) => {
               event.currentTarget.playbackRate = TABLETOP_TRANSITION.playbackRate;
             }}
-            onPlaying={() => {
-              setPlayingCameraMoveId(cameraMove.id);
+            onPlaying={(event) => {
+              startInterfaceFrameSync(event.currentTarget, cameraMove);
             }}
             onEnded={() => {
-              setPlayingCameraMoveId(null);
+              cancelInterfaceFrameSync();
+              setInterfaceToTab(currentTab);
               onCameraMoveEnd(cameraMove.id);
             }}
             onError={() => {
-              setPlayingCameraMoveId(null);
+              cancelInterfaceFrameSync();
+              setInterfaceToTab(currentTab);
               onCameraMoveEnd(cameraMove.id);
             }}
             className="pointer-events-none absolute inset-0 z-10 block h-full w-full object-cover"
@@ -143,14 +192,7 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
       <div className="absolute left-1/2 top-0 h-full w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
         <Motion.div
           className="absolute top-0 z-10 flex aspect-[9/10] w-[200%] will-change-[left]"
-          initial={false}
-          animate={{ left: interfaceDashboardIsActive ? '-100%' : '0%' }}
-          transition={shouldAnimateInterface
-            ? {
-                duration: TABLETOP_TRANSITION.interfaceDurationSeconds,
-                ease: TABLETOP_TRANSITION.ease
-              }
-            : { duration: 0 }}
+          style={{ left: interfaceLeft }}
         >
           <section
             className="shared-tabletop-panel relative h-full w-1/2 shrink-0 overflow-visible"

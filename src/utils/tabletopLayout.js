@@ -14,7 +14,7 @@ export const DASHBOARD_HOTSPOTS = {
     },
     coins: {
         leftPercent: 16.5,
-        topPercent: 71.1,
+        topPercent: 73.24,
         widthPercent: 8.8,
         heightPercent: 4
     }
@@ -51,8 +51,8 @@ export const DASHBOARD_HEX_LAYOUT = {
 
 export const TABLETOP_TRANSITION = {
     sourceDurationSeconds: 1,
-    playbackRate: 1.8,
-    interfaceDurationSeconds: 1 / 1.8,
+    playbackRate: 2.2,
+    wallDurationSeconds: 1 / 2.2,
     ease: [0.45, 0, 0.2, 1]
 };
 
@@ -70,18 +70,38 @@ export const getDashboardHexPositions = () => {
     ];
 };
 
-export const getTabletopTransitionUiState = ({
-    currentTab,
-    cameraMove,
-    playingCameraMoveId
-}) => {
-    const cameraMoveIsPlaying = cameraMove?.id === playingCameraMoveId;
-    const visibleTab = cameraMove && !cameraMoveIsPlaying
-        ? cameraMove.fromTab
-        : currentTab;
-
-    return {
-        interfaceDashboardIsActive: visibleTab === 'dashboard',
-        shouldAnimateInterface: cameraMoveIsPlaying
+export const getTabletopTransitionProgress = (mediaTimeSeconds) => {
+    const normalizedTime = Math.max(
+        0,
+        Math.min(1, mediaTimeSeconds / TABLETOP_TRANSITION.sourceDurationSeconds)
+    );
+    const [x1, y1, x2, y2] = TABLETOP_TRANSITION.ease;
+    const sampleCurve = (time, point1, point2) => {
+        const inverse = 1 - time;
+        return (
+            (3 * inverse * inverse * time * point1)
+            + (3 * inverse * time * time * point2)
+            + (time * time * time)
+        );
     };
+    let low = 0;
+    let high = 1;
+
+    for (let index = 0; index < 18; index += 1) {
+        const midpoint = (low + high) / 2;
+        if (sampleCurve(midpoint, x1, x2) < normalizedTime) {
+            low = midpoint;
+        } else {
+            high = midpoint;
+        }
+    }
+
+    return sampleCurve((low + high) / 2, y1, y2);
+};
+
+export const getTabletopInterfaceLeftPercent = ({ fromTab, mediaTimeSeconds }) => {
+    const progress = getTabletopTransitionProgress(mediaTimeSeconds);
+    return fromTab === 'dashboard'
+        ? -100 + (progress * 100)
+        : -(progress * 100);
 };

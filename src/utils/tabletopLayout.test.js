@@ -7,7 +7,8 @@ import {
     DASHBOARD_PHYSICAL_TARGETS,
     TABLETOP_TRANSITION,
     getDashboardHexPositions,
-    getTabletopTransitionUiState
+    getTabletopInterfaceLeftPercent,
+    getTabletopTransitionProgress
 } from './tabletopLayout.js';
 
 const getHotspotCenter = (hotspot) => ({
@@ -151,13 +152,19 @@ describe('tabletop layout contracts', () => {
 
     it('keeps the coin count centered on the intended coin face', () => {
         const center = getHotspotCenter(DASHBOARD_HOTSPOTS.coins);
+        const approvedPreviewWidth = 390.4;
+        const approvedPreviewHeight = approvedPreviewWidth * (20 / 9);
+        const approvedTopPixels = approvedPreviewHeight
+            * DASHBOARD_HOTSPOTS.coins.topPercent
+            / 100;
 
         expect(DASHBOARD_HOTSPOTS.coins).toEqual({
             leftPercent: 16.5,
-            topPercent: 71.1,
+            topPercent: 73.24,
             widthPercent: 8.8,
             heightPercent: 4
         });
+        expect(approvedTopPixels).toBeCloseTo(635.4, 1);
         expect(pointIsInsideBounds(center, DASHBOARD_PHYSICAL_TARGETS.coinFace)).toBe(true);
     });
 
@@ -188,24 +195,25 @@ describe('tabletop layout contracts', () => {
         expect(nodePolygons.every((polygon) => !polygonsOverlap(polygon, coinPileSilhouette))).toBe(true);
     });
 
-    it('holds the interface until the camera video is actually playing', () => {
-        expect(getTabletopTransitionUiState({
-            currentTab: 'quests',
-            cameraMove: { id: 1, fromTab: 'dashboard' },
-            playingCameraMoveId: null
-        })).toEqual({
-            interfaceDashboardIsActive: true,
-            shouldAnimateInterface: false
-        });
-
-        expect(getTabletopTransitionUiState({
-            currentTab: 'quests',
-            cameraMove: { id: 1, fromTab: 'dashboard' },
-            playingCameraMoveId: 1
-        })).toEqual({
-            interfaceDashboardIsActive: false,
-            shouldAnimateInterface: true
-        });
+    it('maps both interface directions to the video frame clock', () => {
+        expect(getTabletopTransitionProgress(0)).toBeCloseTo(0, 4);
+        expect(getTabletopTransitionProgress(1)).toBeCloseTo(1, 4);
+        expect(getTabletopInterfaceLeftPercent({
+            fromTab: 'dashboard',
+            mediaTimeSeconds: 0
+        })).toBeCloseTo(-100, 4);
+        expect(getTabletopInterfaceLeftPercent({
+            fromTab: 'dashboard',
+            mediaTimeSeconds: 1
+        })).toBeCloseTo(0, 4);
+        expect(getTabletopInterfaceLeftPercent({
+            fromTab: 'quests',
+            mediaTimeSeconds: 0
+        })).toBeCloseTo(0, 4);
+        expect(getTabletopInterfaceLeftPercent({
+            fromTab: 'quests',
+            mediaTimeSeconds: 1
+        })).toBeCloseTo(-100, 4);
     });
 
     it('matches the foreground pan duration and easing to the Blender camera render', () => {
@@ -222,9 +230,10 @@ describe('tabletop layout contracts', () => {
 
         expect(dashboardToQuestsDuration).toBe(TABLETOP_TRANSITION.sourceDurationSeconds);
         expect(questsToDashboardDuration).toBe(TABLETOP_TRANSITION.sourceDurationSeconds);
-        expect(TABLETOP_TRANSITION.interfaceDurationSeconds).toBe(
+        expect(TABLETOP_TRANSITION.wallDurationSeconds).toBe(
             TABLETOP_TRANSITION.sourceDurationSeconds / TABLETOP_TRANSITION.playbackRate
         );
+        expect(TABLETOP_TRANSITION.wallDurationSeconds).toBeLessThan(0.46);
         expect(TABLETOP_TRANSITION.ease).toEqual([0.45, 0, 0.2, 1]);
         expect(blenderSource).toContain('INTERFACE_EASE = (0.45, 0.0, 0.2, 1.0)');
     });
