@@ -16,6 +16,15 @@
 }
 
 @layer utilities {
+  .shared-tabletop-panel {
+    --tabletop-content-inset: calc(0.5rem + env(safe-area-inset-top));
+    top: var(--tabletop-content-inset);
+  }
+
+  .dashboard-hud-layout {
+    padding-top: var(--dashboard-grid-padding-mobile);
+  }
+
   .text-shadow {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   }
@@ -81,4 +90,16 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
+}
+
+@media (min-width: 640px) {
+  .dashboard-hud-layout {
+    padding-top: var(--dashboard-grid-padding-desktop);
+  }
+}
+
+@media (min-width: 768px) {
+  .shared-tabletop-panel {
+    --tabletop-content-inset: calc(0.75rem + env(safe-area-inset-top));
+  }
 }

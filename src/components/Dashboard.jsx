@@ -8,6 +8,12 @@ import DayTimer from './DayTimer';
 import clsx from 'clsx';
 import { getTodayISO } from '../utils/dateUtils';
 import { isHabitDueForFocus } from '../domain/gameState';
+import {
+    DASHBOARD_COORDINATE_PLANE_TOP,
+    DASHBOARD_HEX_LAYOUT,
+    DASHBOARD_HOTSPOTS,
+    getDashboardHexPositions
+} from '../utils/tabletopLayout';
 import healthInjectorScene from '../assets/dashboard/health-injector-tabletop-blender.webp';
 
 const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, showBackdrop = true }) => {
@@ -17,9 +23,19 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, s
     // AppContent reserves the status-bar safe area for interactive content. The
     // artwork is a screen backdrop, though, so it must cancel that inset or the
     // shell gradient becomes visible as a strip above the scene on iOS.
-    const screenBackdropTop = showBackdrop
-        ? 'calc(-0.5rem - env(safe-area-inset-top))'
-        : '0px';
+    const healthHotspotStyle = {
+        left: `${DASHBOARD_HOTSPOTS.health.leftPercent}%`,
+        top: `${DASHBOARD_HOTSPOTS.health.topPercent}%`,
+        width: `${DASHBOARD_HOTSPOTS.health.widthPercent}%`,
+        height: `${DASHBOARD_HOTSPOTS.health.heightPercent}%`
+    };
+    const coinHotspotStyle = {
+        left: `${DASHBOARD_HOTSPOTS.coins.leftPercent}%`,
+        top: `${DASHBOARD_HOTSPOTS.coins.topPercent}%`,
+        width: `${DASHBOARD_HOTSPOTS.coins.widthPercent}%`,
+        height: `${DASHBOARD_HOTSPOTS.coins.heightPercent}%`,
+        textShadow: '0 1px 1px rgba(28,12,0,0.95), 0 0 2px rgba(66,34,2,0.8)'
+    };
 
     return (
         <>
@@ -27,7 +43,7 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, s
             {showBackdrop && (
                 <div
                     className="pointer-events-none absolute left-1/2 z-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden"
-                    style={{ top: screenBackdropTop }}
+                    style={{ top: DASHBOARD_COORDINATE_PLANE_TOP }}
                 >
                     <img
                         src={healthInjectorScene}
@@ -41,13 +57,15 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, s
             {/* This second, transparent coordinate plane keeps only the physical screen interactive. */}
             <div
                 className="pointer-events-none absolute left-1/2 z-30 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2"
-                style={{ top: screenBackdropTop }}
+                style={{ top: DASHBOARD_COORDINATE_PLANE_TOP }}
             >
             <motion.button
                 type="button"
                 onClick={onCapacityClick}
                 aria-label={`Open health tracker. Capacity ${displayPercentage} percent.`}
-                className="pointer-events-auto absolute left-[47.4%] top-[22.5%] flex h-[3.8%] w-[27%] origin-center rotate-[30deg] cursor-pointer flex-col justify-center overflow-hidden border-0 bg-transparent px-[1.2%] font-game text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/80"
+                data-tabletop-hotspot="health"
+                className="pointer-events-auto absolute flex origin-center rotate-[30deg] cursor-pointer flex-col justify-center overflow-hidden border-0 bg-transparent px-[1.2%] font-game text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/80"
+                style={healthHotspotStyle}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.55, ease: 'easeOut' }}
@@ -86,12 +104,13 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, s
                     type="button"
                     onClick={onCoinsClick}
                     aria-label={`Open budget. ${coinLabel} coins.`}
-                    className="pointer-events-auto absolute left-[14.8%] top-[70.2%] flex h-[4%] w-[8.8%] items-center justify-center rounded-full border-0 bg-transparent p-0 font-game font-black leading-none text-[#f6d37a] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80"
+                    data-tabletop-hotspot="coins"
+                    className="pointer-events-auto absolute flex items-center justify-center rounded-full border-0 bg-transparent p-0 font-game font-black leading-none text-[#f6d37a] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.15, duration: 0.45 }}
                     whileTap={{ scale: 0.94 }}
-                    style={{ textShadow: '0 1px 1px rgba(28,12,0,0.95), 0 0 2px rgba(66,34,2,0.8)' }}
+                    style={coinHotspotStyle}
                 >
                     <span className={clsx(coinLabel.length > 4 ? "text-[6px] sm:text-[7px]" : "text-[9px] sm:text-[10px]")}>
                         {coinLabel}
@@ -286,18 +305,7 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
     // Vertical Spacing (dy): ~ 3/4 height. 120 + ~4 = 124
 
     // Tweak to tighter fit if needed
-    const dx = 76;
-    const dy = 128; // slightly more vertical space
-
-    const positions = [
-        { x: 0, y: 0 },         // 0: Center
-        { x: dx, y: -dy },      // 1: Top-Right
-        { x: dx * 2, y: 0 },    // 2: Right (Wide) - 152
-        { x: dx, y: dy },       // 3: Bottom-Right
-        { x: -dx, y: dy },      // 4: Bottom-Left
-        { x: -dx * 2, y: 0 },   // 5: Left (Wide) - -152
-        { x: -dx, y: -dy }      // 6: Top-Left
-    ];
+    const positions = getDashboardHexPositions();
 
     return (
         <div className="relative w-full h-[320px] flex items-center justify-center overflow-visible">
@@ -312,7 +320,10 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
                     <span className="text-xs font-mono uppercase tracking-widest opacity-50">Grid Offline</span>
                 </div>
             ) : (
-                <div className="relative h-0 w-0 -translate-y-[8vh] scale-75 sm:translate-y-0 sm:scale-[0.52]">
+                <div
+                    data-tabletop-region="hex-grid"
+                    className="relative h-0 w-0 -translate-y-[8vh] scale-75 sm:translate-y-0 sm:scale-[0.52]"
+                >
                     <AnimatePresence mode='popLayout'>
                         {nodes.map((node, i) => {
                             if (i >= positions.length) return null; // Cap at 7 visible
@@ -419,7 +430,13 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
                 Adjust pt-[x] to move the entire structure down from the top.
                 e.g. pt-[20vh] (higher), pt-[30vh] (lower).
             */}
-            <div className="relative flex h-full flex-1 flex-col items-center justify-start pt-[36vh] sm:pt-[45vh]">
+            <div
+                className="dashboard-hud-layout relative flex h-full flex-1 flex-col items-center justify-start"
+                style={{
+                    '--dashboard-grid-padding-mobile': `${DASHBOARD_HEX_LAYOUT.mobilePaddingTopVh}vh`,
+                    '--dashboard-grid-padding-desktop': `${DASHBOARD_HEX_LAYOUT.desktopPaddingTopVh}vh`
+                }}
+            >
 
                 {/* Main HUD Group */}
                 <div
