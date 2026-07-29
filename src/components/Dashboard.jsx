@@ -322,7 +322,13 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
             ) : (
                 <div
                     data-tabletop-region="hex-grid"
-                    className="relative h-0 w-0 -translate-y-[8vh] scale-75 sm:translate-y-0 sm:scale-[0.52]"
+                    className="dashboard-hex-positioner relative h-0 w-0"
+                    style={{
+                        '--dashboard-hex-mobile-scale': DASHBOARD_HEX_LAYOUT.mobileInnerScale,
+                        '--dashboard-hex-mobile-x': `${DASHBOARD_HEX_LAYOUT.mobileTranslateXVw}vw`,
+                        '--dashboard-hex-mobile-y': `${DASHBOARD_HEX_LAYOUT.mobileTranslateYVh}vh`,
+                        '--dashboard-hex-desktop-scale': DASHBOARD_HEX_LAYOUT.desktopInnerScale
+                    }}
                 >
                     <AnimatePresence mode='popLayout'>
                         {nodes.map((node, i) => {

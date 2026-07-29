@@ -13,8 +13,8 @@ export const DASHBOARD_HOTSPOTS = {
         heightPercent: 3.8
     },
     coins: {
-        leftPercent: 14.8,
-        topPercent: 70.2,
+        leftPercent: 16.5,
+        topPercent: 71.1,
         widthPercent: 8.8,
         heightPercent: 4
     }
@@ -28,10 +28,10 @@ export const DASHBOARD_PHYSICAL_TARGETS = {
         bottomPercent: 30
     },
     coinFace: {
-        leftPercent: 12,
-        topPercent: 66,
-        rightPercent: 25,
-        bottomPercent: 75
+        leftPercent: 16,
+        topPercent: 70,
+        rightPercent: 27,
+        bottomPercent: 77
     }
 };
 
@@ -40,76 +40,27 @@ export const DASHBOARD_HEX_LAYOUT = {
     nodeHeight: 160,
     dx: 76,
     dy: 128,
-    mobileInnerScale: 0.75,
+    mobileInnerScale: 0.67,
     mobileOuterScale: 0.9,
+    mobileTranslateXVw: 14.1,
     mobileTranslateYVh: -8,
     mobilePaddingTopVh: 36,
     desktopInnerScale: 0.52,
-    desktopPaddingTopVh: 45,
-    bottomRowShiftX: 88
+    desktopPaddingTopVh: 45
 };
 
 export const getDashboardHexPositions = () => {
-    const {
-        dx,
-        dy,
-        bottomRowShiftX
-    } = DASHBOARD_HEX_LAYOUT;
+    const { dx, dy } = DASHBOARD_HEX_LAYOUT;
 
     return [
         { x: 0, y: 0 },
         { x: dx, y: -dy },
         { x: dx * 2, y: 0 },
-        { x: dx + bottomRowShiftX, y: dy },
-        { x: -dx + bottomRowShiftX, y: dy },
+        { x: dx, y: dy },
+        { x: -dx, y: dy },
         { x: -dx * 2, y: 0 },
         { x: -dx, y: -dy }
     ];
-};
-
-export const getHotspotCenter = (hotspot) => ({
-    x: hotspot.leftPercent + (hotspot.widthPercent / 2),
-    y: hotspot.topPercent + (hotspot.heightPercent / 2)
-});
-
-export const pointIsInsideBounds = (point, bounds) => (
-    point.x >= bounds.leftPercent
-    && point.x <= bounds.rightPercent
-    && point.y >= bounds.topPercent
-    && point.y <= bounds.bottomPercent
-);
-
-export const rectanglesOverlap = (first, second) => (
-    first.left < second.right
-    && first.right > second.left
-    && first.top < second.bottom
-    && first.bottom > second.top
-);
-
-export const getCoordinatePlaneOffset = (contentInset) => -contentInset;
-
-export const getMobileHexNodeRects = ({
-    frameWidth = 390,
-    gridOriginY = 500
-} = {}) => {
-    const positions = getDashboardHexPositions();
-    const scale = DASHBOARD_HEX_LAYOUT.mobileInnerScale
-        * DASHBOARD_HEX_LAYOUT.mobileOuterScale;
-    const width = DASHBOARD_HEX_LAYOUT.nodeWidth * scale;
-    const height = DASHBOARD_HEX_LAYOUT.nodeHeight * scale;
-    const originX = frameWidth / 2;
-
-    return positions.map((position) => {
-        const centerX = originX + (position.x * scale);
-        const centerY = gridOriginY + (position.y * scale);
-
-        return {
-            left: centerX - (width / 2),
-            right: centerX + (width / 2),
-            top: centerY - (height / 2),
-            bottom: centerY + (height / 2)
-        };
-    });
 };
 
 export const getTabletopTransitionUiState = ({ currentTab, cameraMove }) => ({

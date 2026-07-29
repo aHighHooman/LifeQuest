@@ -25,6 +25,10 @@
     padding-top: var(--dashboard-grid-padding-mobile);
   }
 
+  .dashboard-hex-positioner {
+    transform: translate(var(--dashboard-hex-mobile-x), var(--dashboard-hex-mobile-y)) scale(var(--dashboard-hex-mobile-scale));
+  }
+
   .text-shadow {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   }
@@ -95,6 +99,10 @@
 @media (min-width: 640px) {
   .dashboard-hud-layout {
     padding-top: var(--dashboard-grid-padding-desktop);
+  }
+
+  .dashboard-hex-positioner {
+    transform: translate(0, 0) scale(var(--dashboard-hex-desktop-scale));
   }
 }
 
