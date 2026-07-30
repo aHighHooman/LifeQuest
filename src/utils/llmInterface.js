@@ -1,16 +1,21 @@
 import { getHabitCycleState } from './gameLogic';
 import { toLocalDateKey } from './dateUtils';
 
-export const LLM_INTERFACE_ROUTE =
-    'REDACTED_LLM_ROUTE';
+export const LLM_INTERFACE_ROUTE = import.meta.env.VITE_LLM_INTERFACE_ROUTE || '';
 
 const normalizeRoute = (value = '') => `/${`${value}`.replace(/^#?\/?/, '').replace(/\/+$/, '')}`;
 
-export const isLlmInterfaceLocation = (location = window.location) => {
+export const isLlmInterfaceLocation = (
+    location = window.location,
+    configuredRoute = LLM_INTERFACE_ROUTE
+) => {
+    if (!configuredRoute) return false;
+
     const pathname = normalizeRoute(location.pathname);
     const hashPath = normalizeRoute(location.hash);
+    const route = normalizeRoute(configuredRoute);
 
-    return pathname.endsWith(LLM_INTERFACE_ROUTE) || hashPath === LLM_INTERFACE_ROUTE;
+    return pathname.endsWith(route) || hashPath === route;
 };
 
 export const getDayTimeRemaining = (now = new Date()) => {

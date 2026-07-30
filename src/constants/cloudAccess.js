@@ -1,25 +1,30 @@
-export const LIFEQUEST_OWNER_UID = 'REDACTED_OWNER_UID';
-export const LIFEQUEST_LLM_UID = 'REDACTED_LLM_UID';
+export const LIFEQUEST_OWNER_UID = import.meta.env.VITE_LIFEQUEST_OWNER_UID || '';
+export const LIFEQUEST_LLM_UID = import.meta.env.VITE_LIFEQUEST_LLM_UID || '';
 
 export const AUTH_SURFACES = Object.freeze({
     APP: 'app',
     LLM: 'llm'
 });
 
-export const getLifeQuestAccountAccess = (uid, surface) => {
+const DEFAULT_ACCESS_CONFIG = Object.freeze({
+    ownerUid: LIFEQUEST_OWNER_UID,
+    llmUid: LIFEQUEST_LLM_UID
+});
+
+export const getLifeQuestAccountAccess = (uid, surface, config = DEFAULT_ACCESS_CONFIG) => {
     if (!uid) return null;
 
-    if (surface === AUTH_SURFACES.APP && uid === LIFEQUEST_OWNER_UID) {
+    if (surface === AUTH_SURFACES.APP && config.ownerUid && uid === config.ownerUid) {
         return {
             role: 'owner',
-            dataUid: LIFEQUEST_OWNER_UID
+            dataUid: config.ownerUid
         };
     }
 
-    if (surface === AUTH_SURFACES.LLM && uid === LIFEQUEST_LLM_UID) {
+    if (surface === AUTH_SURFACES.LLM && config.llmUid && uid === config.llmUid) {
         return {
             role: 'llm',
-            dataUid: LIFEQUEST_OWNER_UID
+            dataUid: config.ownerUid
         };
     }
 

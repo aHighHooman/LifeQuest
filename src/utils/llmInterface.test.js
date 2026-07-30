@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-    LLM_INTERFACE_ROUTE,
     applyCloudSnapshotToDevice,
     buildLlmSnapshot,
     getDayTimeRemaining,
@@ -9,9 +8,12 @@ import {
 
 describe('LLM interface helpers', () => {
     it('recognizes both pathname and hash URLs', () => {
-        expect(isLlmInterfaceLocation({ pathname: LLM_INTERFACE_ROUTE, hash: '' })).toBe(true);
-        expect(isLlmInterfaceLocation({ pathname: '/', hash: `#${LLM_INTERFACE_ROUTE}` })).toBe(true);
-        expect(isLlmInterfaceLocation({ pathname: '/', hash: '#/dashboard' })).toBe(false);
+        const route = '/llm-interface-test-route';
+
+        expect(isLlmInterfaceLocation({ pathname: route, hash: '' }, route)).toBe(true);
+        expect(isLlmInterfaceLocation({ pathname: '/', hash: `#${route}` }, route)).toBe(true);
+        expect(isLlmInterfaceLocation({ pathname: '/', hash: '#/dashboard' }, route)).toBe(false);
+        expect(isLlmInterfaceLocation({ pathname: route, hash: '' }, '')).toBe(false);
     });
 
     it('calculates time remaining until local midnight', () => {

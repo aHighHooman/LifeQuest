@@ -16,6 +16,27 @@ coverage
 test-results
 *.lcov
 *.local
+.env
+.env.*
+!.env.example
+!.env.*.example
+.dev.vars
+**/.secrets/
+**/.wrangler/
+**/action-token.clixml
+**/*password-configured*
+*.pem
+*.key
+*.p12
+*.pfx
+*service-account*.json
+*serviceAccount*.json
+firebase-adminsdk*.json
+.firebase/
+firebase-debug.log*
+.firebaserc
+firestore.rules
+.sanitization-replacements.txt
 .gemini
 .agent
 

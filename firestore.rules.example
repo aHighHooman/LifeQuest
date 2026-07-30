@@ -1,0 +1,18 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAllowedLifeQuestUser(uid) {
+      return request.auth != null
+        && uid == 'YOUR_OWNER_FIREBASE_UID'
+        && (
+          request.auth.uid == 'YOUR_OWNER_FIREBASE_UID'
+          || request.auth.uid == 'YOUR_LLM_FIREBASE_UID'
+        );
+    }
+
+    match /users/{uid}/{document=**} {
+      allow read, write: if isAllowedLifeQuestUser(uid);
+    }
+  }
+}
