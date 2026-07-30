@@ -105,3 +105,8 @@ export const getTabletopInterfaceLeftPercent = ({ fromTab, mediaTimeSeconds }) =
         ? -100 + (progress * 100)
         : -(progress * 100);
 };
+
+export const getTabletopMediaTimeForElapsedMs = (elapsedMs) => Math.min(
+    TABLETOP_TRANSITION.sourceDurationSeconds,
+    Math.max(0, elapsedMs) * TABLETOP_TRANSITION.playbackRate / 1000
+);

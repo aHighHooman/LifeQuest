@@ -13,8 +13,9 @@ import questTabletop from './assets/tabletop/lifequest-quests-perspective.webp';
 import dashboardToQuests from './assets/tabletop/lifequest-dashboard-to-quests.mp4';
 import questsToDashboard from './assets/tabletop/lifequest-quests-to-dashboard.mp4';
 import {
-  getTabletopInterfaceLeftPercent,
-  TABLETOP_TRANSITION
+    getTabletopInterfaceLeftPercent,
+    getTabletopMediaTimeForElapsedMs,
+    TABLETOP_TRANSITION
 } from './utils/tabletopLayout';
 
 const screenLoaders = {
@@ -82,6 +83,19 @@ class AppErrorBoundary extends React.Component {
   }
 }
 
+const TabletopPanelFallback = ({ label }) => (
+  <div
+    className="flex h-full w-full items-center justify-center"
+    role="status"
+    aria-label={`Loading ${label}`}
+  >
+    <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300 backdrop-blur-sm">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+      Loading {label}
+    </div>
+  </div>
+);
+
 function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, onCameraMoveEnd }) {
   const dashboardIsActive = currentTab === 'dashboard';
   const questIsActive = currentTab === 'quests';
@@ -92,11 +106,7 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
     const activeRequest = interfaceFrameRequestRef.current;
     if (!activeRequest) return;
 
-    if (activeRequest.type === 'video') {
-      activeRequest.video.cancelVideoFrameCallback(activeRequest.id);
-    } else {
-      cancelAnimationFrame(activeRequest.id);
-    }
+    cancelAnimationFrame(activeRequest.id);
     interfaceFrameRequestRef.current = null;
   }, []);
 
@@ -104,38 +114,53 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
     interfaceLeft.set(tab === 'dashboard' ? '-100%' : '0%');
   }, [interfaceLeft]);
 
-  const startInterfaceFrameSync = useCallback((video, activeMove) => {
+  const startInterfaceFrameSync = useCallback((activeMove) => {
     cancelInterfaceFrameSync();
 
-    const updateInterface = (_timestamp, metadata) => {
-      const mediaTimeSeconds = metadata?.mediaTime ?? video.currentTime;
+    const updateInterface = (timestamp) => {
+      const mediaTimeSeconds = getTabletopMediaTimeForElapsedMs(
+        timestamp - activeMove.startedAtMs
+      );
       const leftPercent = getTabletopInterfaceLeftPercent({
         fromTab: activeMove.fromTab,
         mediaTimeSeconds
       });
       interfaceLeft.set(`${leftPercent}%`);
 
-      if (video.ended || video.paused) {
+      if (mediaTimeSeconds >= TABLETOP_TRANSITION.sourceDurationSeconds) {
+        setInterfaceToTab(activeMove.toTab);
         interfaceFrameRequestRef.current = null;
+        onCameraMoveEnd(activeMove.id);
         return;
       }
 
-      if (typeof video.requestVideoFrameCallback === 'function') {
-        const id = video.requestVideoFrameCallback(updateInterface);
-        interfaceFrameRequestRef.current = { type: 'video', video, id };
-      } else {
-        const id = requestAnimationFrame(updateInterface);
-        interfaceFrameRequestRef.current = { type: 'animation', id };
-      }
+      const id = requestAnimationFrame(updateInterface);
+      interfaceFrameRequestRef.current = { id };
     };
 
-    updateInterface(undefined, { mediaTime: video.currentTime });
-  }, [cancelInterfaceFrameSync, interfaceLeft]);
+    updateInterface(performance.now());
+  }, [
+    cancelInterfaceFrameSync,
+    interfaceLeft,
+    onCameraMoveEnd,
+    setInterfaceToTab
+  ]);
 
   useEffect(() => {
     cancelInterfaceFrameSync();
-    setInterfaceToTab(cameraMove?.fromTab ?? currentTab);
-  }, [cameraMove, cancelInterfaceFrameSync, currentTab, setInterfaceToTab]);
+    if (cameraMove) {
+      setInterfaceToTab(cameraMove.fromTab);
+      startInterfaceFrameSync(cameraMove);
+    } else {
+      setInterfaceToTab(currentTab);
+    }
+  }, [
+    cameraMove,
+    cancelInterfaceFrameSync,
+    currentTab,
+    setInterfaceToTab,
+    startInterfaceFrameSync
+  ]);
 
   useEffect(() => cancelInterfaceFrameSync, [cancelInterfaceFrameSync]);
 
@@ -165,24 +190,13 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
             preload="auto"
             aria-hidden="true"
             onLoadedMetadata={(event) => {
+              const elapsedMs = performance.now() - cameraMove.startedAtMs;
               event.currentTarget.defaultPlaybackRate = TABLETOP_TRANSITION.playbackRate;
               event.currentTarget.playbackRate = TABLETOP_TRANSITION.playbackRate;
+              event.currentTarget.currentTime = getTabletopMediaTimeForElapsedMs(elapsedMs);
             }}
             onPlay={(event) => {
               event.currentTarget.playbackRate = TABLETOP_TRANSITION.playbackRate;
-            }}
-            onPlaying={(event) => {
-              startInterfaceFrameSync(event.currentTarget, cameraMove);
-            }}
-            onEnded={() => {
-              cancelInterfaceFrameSync();
-              setInterfaceToTab(currentTab);
-              onCameraMoveEnd(cameraMove.id);
-            }}
-            onError={() => {
-              cancelInterfaceFrameSync();
-              setInterfaceToTab(currentTab);
-              onCameraMoveEnd(cameraMove.id);
             }}
             className="pointer-events-none absolute inset-0 z-10 block h-full w-full object-cover"
           />
@@ -200,7 +214,7 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
             style={{ pointerEvents: questIsActive ? 'auto' : 'none' }}
           >
             <Profiler id="screen:quests" onRender={onProfileRender}>
-              <React.Suspense fallback={null}>
+              <React.Suspense fallback={<TabletopPanelFallback label="quests" />}>
                 <QuestBoard showTabletopBackdrop={false} />
               </React.Suspense>
             </Profiler>
@@ -212,7 +226,7 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
             style={{ pointerEvents: dashboardIsActive ? 'auto' : 'none' }}
           >
             <Profiler id="screen:dashboard" onRender={onProfileRender}>
-              <React.Suspense fallback={null}>
+              <React.Suspense fallback={<TabletopPanelFallback label="dashboard" />}>
                 <Dashboard
                   onTabChange={setCurrentTab}
                   onOpenSettings={onOpenSettings}
@@ -330,6 +344,8 @@ function App() {
       setTabletopCameraMove({
         id: cameraMoveIdRef.current,
         fromTab: currentTab,
+        toTab: nextTab,
+        startedAtMs: performance.now(),
         source: toQuests ? dashboardToQuests : questsToDashboard,
         poster: toQuests ? dashboardTabletop : questTabletop
       });

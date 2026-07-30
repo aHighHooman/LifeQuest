@@ -8,6 +8,7 @@ import {
     TABLETOP_TRANSITION,
     getDashboardHexPositions,
     getTabletopInterfaceLeftPercent,
+    getTabletopMediaTimeForElapsedMs,
     getTabletopTransitionProgress
 } from './tabletopLayout.js';
 
@@ -236,5 +237,18 @@ describe('tabletop layout contracts', () => {
         expect(TABLETOP_TRANSITION.wallDurationSeconds).toBeLessThan(0.46);
         expect(TABLETOP_TRANSITION.ease).toEqual([0.45, 0, 0.2, 1]);
         expect(blenderSource).toContain('INTERFACE_EASE = (0.45, 0.0, 0.2, 1.0)');
+    });
+
+    it('uses a bounded wall clock when video frames are unavailable', () => {
+        expect(getTabletopMediaTimeForElapsedMs(-20)).toBe(0);
+        expect(getTabletopMediaTimeForElapsedMs(
+            TABLETOP_TRANSITION.wallDurationSeconds * 500
+        )).toBeCloseTo(0.5, 5);
+        expect(getTabletopMediaTimeForElapsedMs(
+            TABLETOP_TRANSITION.wallDurationSeconds * 1000
+        )).toBe(TABLETOP_TRANSITION.sourceDurationSeconds);
+        expect(getTabletopMediaTimeForElapsedMs(10_000)).toBe(
+            TABLETOP_TRANSITION.sourceDurationSeconds
+        );
     });
 });
