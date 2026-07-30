@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X, CheckCircle, Circle, Shield, Swords, Crosshair } from 'lucide-react';
 import { useGame } from '../context/GameContext';
@@ -18,7 +19,7 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
         toggleToday(id, type);
     };
 
-    return (
+    return createPortal(
         <AnimatePresence>
             {isOpen && (
                 <div className="fixed inset-0 z-50 flex items-start justify-center" data-no-swipe="true">
@@ -175,7 +176,8 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                     </motion.div>
                 </div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 };
 
