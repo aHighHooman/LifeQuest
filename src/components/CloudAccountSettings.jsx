@@ -353,7 +353,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
                 </div>
             )}
 
-            {isConfigured && user && securityStatus === 'passed' && (
+            {isConfigured && user && (
                 <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
                     <div className="text-sm font-bold text-violet-100">Manual LifeQuest Cloud Transfer</div>
                     <p className="mt-1 text-xs text-slate-400">
@@ -431,7 +431,7 @@ const CloudAccountSettings = ({ exportAppState, importAppState }) => {
                 </div>
             )}
 
-            {isConfigured && user && securityStatus === 'passed' && (
+            {isConfigured && user && (
                 <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
                     <div className="flex items-start justify-between gap-3">
                         <div>

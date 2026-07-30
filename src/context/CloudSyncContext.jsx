@@ -18,8 +18,12 @@ import {
     saveCloudSnapshot
 } from '../utils/cloudSnapshot.js';
 import { safeGet, safeSet } from '../utils/persistence.js';
+import {
+    CLOUD_SYNC_META_KEY,
+    getCloudSyncMetaKey,
+    getCloudSyncStartupState
+} from '../utils/cloudSyncState.js';
 
-const CLOUD_SYNC_META_KEY = 'lq_cloud_sync_meta';
 const CLOUD_SAVE_DEBOUNCE_MS = 1800;
 const CloudSyncContext = createContext(null);
 
@@ -27,11 +31,6 @@ const emptyConflict = {
     cloudSnapshot: null,
     cloudRevisionId: null
 };
-
-const metadataMatchesIdentity = (metadata, user, dataUid) => (
-    metadata?.uid === user?.uid
-    && (metadata.dataUid || metadata.uid) === dataUid
-);
 
 export const useCloudSync = () => {
     const context = useContext(CloudSyncContext);
@@ -51,6 +50,24 @@ export const CloudSyncProvider = ({ children }) => {
     const inFlightRef = useRef(false);
     const reconciliationKeyRef = useRef(null);
 
+    const readMeta = useCallback(() => {
+        if (!user || !dataUid) return null;
+
+        const scopedKey = getCloudSyncMetaKey(user.uid, dataUid);
+        const scopedMeta = safeGet(scopedKey, null);
+        const scopedState = getCloudSyncStartupState(scopedMeta, user, dataUid);
+        if (scopedState.metadata) return scopedState.metadata;
+
+        // Migrate the original single-account key without letting another
+        // authenticated surface consume or overwrite this identity's setting.
+        const legacyMeta = safeGet(CLOUD_SYNC_META_KEY, null);
+        const legacyState = getCloudSyncStartupState(legacyMeta, user, dataUid);
+        if (!legacyState.metadata) return null;
+
+        safeSet(scopedKey, legacyState.metadata);
+        return legacyState.metadata;
+    }, [dataUid, user]);
+
     const persistMeta = useCallback((next = {}) => {
         if (!user || !dataUid) return;
 
@@ -64,7 +81,7 @@ export const CloudSyncProvider = ({ children }) => {
             ...next
         };
 
-        safeSet(CLOUD_SYNC_META_KEY, metadata);
+        safeSet(getCloudSyncMetaKey(user.uid, dataUid), metadata);
     }, [dataUid, enabled, lastSyncedAt, user]);
 
     const markSynced = useCallback((manifest, stateChecksum = manifest.stateChecksum) => {
@@ -107,10 +124,7 @@ export const CloudSyncProvider = ({ children }) => {
         try {
             const localSnapshot = exportAppState();
             const localChecksum = await hashPortableSnapshotState(localSnapshot);
-            const storedMeta = safeGet(CLOUD_SYNC_META_KEY, null);
-            const validStoredMeta = metadataMatchesIdentity(storedMeta, user, dataUid)
-                ? storedMeta
-                : null;
+            const validStoredMeta = readMeta();
             const cloud = await loadCloudSnapshot({ db: firebaseDb, uid: dataUid });
 
             if (!cloud || cloud.manifest.kind === 'dummy') {
@@ -160,19 +174,12 @@ export const CloudSyncProvider = ({ children }) => {
         } finally {
             inFlightRef.current = false;
         }
-    }, [dataUid, enabled, exportAppState, importAppState, markSynced, saveLocalSnapshot, user]);
+    }, [dataUid, enabled, exportAppState, importAppState, markSynced, readMeta, saveLocalSnapshot, user]);
 
     useEffect(() => {
         reconciliationKeyRef.current = null;
-        const storedMeta = safeGet(CLOUD_SYNC_META_KEY, null);
 
         if (!user || !dataUid) {
-            if (storedMeta) {
-                safeSet(CLOUD_SYNC_META_KEY, {
-                    ...storedMeta,
-                    enabled: false
-                });
-            }
             setEnabled(false);
             setStatus('paused');
             setLastSyncedAt(null);
@@ -181,24 +188,17 @@ export const CloudSyncProvider = ({ children }) => {
             return;
         }
 
-        const validStoredMeta = metadataMatchesIdentity(storedMeta, user, dataUid)
-            ? storedMeta
-            : null;
+        const {
+            metadata: validStoredMeta,
+            enabled: restoredEnabled,
+            status: restoredStatus
+        } = getCloudSyncStartupState(readMeta(), user, dataUid);
         revisionRef.current = validStoredMeta?.revisionId || null;
         stateChecksumRef.current = validStoredMeta?.stateChecksum || null;
         setLastSyncedAt(validStoredMeta?.lastSyncedAt || null);
-        safeSet(CLOUD_SYNC_META_KEY, {
-            ...(validStoredMeta || {}),
-            uid: user.uid,
-            dataUid,
-            enabled: false,
-            revisionId: validStoredMeta?.revisionId || null,
-            stateChecksum: validStoredMeta?.stateChecksum || null,
-            lastSyncedAt: validStoredMeta?.lastSyncedAt || null
-        });
-        setEnabled(false);
-        setStatus('paused');
-    }, [dataUid, user]);
+        setEnabled(restoredEnabled);
+        setStatus(restoredStatus);
+    }, [dataUid, readMeta, user]);
 
     useEffect(() => {
         const reconciliationKey = enabled && user && dataUid
