@@ -7,14 +7,14 @@ export const DASHBOARD_COORDINATE_PLANE_TOP = 'calc(-1 * var(--tabletop-content-
 
 export const DASHBOARD_HOTSPOTS = {
     health: {
-        leftPercent: 47.4,
-        topPercent: 22.5,
+        leftPercent: 45.9185,
+        topPercent: 18.9167,
         widthPercent: 27,
         heightPercent: 3.8
     },
     coins: {
-        leftPercent: 16.5,
-        topPercent: 73.24,
+        leftPercent: 15.2037,
+        topPercent: 70.74,
         widthPercent: 8.8,
         heightPercent: 4
     }
@@ -22,16 +22,16 @@ export const DASHBOARD_HOTSPOTS = {
 
 export const DASHBOARD_PHYSICAL_TARGETS = {
     injectorDisplay: {
-        leftPercent: 39,
-        topPercent: 14,
-        rightPercent: 78,
-        bottomPercent: 30
+        leftPercent: 37.5185,
+        topPercent: 10.4167,
+        rightPercent: 76.5185,
+        bottomPercent: 26.4167
     },
     coinFace: {
-        leftPercent: 16,
-        topPercent: 70,
-        rightPercent: 27,
-        bottomPercent: 77
+        leftPercent: 14.7037,
+        topPercent: 67.5,
+        rightPercent: 25.7037,
+        bottomPercent: 74.5
     }
 };
 

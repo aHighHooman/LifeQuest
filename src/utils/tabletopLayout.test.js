@@ -123,8 +123,8 @@ describe('tabletop layout contracts', () => {
         const center = getHotspotCenter(DASHBOARD_HOTSPOTS.health);
 
         expect(DASHBOARD_HOTSPOTS.health).toEqual({
-            leftPercent: 47.4,
-            topPercent: 22.5,
+            leftPercent: 45.9185,
+            topPercent: 18.9167,
             widthPercent: 27,
             heightPercent: 3.8
         });
@@ -135,17 +135,17 @@ describe('tabletop layout contracts', () => {
         const center = getHotspotCenter(DASHBOARD_HOTSPOTS.coins);
         const approvedPreviewWidth = 390.4;
         const approvedPreviewHeight = approvedPreviewWidth * (20 / 9);
-        const approvedTopPixels = approvedPreviewHeight
-            * DASHBOARD_HOTSPOTS.coins.topPercent
+        const approvedCenterPixels = approvedPreviewHeight
+            * (DASHBOARD_HOTSPOTS.coins.topPercent + (DASHBOARD_HOTSPOTS.coins.heightPercent / 2))
             / 100;
 
         expect(DASHBOARD_HOTSPOTS.coins).toEqual({
-            leftPercent: 16.5,
-            topPercent: 73.24,
+            leftPercent: 15.2037,
+            topPercent: 70.74,
             widthPercent: 8.8,
             heightPercent: 4
         });
-        expect(approvedTopPixels).toBeCloseTo(635.4, 1);
+        expect(approvedCenterPixels).toBeCloseTo(631.1, 1);
         expect(pointIsInsideBounds(center, DASHBOARD_PHYSICAL_TARGETS.coinFace)).toBe(true);
     });
 
@@ -185,6 +185,10 @@ describe('tabletop layout contracts', () => {
             appSource.indexOf('const TabletopBackdrop'),
             appSource.indexOf('function TabletopStage')
         );
+        const stageSource = appSource.slice(
+            appSource.indexOf('function TabletopStage'),
+            appSource.indexOf('function AppContent')
+        );
         const blenderSource = readFileSync(
             new URL('../../tools/blender/render_lifequest_tabletop_transition.py', import.meta.url),
             'utf8'
@@ -197,6 +201,8 @@ describe('tabletop layout contracts', () => {
         expect(appSource).toContain('lifequest-tabletop-wide.webp');
         expect(backdropSource).toContain('src={tabletopWide}');
         expect(backdropSource).not.toContain('opacity');
+        expect(backdropSource).toContain('animate={turnAnimation.animate}');
+        expect(stageSource).toContain('animate={turnAnimation.animate}');
         expect(blenderSource).toContain('INTERFACE_EASE = (0.45, 0.0, 0.2, 1.0)');
     });
 });

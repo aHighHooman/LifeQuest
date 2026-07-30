@@ -89,23 +89,32 @@ const TabletopPanelFallback = ({ label }) => (
   </div>
 );
 
-const TabletopBackdrop = ({ cameraMove, stageX }) => {
+const getTabletopTurnAnimation = (cameraMove) => {
   const direction = cameraMove?.toTab === 'quests' ? 1 : -1;
+
+  return {
+    animate: {
+      rotateY: cameraMove ? [0, direction * TABLETOP_TRANSITION.turnTiltDegrees, 0] : 0,
+      scale: cameraMove ? [1, TABLETOP_TRANSITION.turnScale, 1] : 1
+    },
+    transition: {
+      duration: TABLETOP_TRANSITION.durationSeconds,
+      ease: TABLETOP_TRANSITION.ease,
+      times: [0, 0.5, 1]
+    }
+  };
+};
+
+const TabletopBackdrop = ({ cameraMove, stageX }) => {
+  const turnAnimation = getTabletopTurnAnimation(cameraMove);
 
   return (
     <Motion.img
       src={tabletopWide}
       alt=""
       draggable="false"
-      animate={{
-        rotateY: cameraMove ? [0, direction * TABLETOP_TRANSITION.turnTiltDegrees, 0] : 0,
-        scale: cameraMove ? [1, TABLETOP_TRANSITION.turnScale, 1] : 1
-      }}
-      transition={{
-        duration: TABLETOP_TRANSITION.durationSeconds,
-        ease: TABLETOP_TRANSITION.ease,
-        times: [0, 0.5, 1]
-      }}
+      animate={turnAnimation.animate}
+      transition={turnAnimation.transition}
       style={{
         x: stageX,
         transformPerspective: 1200
@@ -120,6 +129,7 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
   const questIsActive = currentTab === 'quests';
   const stageX = useMotionValue(dashboardIsActive ? '-50%' : '0%');
   const interfaceAnimationRef = useRef(null);
+  const turnAnimation = getTabletopTurnAnimation(cameraMove);
 
   useEffect(() => {
     interfaceAnimationRef.current?.stop();
@@ -150,7 +160,12 @@ function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, 
       <div className="absolute left-1/2 top-0 h-full w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
         <Motion.div
           className="absolute left-0 top-0 z-10 flex aspect-[9/10] w-[200%] will-change-transform"
-          style={{ x: stageX }}
+          animate={turnAnimation.animate}
+          transition={turnAnimation.transition}
+          style={{
+            x: stageX,
+            transformPerspective: 1200
+          }}
         >
           <section
             className="shared-tabletop-panel relative h-full w-1/2 shrink-0 overflow-visible"

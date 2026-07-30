@@ -10,6 +10,7 @@
     "build": "vite build",
     "lint": "eslint src eslint.config.js vite.config.js postcss.config.js tailwind.config.js",
     "test": "vitest run",
+    "validate:dashboard-alignment": "python tools/validate_dashboard_alignment.py",
     "preview": "vite preview"
   },
   "dependencies": {
