@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { CheckCircle, Trash2, Plus, Sword, Settings, Calendar, X, RotateCcw } from 'lucide-react';
@@ -400,7 +401,7 @@ const QuestDeck = ({
 };
 
 const LogModal = ({ title, items, onClose, type, onRestore }) => {
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
@@ -441,7 +442,8 @@ const LogModal = ({ title, items, onClose, type, onRestore }) => {
                     ))}
                 </div>
             </motion.div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
