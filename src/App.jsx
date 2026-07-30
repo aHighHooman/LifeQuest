@@ -241,7 +241,7 @@ function AppContent({
             <AnimatePresence initial={false} mode="wait">
               <Motion.main
                 key={currentTab}
-                className="absolute inset-0 z-10 flex flex-col will-change-transform"
+                className="absolute inset-x-0 bottom-0 top-[calc(0.5rem+env(safe-area-inset-top))] z-10 flex flex-col will-change-transform md:top-[calc(0.75rem+env(safe-area-inset-top))]"
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
