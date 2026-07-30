@@ -53,7 +53,10 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                         style={{ marginTop: 0, touchAction: 'none' }}
                     >
                         {/* Header */}
-                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/95 backdrop-blur z-10">
+                        <div
+                            className="px-4 pb-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/95 backdrop-blur z-10"
+                            style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
+                        >
                             <h2 className="text-lg font-game font-bold text-white tracking-wider flex items-center gap-2">
                                 <Swords size={20} className="text-game-accent" />
                                 Mission Control
