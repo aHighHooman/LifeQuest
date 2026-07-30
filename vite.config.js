@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       workbox: {
-        globPatterns: ['**/*.{js,wasm,css,html}', 'assets/*.{webp,mp4}']
+        globPatterns: ['**/*.{js,wasm,css,html}', 'assets/*.webp']
       },
       manifest: {
         name: 'LifeQuest',

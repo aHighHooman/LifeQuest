@@ -3,20 +3,13 @@ import { GameProvider } from './context/GameContext';
 import { BudgetProvider } from './context/BudgetContext';
 import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
-import { AnimatePresence, motion as Motion, useMotionValue } from 'framer-motion';
+import { animate, AnimatePresence, motion as Motion, useMotionValue } from 'framer-motion';
 import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfMonitor';
 import Navigation from './components/Navigation';
 import { isLlmInterfaceLocation } from './utils/llmInterface';
 import { CloudSyncProvider } from './context/CloudSyncContext.jsx';
-import dashboardTabletop from './assets/tabletop/lifequest-dashboard-perspective.webp';
-import questTabletop from './assets/tabletop/lifequest-quests-perspective.webp';
-import dashboardToQuests from './assets/tabletop/lifequest-dashboard-to-quests.mp4';
-import questsToDashboard from './assets/tabletop/lifequest-quests-to-dashboard.mp4';
-import {
-    getTabletopInterfaceLeftPercent,
-    getTabletopMediaTimeForElapsedMs,
-    TABLETOP_TRANSITION
-} from './utils/tabletopLayout';
+import tabletopWide from './assets/tabletop/lifequest-tabletop-wide.webp';
+import { TABLETOP_TRANSITION } from './utils/tabletopLayout';
 
 const screenLoaders = {
   dashboard: () => import('./components/Dashboard'),
@@ -96,117 +89,68 @@ const TabletopPanelFallback = ({ label }) => (
   </div>
 );
 
+const TabletopBackdrop = ({ cameraMove, stageX }) => {
+  const direction = cameraMove?.toTab === 'quests' ? 1 : -1;
+
+  return (
+    <Motion.img
+      src={tabletopWide}
+      alt=""
+      draggable="false"
+      animate={{
+        rotateY: cameraMove ? [0, direction * TABLETOP_TRANSITION.turnTiltDegrees, 0] : 0,
+        scale: cameraMove ? [1, TABLETOP_TRANSITION.turnScale, 1] : 1
+      }}
+      transition={{
+        duration: TABLETOP_TRANSITION.durationSeconds,
+        ease: TABLETOP_TRANSITION.ease,
+        times: [0, 0.5, 1]
+      }}
+      style={{
+        x: stageX,
+        transformPerspective: 1200
+      }}
+      className="pointer-events-none absolute inset-y-0 left-0 block h-full w-[200%] max-w-none origin-center select-none will-change-transform"
+    />
+  );
+};
+
 function TabletopStage({ currentTab, setCurrentTab, onOpenSettings, cameraMove, onCameraMoveEnd }) {
   const dashboardIsActive = currentTab === 'dashboard';
   const questIsActive = currentTab === 'quests';
-  const interfaceLeft = useMotionValue(dashboardIsActive ? '-100%' : '0%');
-  const interfaceFrameRequestRef = useRef(null);
-
-  const cancelInterfaceFrameSync = useCallback(() => {
-    const activeRequest = interfaceFrameRequestRef.current;
-    if (!activeRequest) return;
-
-    cancelAnimationFrame(activeRequest.id);
-    interfaceFrameRequestRef.current = null;
-  }, []);
-
-  const setInterfaceToTab = useCallback((tab) => {
-    interfaceLeft.set(tab === 'dashboard' ? '-100%' : '0%');
-  }, [interfaceLeft]);
-
-  const startInterfaceFrameSync = useCallback((activeMove) => {
-    cancelInterfaceFrameSync();
-
-    const updateInterface = (timestamp) => {
-      const mediaTimeSeconds = getTabletopMediaTimeForElapsedMs(
-        timestamp - activeMove.startedAtMs
-      );
-      const leftPercent = getTabletopInterfaceLeftPercent({
-        fromTab: activeMove.fromTab,
-        mediaTimeSeconds
-      });
-      interfaceLeft.set(`${leftPercent}%`);
-
-      if (mediaTimeSeconds >= TABLETOP_TRANSITION.sourceDurationSeconds) {
-        setInterfaceToTab(activeMove.toTab);
-        interfaceFrameRequestRef.current = null;
-        onCameraMoveEnd(activeMove.id);
-        return;
-      }
-
-      const id = requestAnimationFrame(updateInterface);
-      interfaceFrameRequestRef.current = { id };
-    };
-
-    updateInterface(performance.now());
-  }, [
-    cancelInterfaceFrameSync,
-    interfaceLeft,
-    onCameraMoveEnd,
-    setInterfaceToTab
-  ]);
+  const stageX = useMotionValue(dashboardIsActive ? '-50%' : '0%');
+  const interfaceAnimationRef = useRef(null);
 
   useEffect(() => {
-    cancelInterfaceFrameSync();
-    if (cameraMove) {
-      setInterfaceToTab(cameraMove.fromTab);
-      startInterfaceFrameSync(cameraMove);
-    } else {
-      setInterfaceToTab(currentTab);
-    }
-  }, [
-    cameraMove,
-    cancelInterfaceFrameSync,
-    currentTab,
-    setInterfaceToTab,
-    startInterfaceFrameSync
-  ]);
+    interfaceAnimationRef.current?.stop();
 
-  useEffect(() => cancelInterfaceFrameSync, [cancelInterfaceFrameSync]);
+    if (cameraMove) {
+      interfaceAnimationRef.current = animate(
+        stageX,
+        cameraMove.toTab === 'dashboard' ? '-50%' : '0%',
+        {
+          duration: TABLETOP_TRANSITION.durationSeconds,
+          ease: TABLETOP_TRANSITION.ease,
+          onComplete: () => onCameraMoveEnd(cameraMove.id)
+        }
+      );
+    } else {
+      stageX.set(currentTab === 'dashboard' ? '-50%' : '0%');
+    }
+
+    return () => interfaceAnimationRef.current?.stop();
+  }, [cameraMove, currentTab, onCameraMoveEnd, stageX]);
 
   return (
     <main className="absolute inset-0 z-10 overflow-visible">
-      <div className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0" aria-hidden="true">
-        <video src={dashboardToQuests} preload="auto" muted playsInline />
-        <video src={questsToDashboard} preload="auto" muted playsInline />
-      </div>
-
       <div className="absolute left-1/2 top-0 aspect-[9/20] w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
-        <img
-          src={dashboardIsActive ? dashboardTabletop : questTabletop}
-          alt=""
-          draggable="false"
-          className="pointer-events-none absolute inset-0 block h-full w-full select-none object-cover"
-        />
-
-        {cameraMove && (
-          <video
-            key={cameraMove.id}
-            src={cameraMove.source}
-            poster={cameraMove.poster}
-            autoPlay
-            muted
-            playsInline
-            preload="auto"
-            aria-hidden="true"
-            onLoadedMetadata={(event) => {
-              const elapsedMs = performance.now() - cameraMove.startedAtMs;
-              event.currentTarget.defaultPlaybackRate = TABLETOP_TRANSITION.playbackRate;
-              event.currentTarget.playbackRate = TABLETOP_TRANSITION.playbackRate;
-              event.currentTarget.currentTime = getTabletopMediaTimeForElapsedMs(elapsedMs);
-            }}
-            onPlay={(event) => {
-              event.currentTarget.playbackRate = TABLETOP_TRANSITION.playbackRate;
-            }}
-            className="pointer-events-none absolute inset-0 z-10 block h-full w-full object-cover"
-          />
-        )}
+        <TabletopBackdrop cameraMove={cameraMove} stageX={stageX} />
       </div>
 
       <div className="absolute left-1/2 top-0 h-full w-[min(100vw,540px)] -translate-x-1/2 overflow-hidden">
         <Motion.div
-          className="absolute top-0 z-10 flex aspect-[9/10] w-[200%] will-change-[left]"
-          style={{ left: interfaceLeft }}
+          className="absolute left-0 top-0 z-10 flex aspect-[9/10] w-[200%] will-change-transform"
+          style={{ x: stageX }}
         >
           <section
             className="shared-tabletop-panel relative h-full w-1/2 shrink-0 overflow-visible"
@@ -340,14 +284,10 @@ function App() {
     const isTabletopMove = TABLETOP_TABS.has(currentTab) && TABLETOP_TABS.has(nextTab);
     if (isTabletopMove && !prefersReducedMotion) {
       cameraMoveIdRef.current += 1;
-      const toQuests = nextTab === 'quests';
       setTabletopCameraMove({
         id: cameraMoveIdRef.current,
         fromTab: currentTab,
-        toTab: nextTab,
-        startedAtMs: performance.now(),
-        source: toQuests ? dashboardToQuests : questsToDashboard,
-        poster: toQuests ? dashboardTabletop : questTabletop
+        toTab: nextTab
       });
     } else {
       setTabletopCameraMove(null);

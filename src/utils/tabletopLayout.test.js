@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 import {
     DASHBOARD_HEX_LAYOUT,
     DASHBOARD_HOTSPOTS,
     DASHBOARD_PHYSICAL_TARGETS,
     TABLETOP_TRANSITION,
-    getDashboardHexPositions,
-    getTabletopInterfaceLeftPercent,
-    getTabletopMediaTimeForElapsedMs,
-    getTabletopTransitionProgress
+    getDashboardHexPositions
 } from './tabletopLayout.js';
 
 const getHotspotCenter = (hotspot) => ({
@@ -116,22 +112,6 @@ const coinPileSilhouette = [
     { x: 21, y: 593 }
 ];
 
-const getMp4DurationSeconds = (relativeAssetPath) => {
-    const buffer = readFileSync(new URL(relativeAssetPath, import.meta.url));
-    const marker = buffer.indexOf(Buffer.from('mvhd'));
-    if (marker < 0) throw new Error(`Missing mvhd atom in ${relativeAssetPath}`);
-
-    const version = buffer[marker + 4];
-    const timescaleOffset = marker + (version === 1 ? 24 : 16);
-    const durationOffset = marker + (version === 1 ? 28 : 20);
-    const timescale = buffer.readUInt32BE(timescaleOffset);
-    const duration = version === 1
-        ? Number(buffer.readBigUInt64BE(durationOffset))
-        : buffer.readUInt32BE(durationOffset);
-
-    return duration / timescale;
-};
-
 describe('tabletop layout contracts', () => {
     it('cancels the content safe-area inset for physical Blender coordinates', () => {
         const contentInset = 67;
@@ -196,59 +176,27 @@ describe('tabletop layout contracts', () => {
         expect(nodePolygons.every((polygon) => !polygonsOverlap(polygon, coinPileSilhouette))).toBe(true);
     });
 
-    it('maps both interface directions to the video frame clock', () => {
-        expect(getTabletopTransitionProgress(0)).toBeCloseTo(0, 4);
-        expect(getTabletopTransitionProgress(1)).toBeCloseTo(1, 4);
-        expect(getTabletopInterfaceLeftPercent({
-            fromTab: 'dashboard',
-            mediaTimeSeconds: 0
-        })).toBeCloseTo(-100, 4);
-        expect(getTabletopInterfaceLeftPercent({
-            fromTab: 'dashboard',
-            mediaTimeSeconds: 1
-        })).toBeCloseTo(0, 4);
-        expect(getTabletopInterfaceLeftPercent({
-            fromTab: 'quests',
-            mediaTimeSeconds: 0
-        })).toBeCloseTo(0, 4);
-        expect(getTabletopInterfaceLeftPercent({
-            fromTab: 'quests',
-            mediaTimeSeconds: 1
-        })).toBeCloseTo(-100, 4);
-    });
-
-    it('matches the foreground pan duration and easing to the Blender camera render', () => {
-        const dashboardToQuestsDuration = getMp4DurationSeconds(
-            '../assets/tabletop/lifequest-dashboard-to-quests.mp4'
+    it('keeps the compositor-only tabletop turn short and subtle', () => {
+        const appSource = readFileSync(
+            new URL('../App.jsx', import.meta.url),
+            'utf8'
         );
-        const questsToDashboardDuration = getMp4DurationSeconds(
-            '../assets/tabletop/lifequest-quests-to-dashboard.mp4'
+        const backdropSource = appSource.slice(
+            appSource.indexOf('const TabletopBackdrop'),
+            appSource.indexOf('function TabletopStage')
         );
         const blenderSource = readFileSync(
             new URL('../../tools/blender/render_lifequest_tabletop_transition.py', import.meta.url),
             'utf8'
         );
 
-        expect(dashboardToQuestsDuration).toBe(TABLETOP_TRANSITION.sourceDurationSeconds);
-        expect(questsToDashboardDuration).toBe(TABLETOP_TRANSITION.sourceDurationSeconds);
-        expect(TABLETOP_TRANSITION.wallDurationSeconds).toBe(
-            TABLETOP_TRANSITION.sourceDurationSeconds / TABLETOP_TRANSITION.playbackRate
-        );
-        expect(TABLETOP_TRANSITION.wallDurationSeconds).toBeLessThan(0.46);
+        expect(TABLETOP_TRANSITION.durationSeconds).toBeLessThan(0.4);
         expect(TABLETOP_TRANSITION.ease).toEqual([0.45, 0, 0.2, 1]);
+        expect(TABLETOP_TRANSITION.turnTiltDegrees).toBeLessThanOrEqual(1);
+        expect(TABLETOP_TRANSITION.turnScale).toBeLessThanOrEqual(1.01);
+        expect(appSource).toContain('lifequest-tabletop-wide.webp');
+        expect(backdropSource).toContain('src={tabletopWide}');
+        expect(backdropSource).not.toContain('opacity');
         expect(blenderSource).toContain('INTERFACE_EASE = (0.45, 0.0, 0.2, 1.0)');
-    });
-
-    it('uses a bounded wall clock when video frames are unavailable', () => {
-        expect(getTabletopMediaTimeForElapsedMs(-20)).toBe(0);
-        expect(getTabletopMediaTimeForElapsedMs(
-            TABLETOP_TRANSITION.wallDurationSeconds * 500
-        )).toBeCloseTo(0.5, 5);
-        expect(getTabletopMediaTimeForElapsedMs(
-            TABLETOP_TRANSITION.wallDurationSeconds * 1000
-        )).toBe(TABLETOP_TRANSITION.sourceDurationSeconds);
-        expect(getTabletopMediaTimeForElapsedMs(10_000)).toBe(
-            TABLETOP_TRANSITION.sourceDurationSeconds
-        );
     });
 });
