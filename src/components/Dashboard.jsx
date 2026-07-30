@@ -7,7 +7,7 @@ import FocusSelectionModal from './FocusSelectionModal';
 import DayTimer from './DayTimer';
 import clsx from 'clsx';
 import { getTodayISO } from '../utils/dateUtils';
-import { isHabitDueForFocus } from '../domain/gameState';
+import { isHabitDueForFocus, isQuestPendingForFocus } from '../domain/gameState';
 import {
     DASHBOARD_COORDINATE_PLANE_TOP,
     DASHBOARD_HEX_LAYOUT,
@@ -364,7 +364,7 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
 
     // Memoized pending queue for the hex matrix
     const matrixNodes = useMemo(() => {
-        const allPendingTodayQuests = quests.filter(q => q.isFocusedToday && !q.completed);
+        const allPendingTodayQuests = quests.filter(isQuestPendingForFocus);
         const allPendingTodayHabits = habits.filter(h => {
             if (!isHabitDueForFocus(h)) return false;
             return (h.history?.[today] || 0) <= 0;

@@ -40,6 +40,21 @@ export const normalizeQuestRecord = (quest = {}) => {
     };
 };
 
+export const isQuestAvailableForFocus = (quest) => (
+    Boolean(quest) && !quest.completed && !quest.discarded
+);
+
+export const isQuestPendingForFocus = (quest) => (
+    Boolean(quest?.isFocusedToday) && isQuestAvailableForFocus(quest)
+);
+
+export const markQuestDiscarded = (quest, discardedAt = new Date().toISOString()) => ({
+    ...quest,
+    discarded: true,
+    discardedAt,
+    isFocusedToday: false
+});
+
 export const normalizeHabitHistory = (history = {}) => {
     if (!history || typeof history !== 'object' || Array.isArray(history)) return {};
 

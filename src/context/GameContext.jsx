@@ -24,7 +24,8 @@ import {
     normalizeHabitHistory,
     normalizeHabitRecord as normalizeDomainHabitRecord,
     normalizeQuestRecord,
-    normalizeQuickSlots
+    normalizeQuickSlots,
+    markQuestDiscarded
 } from '../domain/gameState.js';
 import {
     DEFAULT_HOME_SCREEN_ICON_ID,
@@ -1092,7 +1093,7 @@ export const GameProvider = ({ children }) => {
 
     const deleteQuest = useCallback((id) => {
         setQuests(prev => prev.map(q => (
-            q.id === id ? { ...q, discarded: true, discardedAt: new Date().toISOString() } : q
+            q.id === id ? markQuestDiscarded(q) : q
         )));
     }, [setQuests]);
 

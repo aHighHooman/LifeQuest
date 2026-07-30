@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X, CheckCircle, Circle, Shield, Swords, Crosshair } from 'lucide-react';
 import { useGame } from '../context/GameContext';
-import { isHabitDueForFocus } from '../domain/gameState';
+import { isHabitDueForFocus, isQuestAvailableForFocus } from '../domain/gameState';
 
 const FocusSelectionModal = ({ isOpen, onClose }) => {
     const { quests, habits, toggleToday } = useGame();
@@ -12,7 +12,7 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
 
     if (!isOpen) return null;
 
-    const availableQuests = quests.filter(q => !q.completed && !q.discarded);
+    const availableQuests = quests.filter(isQuestAvailableForFocus);
     const availableHabits = habits; // All habits are always available
 
     const toggleItem = (id, type) => {
