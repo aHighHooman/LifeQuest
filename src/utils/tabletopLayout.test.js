@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
     DASHBOARD_HEX_LAYOUT,
+    DASHBOARD_COIN_HIT_TARGET,
     DASHBOARD_HOTSPOTS,
     DASHBOARD_PHYSICAL_TARGETS,
     TABLETOP_TRANSITION,
@@ -147,6 +148,29 @@ describe('tabletop layout contracts', () => {
         });
         expect(approvedCenterPixels).toBeCloseTo(631.1, 1);
         expect(pointIsInsideBounds(center, DASHBOARD_PHYSICAL_TARGETS.coinFace)).toBe(true);
+    });
+
+    it('makes the whole physical coin pile open the budget', () => {
+        expect(DASHBOARD_COIN_HIT_TARGET).toEqual({
+            leftPercent: 0,
+            topPercent: 61,
+            widthPercent: 39,
+            heightPercent: 20
+        });
+
+        const pileBounds = {
+            leftPercent: DASHBOARD_COIN_HIT_TARGET.leftPercent,
+            topPercent: DASHBOARD_COIN_HIT_TARGET.topPercent,
+            rightPercent: DASHBOARD_COIN_HIT_TARGET.leftPercent + DASHBOARD_COIN_HIT_TARGET.widthPercent,
+            bottomPercent: DASHBOARD_COIN_HIT_TARGET.topPercent + DASHBOARD_COIN_HIT_TARGET.heightPercent
+        };
+        const coinFaceCenter = getHotspotCenter(DASHBOARD_HOTSPOTS.coins);
+
+        expect(pointIsInsideBounds(coinFaceCenter, pileBounds)).toBe(true);
+        expect(coinPileSilhouette.every((point) => pointIsInsideBounds({
+            x: point.x / 3.9,
+            y: point.y / (8.67)
+        }, pileBounds))).toBe(true);
     });
 
     it('keeps a symmetric, horizontally centered grid inside the real prop corridor', () => {

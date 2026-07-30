@@ -20,6 +20,16 @@ export const DASHBOARD_HOTSPOTS = {
     }
 };
 
+// The coin balance is printed on one coin, but the whole visible pile is the
+// physical control. Keep its larger interaction bounds separate so the label
+// can remain registered to the intended coin face.
+export const DASHBOARD_COIN_HIT_TARGET = {
+    leftPercent: 0,
+    topPercent: 61,
+    widthPercent: 39,
+    heightPercent: 20
+};
+
 export const DASHBOARD_PHYSICAL_TARGETS = {
     injectorDisplay: {
         leftPercent: 37.5185,

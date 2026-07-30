@@ -10,6 +10,7 @@ import { getTodayISO } from '../utils/dateUtils';
 import { isHabitDueForFocus, isQuestPendingForFocus } from '../domain/gameState';
 import {
     DASHBOARD_COORDINATE_PLANE_TOP,
+    DASHBOARD_COIN_HIT_TARGET,
     DASHBOARD_HEX_LAYOUT,
     DASHBOARD_HOTSPOTS,
     getDashboardHexPositions
@@ -30,10 +31,22 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, s
         height: `${DASHBOARD_HOTSPOTS.health.heightPercent}%`
     };
     const coinHotspotStyle = {
-        left: `${DASHBOARD_HOTSPOTS.coins.leftPercent}%`,
-        top: `${DASHBOARD_HOTSPOTS.coins.topPercent}%`,
-        width: `${DASHBOARD_HOTSPOTS.coins.widthPercent}%`,
-        height: `${DASHBOARD_HOTSPOTS.coins.heightPercent}%`,
+        left: `${DASHBOARD_COIN_HIT_TARGET.leftPercent}%`,
+        top: `${DASHBOARD_COIN_HIT_TARGET.topPercent}%`,
+        width: `${DASHBOARD_COIN_HIT_TARGET.widthPercent}%`,
+        height: `${DASHBOARD_COIN_HIT_TARGET.heightPercent}%`
+    };
+    const coinLabelStyle = {
+        left: `${(
+            (DASHBOARD_HOTSPOTS.coins.leftPercent - DASHBOARD_COIN_HIT_TARGET.leftPercent)
+            / DASHBOARD_COIN_HIT_TARGET.widthPercent
+        ) * 100}%`,
+        top: `${(
+            (DASHBOARD_HOTSPOTS.coins.topPercent - DASHBOARD_COIN_HIT_TARGET.topPercent)
+            / DASHBOARD_COIN_HIT_TARGET.heightPercent
+        ) * 100}%`,
+        width: `${(DASHBOARD_HOTSPOTS.coins.widthPercent / DASHBOARD_COIN_HIT_TARGET.widthPercent) * 100}%`,
+        height: `${(DASHBOARD_HOTSPOTS.coins.heightPercent / DASHBOARD_COIN_HIT_TARGET.heightPercent) * 100}%`,
         textShadow: '0 1px 1px rgba(28,12,0,0.95), 0 0 2px rgba(66,34,2,0.8)'
     };
 
@@ -102,17 +115,26 @@ const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, s
 
                 <motion.button
                     type="button"
-                    onClick={onCoinsClick}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onCoinsClick();
+                    }}
                     aria-label={`Open budget. ${coinLabel} coins.`}
                     data-tabletop-hotspot="coins"
-                    className="pointer-events-auto absolute flex items-center justify-center rounded-full border-0 bg-transparent p-0 font-game font-black leading-none text-[#f6d37a] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80"
+                    className="pointer-events-auto absolute cursor-pointer border-0 bg-transparent p-0 font-game font-black leading-none text-[#f6d37a] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.15, duration: 0.45 }}
                     whileTap={{ scale: 0.94 }}
                     style={coinHotspotStyle}
                 >
-                    <span className={clsx(coinLabel.length > 4 ? "text-[6px] sm:text-[7px]" : "text-[9px] sm:text-[10px]")}>
+                    <span
+                        className={clsx(
+                            "absolute flex items-center justify-center rounded-full",
+                            coinLabel.length > 4 ? "text-[6px] sm:text-[7px]" : "text-[9px] sm:text-[10px]"
+                        )}
+                        style={coinLabelStyle}
+                    >
                         {coinLabel}
                     </span>
                 </motion.button>
