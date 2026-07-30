@@ -281,17 +281,22 @@
 .quest-card-title {
     position: absolute;
     z-index: 1;
-    top: 67px;
+    top: 19%;
     right: 27px;
     left: 27px;
+    display: -webkit-box;
+    overflow: hidden;
     margin: 0;
     color: var(--title);
     font-family: 'Rajdhani', sans-serif;
-    font-size: 27px;
+    font-size: clamp(20px, 5.65vw, 27px);
     font-weight: 700;
     line-height: 1.06;
     letter-spacing: .018em;
+    overflow-wrap: anywhere;
     text-shadow: 0 -1px 1px rgba(0, 0, 0, .98), 0 1px 0 color-mix(in srgb, var(--rim-hi) 28%, transparent);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
 }
 
 .quest-card-content {
@@ -302,14 +307,14 @@
 
 .quest-card-details {
     position: absolute;
-    top: 112px;
+    top: 55%;
     right: 12%;
     bottom: 11%;
     left: 12%;
     display: flex;
     min-height: 0;
     flex-direction: column;
-    padding-top: 8px;
+    padding-top: 6px;
     border-top: 1px solid rgba(255, 255, 255, .045);
 }
 
@@ -324,7 +329,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     color: var(--accent);
     font-size: 9px;
     letter-spacing: .15em;
@@ -346,7 +351,7 @@
 .quest-brief-heading {
     display: flex;
     justify-content: space-between;
-    margin: 8px 0 4px;
+    margin: 6px 0 3px;
     color: #707571;
     font-size: 8px;
     letter-spacing: .16em;
@@ -449,10 +454,6 @@
     background:
         radial-gradient(circle at 50% -10%, rgba(208, 169, 73, .09), transparent 38%),
         linear-gradient(110deg, transparent 34%, rgba(212, 175, 86, .035) 49%, transparent 64%);
-}
-
-@media (max-width: 350px) {
-    .quest-card-title { font-size: 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
