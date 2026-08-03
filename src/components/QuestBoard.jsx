@@ -608,7 +608,7 @@ const QuestBoard = ({ showTabletopBackdrop = true }) => {
             </div>
 
             <AnimatePresence>
-                {isCreationOpen && (
+                {isCreationOpen && createPortal(
                     <>
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -812,7 +812,8 @@ const QuestBoard = ({ showTabletopBackdrop = true }) => {
                     </AnimatePresence>
                 </form>
                         </motion.div>
-                    </>
+                    </>,
+                    document.body
                 )}
             </AnimatePresence>
 

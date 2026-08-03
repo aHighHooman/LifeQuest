@@ -178,7 +178,7 @@
     .quest-creation-drawer {
         right: 1.5rem;
         left: 1.5rem;
-        width: min(44rem, calc(100vw - 3rem));
+        width: min(540px, calc(100vw - 3rem));
         margin-inline: auto;
     }
 }
