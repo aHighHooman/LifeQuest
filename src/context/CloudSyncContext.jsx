@@ -17,6 +17,10 @@ import {
     loadCloudSnapshot,
     saveCloudSnapshot
 } from '../utils/cloudSnapshot.js';
+import {
+    isPortableSnapshotCurrent,
+    migrateLegacyPortableSnapshot
+} from '../utils/portableState.js';
 import { safeGet, safeSet } from '../utils/persistence.js';
 import {
     CLOUD_SYNC_META_KEY,
@@ -29,7 +33,8 @@ const CloudSyncContext = createContext(null);
 
 const emptyConflict = {
     cloudSnapshot: null,
-    cloudRevisionId: null
+    cloudRevisionId: null,
+    cloudNeedsCurrencyMigration: false
 };
 
 export const useCloudSync = () => {
@@ -138,12 +143,17 @@ export const CloudSyncProvider = ({ children }) => {
                 return;
             }
 
-            const cloudChecksum = cloud.manifest.stateChecksum
-                || await hashPortableSnapshotState(cloud.snapshot);
+            const cloudSnapshot = migrateLegacyPortableSnapshot(cloud.snapshot);
+            const cloudNeedsCurrencyMigration = !isPortableSnapshotCurrent(cloud.snapshot);
+            const cloudChecksum = await hashPortableSnapshotState(cloudSnapshot);
             revisionRef.current = cloud.manifest.revisionId;
 
             if (localChecksum === cloudChecksum) {
-                markSynced(cloud.manifest, cloudChecksum);
+                if (cloudNeedsCurrencyMigration) {
+                    await saveLocalSnapshot(localSnapshot, cloud.manifest.revisionId);
+                } else {
+                    markSynced(cloud.manifest, cloudChecksum);
+                }
                 return;
             }
 
@@ -158,14 +168,19 @@ export const CloudSyncProvider = ({ children }) => {
             if (!cloudMatchesBase && localMatchesBase) {
                 stateChecksumRef.current = cloudChecksum;
                 revisionRef.current = cloud.manifest.revisionId;
-                importAppState(cloud.snapshot);
-                markSynced(cloud.manifest, cloudChecksum);
+                importAppState(cloudSnapshot);
+                if (cloudNeedsCurrencyMigration) {
+                    await saveLocalSnapshot(cloudSnapshot, cloud.manifest.revisionId);
+                } else {
+                    markSynced(cloud.manifest, cloudChecksum);
+                }
                 return;
             }
 
             setConflict({
-                cloudSnapshot: cloud.snapshot,
-                cloudRevisionId: cloud.manifest.revisionId
+                cloudSnapshot,
+                cloudRevisionId: cloud.manifest.revisionId,
+                cloudNeedsCurrencyMigration
             });
             setStatus('conflict');
         } catch (error) {
@@ -232,9 +247,13 @@ export const CloudSyncProvider = ({ children }) => {
             } catch (error) {
                 if (error instanceof CloudSnapshotConflictError) {
                     const cloud = await loadCloudSnapshot({ db: firebaseDb, uid: dataUid });
+                    const cloudSnapshot = cloud?.snapshot || null;
                     setConflict({
-                        cloudSnapshot: cloud?.snapshot || null,
-                        cloudRevisionId: cloud?.manifest.revisionId || null
+                        cloudSnapshot,
+                        cloudRevisionId: cloud?.manifest.revisionId || null,
+                        cloudNeedsCurrencyMigration: cloudSnapshot
+                            ? !isPortableSnapshotCurrent(cloudSnapshot)
+                            : false
                     });
                     setStatus('conflict');
                 } else {
@@ -279,17 +298,35 @@ export const CloudSyncProvider = ({ children }) => {
         persistMeta({ enabled: false });
     }, [persistMeta]);
 
-    const useCloudCopy = useCallback(() => {
+    const useCloudCopy = useCallback(async () => {
         if (!conflict.cloudSnapshot) return;
 
-        importAppState(conflict.cloudSnapshot);
-        hashPortableSnapshotState(conflict.cloudSnapshot).then((checksum) => {
-            markSynced({
-                revisionId: conflict.cloudRevisionId,
-                stateChecksum: checksum
-            }, checksum);
-        });
-    }, [conflict, importAppState, markSynced]);
+        const cloudSnapshot = migrateLegacyPortableSnapshot(conflict.cloudSnapshot);
+        const cloudNeedsCurrencyMigration = conflict.cloudNeedsCurrencyMigration;
+        importAppState(cloudSnapshot);
+
+        if (cloudNeedsCurrencyMigration) {
+            if (!user || !dataUid) return;
+
+            inFlightRef.current = true;
+            setStatus('saving');
+            try {
+                await saveLocalSnapshot(cloudSnapshot, conflict.cloudRevisionId);
+            } catch (error) {
+                console.error('Migrated cloud copy could not be saved:', error);
+                setStatus(error?.code === 'unavailable' ? 'offline' : 'error');
+            } finally {
+                inFlightRef.current = false;
+            }
+            return;
+        }
+
+        const checksum = await hashPortableSnapshotState(cloudSnapshot);
+        markSynced({
+            revisionId: conflict.cloudRevisionId,
+            stateChecksum: checksum
+        }, checksum);
+    }, [conflict, dataUid, importAppState, markSynced, saveLocalSnapshot, user]);
 
     const useDeviceCopy = useCallback(async () => {
         if (!user || !dataUid || !conflict.cloudRevisionId) return;

@@ -5,6 +5,10 @@ import {
     runTransaction,
     serverTimestamp
 } from 'firebase/firestore';
+import {
+    isPortableSnapshotCurrent,
+    normalizePortableSnapshot
+} from './portableState.js';
 
 export const CLOUD_CHUNK_BYTES = 256 * 1024;
 export const CLOUD_MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
@@ -74,12 +78,19 @@ export const saveCloudSnapshot = async ({
     expectedRevisionId = null,
     kind = 'lifequest'
 }) => {
-    const bytes = encodeSnapshot(snapshot);
+    if (kind === 'lifequest' && !isPortableSnapshotCurrent(snapshot)) {
+        throw new Error('LifeQuest cloud uploads require a current-format snapshot. Migrate it before saving.');
+    }
+
+    const normalizedSnapshot = kind === 'lifequest'
+        ? normalizePortableSnapshot(snapshot)
+        : snapshot;
+    const bytes = encodeSnapshot(normalizedSnapshot);
     const chunks = splitSnapshotBytes(bytes);
     const checksum = await hashSnapshotBytes(bytes);
-    const stateChecksum = await hashPortableSnapshotState(snapshot);
+    const stateChecksum = await hashPortableSnapshotState(normalizedSnapshot);
     const revisionId = globalThis.crypto.randomUUID();
-    const formatVersion = Number(snapshot?.formatVersion || 0);
+    const formatVersion = Number(normalizedSnapshot?.formatVersion || 0);
     const manifestRef = getManifestRef(db, uid);
     const revisionRef = getRevisionRef(db, uid, revisionId);
 

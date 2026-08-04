@@ -9,8 +9,15 @@ import {
 import { getTodayISO, toLocalDateKey } from './dateUtils.js';
 import { DEFAULT_HOME_SCREEN_ICON_ID, normalizeHomeScreenIconId } from './homeScreenIcons.js';
 import { safeGet, safeSet } from './persistence.js';
+import {
+    CURRENCY_UNIT_VERSION,
+    DEFAULT_CREDITS_PER_USD,
+    normalizeCurrencyAmount,
+    normalizeNonNegativeCurrencyAmount,
+    scaleLegacyCurrencyAmount
+} from '../constants/currency.js';
 
-export const PORTABLE_FORMAT_VERSION = 3;
+export const PORTABLE_FORMAT_VERSION = 4;
 export const PORTABLE_APP_NAME = 'LifeQuest';
 export const PORTABLE_BACKUP_PREFIX = 'lq_backup_transfer_pre_import';
 export const DEFAULT_PROTOCOL_LOOKAHEAD_DAYS = 1;
@@ -37,6 +44,7 @@ export const PORTABLE_SNAPSHOT_KEYS = [
     'formatVersion',
     'generatedAt',
     'appName',
+    'currencyUnitVersion',
     'stats',
     'settings',
     'quests',
@@ -47,9 +55,7 @@ export const PORTABLE_SNAPSHOT_KEYS = [
     'ui'
 ];
 
-const HEADER_KEYS = new Set(['formatVersion', 'generatedAt', 'appName']);
-const LEGACY_FORMAT_VERSIONS = new Set([1, 2]);
-const SUPPORTED_FORMAT_VERSIONS = new Set([...LEGACY_FORMAT_VERSIONS, PORTABLE_FORMAT_VERSION]);
+const HEADER_KEYS = new Set(['formatVersion', 'generatedAt', 'appName', 'currencyUnitVersion']);
 const COLLECTION_SECTIONS = new Set([
     'quests',
     'habits',
@@ -116,13 +122,13 @@ const INITIAL_STATS = {
 };
 
 const INITIAL_SETTINGS = {
-    protocolReward: 1,
+    protocolReward: 0.1,
     homeScreenIconId: DEFAULT_HOME_SCREEN_ICON_ID,
     questRewards: {
-        easy: 5,
-        medium: 15,
-        hard: 40,
-        legendary: 100
+        easy: 0.5,
+        medium: 1.5,
+        hard: 4,
+        legendary: 10
     }
 };
 
@@ -148,7 +154,7 @@ const INITIAL_BUDGET = {
     stipendAmount: 0,
     stipendPeriod: 'weekly',
     stipendPaidThrough: null,
-    goldToUsdRatio: 10
+    goldToUsdRatio: DEFAULT_CREDITS_PER_USD
 };
 
 const PASSIVE_CALORIE_CHECKPOINT_IDS = new Set(['18:00', '23:59']);
@@ -196,6 +202,141 @@ const sortObjectByKey = (value = {}) => Object.fromEntries(
 const compactObject = (value = {}) => Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
 );
+
+export const isPortableSnapshotCurrent = (snapshot = {}) => (
+    Number(snapshot?.currencyUnitVersion) >= CURRENCY_UNIT_VERSION
+    && Number(snapshot?.formatVersion) >= PORTABLE_FORMAT_VERSION
+);
+
+const scaleLegacyReward = (reward) => {
+    if (!isPlainObject(reward)) return reward;
+
+    return {
+        ...reward,
+        ...(Object.prototype.hasOwnProperty.call(reward, 'gold')
+            ? { gold: scaleLegacyCurrencyAmount(reward.gold) }
+            : {})
+    };
+};
+
+const scaleLegacyPortableCurrency = (snapshot = {}) => {
+    const source = isPlainObject(snapshot) ? snapshot : {};
+    const stats = isPlainObject(source.stats) ? source.stats : {};
+    const rawSettings = isPlainObject(source.settings) ? source.settings : {};
+    const questRewards = isPlainObject(rawSettings.questRewards)
+        ? Object.fromEntries(
+            Object.entries(rawSettings.questRewards).map(([key, value]) => [
+                key,
+                scaleLegacyCurrencyAmount(value)
+            ])
+        )
+        : rawSettings.questRewards;
+    const quests = Array.isArray(source.quests)
+        ? source.quests.map((quest) => (
+            isPlainObject(quest)
+                ? {
+                    ...quest,
+                    ...(Object.prototype.hasOwnProperty.call(quest, 'reward')
+                        ? { reward: scaleLegacyReward(quest.reward) }
+                        : {}),
+                    ...(Object.prototype.hasOwnProperty.call(quest, 'completedReward')
+                        ? { completedReward: scaleLegacyReward(quest.completedReward) }
+                        : {})
+                }
+                : quest
+        ))
+        : source.quests;
+    const habits = Array.isArray(source.habits)
+        ? source.habits.map((habit) => (
+            isPlainObject(habit)
+                ? {
+                    ...habit,
+                    ...(Object.prototype.hasOwnProperty.call(habit, 'completionReward')
+                        ? { completionReward: scaleLegacyCurrencyAmount(habit.completionReward) }
+                        : {}),
+                    ...(Object.prototype.hasOwnProperty.call(habit, 'passiveReward')
+                        ? { passiveReward: scaleLegacyCurrencyAmount(habit.passiveReward) }
+                        : {})
+                }
+                : habit
+        ))
+        : source.habits;
+    const calories = isPlainObject(source.calories) ? source.calories : {};
+    const calorieHistory = Array.isArray(calories.history)
+        ? calories.history.map((entry) => (
+            isPlainObject(entry) && Object.prototype.hasOwnProperty.call(entry, 'coinCost')
+                ? {
+                    ...entry,
+                    coinCost: scaleLegacyCurrencyAmount(entry.coinCost)
+                }
+                : entry
+        ))
+        : calories.history;
+    const savedFoods = Array.isArray(calories.savedFoods)
+        ? calories.savedFoods.map((food) => (
+            isPlainObject(food) && Object.prototype.hasOwnProperty.call(food, 'coinCost')
+                ? {
+                    ...food,
+                    coinCost: scaleLegacyCurrencyAmount(food.coinCost)
+                }
+                : food
+        ))
+        : calories.savedFoods;
+    const coinHistory = Array.isArray(source.coinHistory)
+        ? source.coinHistory.map((entry) => (
+            isPlainObject(entry) && Object.prototype.hasOwnProperty.call(entry, 'amount')
+                ? {
+                    ...entry,
+                    amount: scaleLegacyCurrencyAmount(entry.amount)
+                }
+                : entry
+        ))
+        : source.coinHistory;
+    const budget = isPlainObject(source.budget) ? source.budget : {};
+
+    return {
+        ...source,
+        stats: {
+            ...stats,
+            ...(Object.prototype.hasOwnProperty.call(stats, 'gold')
+                ? { gold: scaleLegacyCurrencyAmount(stats.gold) }
+                : {})
+        },
+        settings: {
+            ...rawSettings,
+            ...(Object.prototype.hasOwnProperty.call(rawSettings, 'protocolReward')
+                ? { protocolReward: scaleLegacyCurrencyAmount(rawSettings.protocolReward) }
+                : {}),
+            ...(questRewards ? { questRewards } : {}),
+            ...Object.fromEntries(
+                ['easy', 'medium', 'hard', 'legendary']
+                    .map((key) => `questReward${key[0].toUpperCase()}${key.slice(1)}`)
+                    .filter((key) => Object.prototype.hasOwnProperty.call(rawSettings, key))
+                    .map((key) => [
+                        key,
+                        scaleLegacyCurrencyAmount(rawSettings[key])
+                    ])
+            )
+        },
+        quests,
+        habits,
+        calories: {
+            ...calories,
+            ...(calorieHistory ? { history: calorieHistory } : {}),
+            ...(savedFoods ? { savedFoods } : {})
+        },
+        coinHistory,
+        budget: {
+            ...budget,
+            ...(Object.prototype.hasOwnProperty.call(budget, 'stipendAmount')
+                ? { stipendAmount: scaleLegacyCurrencyAmount(budget.stipendAmount) }
+                : {}),
+            ...(Object.prototype.hasOwnProperty.call(budget, 'goldToUsdRatio')
+                ? { goldToUsdRatio: scaleLegacyCurrencyAmount(budget.goldToUsdRatio) }
+                : {})
+        }
+    };
+};
 
 const parseKeyValueLines = (sectionName, lines, allowedKeys = null) => {
     const values = {};
@@ -311,29 +452,8 @@ const parseHeaderLine = (header, line) => {
     header[key] = parseValue(rawValue, key);
 };
 
-const getRequiredSectionsForVersion = (formatVersion) => {
-    const version = Number(formatVersion);
-    if (version < 2) {
-        return PORTABLE_SECTION_ORDER.filter((sectionName) => ![
-            'calorieSavedFoods',
-            'calorieRecentFoods',
-            'calorieQuickSlots',
-            'caloriePassiveLedger'
-        ].includes(sectionName));
-    }
-
-    if (version < 3) {
-        return PORTABLE_SECTION_ORDER.filter((sectionName) => ![
-            'calorieQuickSlots',
-            'caloriePassiveLedger'
-        ].includes(sectionName));
-    }
-
-    return PORTABLE_SECTION_ORDER;
-};
-
-const validateSectionPresence = (sections, formatVersion) => {
-    getRequiredSectionsForVersion(formatVersion).forEach((sectionName) => {
+const validateSectionPresence = (sections) => {
+    PORTABLE_SECTION_ORDER.forEach((sectionName) => {
         if (!(sectionName in sections)) {
             throw new Error(`Missing required section [${sectionName}].`);
         }
@@ -378,7 +498,7 @@ const normalizeCalorieHistoryEntry = (entry = {}, index = 0) => {
         ),
         source,
         foodId: entry.foodId || null,
-        coinCost: normalizeNonNegativeInteger(entry.coinCost, 0)
+        coinCost: normalizeNonNegativeCurrencyAmount(entry.coinCost, 0)
     };
 };
 
@@ -388,7 +508,7 @@ const normalizeSavedFood = (food = {}, index = 0) => {
         id: normalizeText(food.id, `food-${index}`),
         name: normalizeText(food.name, 'Untitled Food'),
         calories: normalizePositiveInteger(food.calories, 1),
-        coinCost: normalizeNonNegativeInteger(food.coinCost, 0),
+        coinCost: normalizeNonNegativeCurrencyAmount(food.coinCost, 0),
         createdAt,
         updatedAt: food.updatedAt || createdAt
     };
@@ -422,20 +542,20 @@ const normalizeStats = (stats = {}) => ({
     maxXp: normalizePositiveInteger(stats.maxXp ?? INITIAL_STATS.maxXp, INITIAL_STATS.maxXp),
     hp: normalizeNonNegativeInteger(stats.hp ?? INITIAL_STATS.hp, INITIAL_STATS.hp),
     maxHp: normalizePositiveInteger(stats.maxHp ?? INITIAL_STATS.maxHp, INITIAL_STATS.maxHp),
-    gold: normalizeInteger(stats.gold ?? INITIAL_STATS.gold, INITIAL_STATS.gold),
+    gold: normalizeCurrencyAmount(stats.gold ?? INITIAL_STATS.gold, INITIAL_STATS.gold),
     lastLoginDate: stats.lastLoginDate ?? null
 });
 
 const normalizeSettings = (settings = {}) => ({
     ...INITIAL_SETTINGS,
     ...settings,
-    protocolReward: normalizeNonNegativeInteger(settings.protocolReward ?? INITIAL_SETTINGS.protocolReward, INITIAL_SETTINGS.protocolReward),
+    protocolReward: normalizeNonNegativeCurrencyAmount(settings.protocolReward ?? INITIAL_SETTINGS.protocolReward, INITIAL_SETTINGS.protocolReward),
     homeScreenIconId: normalizeHomeScreenIconId(settings.homeScreenIconId),
     questRewards: {
-        easy: normalizeNonNegativeInteger(settings.questRewards?.easy ?? settings.questRewardEasy ?? INITIAL_SETTINGS.questRewards.easy, INITIAL_SETTINGS.questRewards.easy),
-        medium: normalizeNonNegativeInteger(settings.questRewards?.medium ?? settings.questRewardMedium ?? INITIAL_SETTINGS.questRewards.medium, INITIAL_SETTINGS.questRewards.medium),
-        hard: normalizeNonNegativeInteger(settings.questRewards?.hard ?? settings.questRewardHard ?? INITIAL_SETTINGS.questRewards.hard, INITIAL_SETTINGS.questRewards.hard),
-        legendary: normalizeNonNegativeInteger(settings.questRewards?.legendary ?? settings.questRewardLegendary ?? INITIAL_SETTINGS.questRewards.legendary, INITIAL_SETTINGS.questRewards.legendary)
+        easy: normalizeNonNegativeCurrencyAmount(settings.questRewards?.easy ?? settings.questRewardEasy ?? INITIAL_SETTINGS.questRewards.easy, INITIAL_SETTINGS.questRewards.easy),
+        medium: normalizeNonNegativeCurrencyAmount(settings.questRewards?.medium ?? settings.questRewardMedium ?? INITIAL_SETTINGS.questRewards.medium, INITIAL_SETTINGS.questRewards.medium),
+        hard: normalizeNonNegativeCurrencyAmount(settings.questRewards?.hard ?? settings.questRewardHard ?? INITIAL_SETTINGS.questRewards.hard, INITIAL_SETTINGS.questRewards.hard),
+        legendary: normalizeNonNegativeCurrencyAmount(settings.questRewards?.legendary ?? settings.questRewardLegendary ?? INITIAL_SETTINGS.questRewards.legendary, INITIAL_SETTINGS.questRewards.legendary)
     }
 });
 
@@ -488,36 +608,70 @@ const normalizeBudget = (budget = {}) => ({
     groceryList: Array.isArray(budget.groceryList) ? budget.groceryList : [],
     priceDatabase: sortObjectByKey(budget.priceDatabase),
     groceryPeriod: budget.groceryPeriod || INITIAL_BUDGET.groceryPeriod,
-    stipendAmount: normalizeNumber(budget.stipendAmount ?? INITIAL_BUDGET.stipendAmount, INITIAL_BUDGET.stipendAmount),
+    stipendAmount: normalizeNonNegativeCurrencyAmount(
+        budget.stipendAmount ?? INITIAL_BUDGET.stipendAmount,
+        INITIAL_BUDGET.stipendAmount
+    ),
     stipendPeriod: budget.stipendPeriod || INITIAL_BUDGET.stipendPeriod,
     stipendPaidThrough: budget.stipendPaidThrough ?? null,
-    goldToUsdRatio: normalizePositiveInteger(budget.goldToUsdRatio ?? INITIAL_BUDGET.goldToUsdRatio, INITIAL_BUDGET.goldToUsdRatio)
+    goldToUsdRatio: Math.max(
+        0.0001,
+        normalizeCurrencyAmount(budget.goldToUsdRatio ?? INITIAL_BUDGET.goldToUsdRatio, INITIAL_BUDGET.goldToUsdRatio)
+    )
 });
 
 export const normalizePortableSnapshot = (snapshot = {}) => {
-    const settings = normalizeSettings(snapshot.settings);
+    const currentSnapshot = isPlainObject(snapshot) ? snapshot : {};
+    if (!isPortableSnapshotCurrent(currentSnapshot)) {
+        throw new Error('Portable snapshots must use the current format. Migrate legacy data before normalizing it.');
+    }
+
+    const settings = normalizeSettings(currentSnapshot.settings);
     const todayKey = getTodayISO();
 
     return {
         formatVersion: PORTABLE_FORMAT_VERSION,
-        generatedAt: snapshot.generatedAt || new Date().toISOString(),
-        appName: snapshot.appName || PORTABLE_APP_NAME,
-        stats: normalizeStats(snapshot.stats),
+        generatedAt: currentSnapshot.generatedAt || new Date().toISOString(),
+        appName: currentSnapshot.appName || PORTABLE_APP_NAME,
+        currencyUnitVersion: CURRENCY_UNIT_VERSION,
+        stats: normalizeStats(currentSnapshot.stats),
         settings,
-        quests: Array.isArray(snapshot.quests) ? snapshot.quests.map(normalizeQuestRecord) : [],
-        habits: Array.isArray(snapshot.habits)
-            ? snapshot.habits.map((habit) => normalizeHabitRecord(habit, settings.protocolReward, todayKey))
+        quests: Array.isArray(currentSnapshot.quests) ? currentSnapshot.quests.map(normalizeQuestRecord) : [],
+        habits: Array.isArray(currentSnapshot.habits)
+            ? currentSnapshot.habits.map((habit) => normalizeHabitRecord(habit, settings.protocolReward, todayKey))
             : [],
-        calories: normalizeCalories(snapshot.calories),
-        coinHistory: Array.isArray(snapshot.coinHistory) ? snapshot.coinHistory : [],
-        budget: normalizeBudget(snapshot.budget),
+        calories: normalizeCalories(currentSnapshot.calories),
+        coinHistory: Array.isArray(currentSnapshot.coinHistory)
+            ? currentSnapshot.coinHistory.map((entry) => ({
+                ...entry,
+                amount: normalizeCurrencyAmount(entry?.amount)
+            }))
+            : [],
+        budget: normalizeBudget(currentSnapshot.budget),
         ui: {
             protocolLookaheadDays: Math.max(
                 1,
-                normalizeInteger(snapshot.ui?.protocolLookaheadDays ?? DEFAULT_PROTOCOL_LOOKAHEAD_DAYS, DEFAULT_PROTOCOL_LOOKAHEAD_DAYS)
+                normalizeInteger(currentSnapshot.ui?.protocolLookaheadDays ?? DEFAULT_PROTOCOL_LOOKAHEAD_DAYS, DEFAULT_PROTOCOL_LOOKAHEAD_DAYS)
             )
         }
     };
+};
+
+/**
+ * Converts the one existing pre-decimal snapshot into the current format.
+ * Call this only at migration/import boundaries; current snapshots should use
+ * normalizePortableSnapshot directly.
+ */
+export const migrateLegacyPortableSnapshot = (snapshot = {}) => {
+    if (isPortableSnapshotCurrent(snapshot)) {
+        return normalizePortableSnapshot(snapshot);
+    }
+
+    return normalizePortableSnapshot({
+        ...scaleLegacyPortableCurrency(snapshot),
+        formatVersion: PORTABLE_FORMAT_VERSION,
+        currencyUnitVersion: CURRENCY_UNIT_VERSION
+    });
 };
 
 const collectionRecordsFromSnapshot = (snapshot, sectionName) => {
@@ -574,8 +728,10 @@ export const writeProtocolLookaheadDays = (value) => {
 
 export const createPortableSnapshot = (state) => normalizePortableSnapshot({
     ...state,
+    formatVersion: PORTABLE_FORMAT_VERSION,
     generatedAt: new Date().toISOString(),
-    appName: PORTABLE_APP_NAME
+    appName: PORTABLE_APP_NAME,
+    currencyUnitVersion: CURRENCY_UNIT_VERSION
 });
 
 export const formatPortableSnapshot = (snapshot) => {
@@ -587,6 +743,7 @@ export const formatPortableSnapshot = (snapshot) => {
         `formatVersion: ${serializeValue(PORTABLE_FORMAT_VERSION)}`,
         `generatedAt: ${serializeValue(normalized.generatedAt)}`,
         `appName: ${serializeValue(normalized.appName)}`,
+        `currencyUnitVersion: ${serializeValue(CURRENCY_UNIT_VERSION)}`,
         '',
         renderScalarSection('stats', {
             level: normalized.stats.level,
@@ -667,6 +824,7 @@ const sectionsToSnapshot = (header, sections) => {
         formatVersion: Number(header.formatVersion),
         generatedAt: header.generatedAt,
         appName: header.appName || PORTABLE_APP_NAME,
+        currencyUnitVersion: Number(header.currencyUnitVersion || 0),
         stats: sections.stats,
         settings: {
             protocolReward: sections.settings.protocolReward,
@@ -764,20 +922,24 @@ export const parsePortableSnapshot = (text) => {
 
     const formatVersion = Number(header.formatVersion);
 
-    if (!SUPPORTED_FORMAT_VERSIONS.has(formatVersion)) {
-        throw new Error(`Unsupported formatVersion "${header.formatVersion}". Expected 1, 2, or ${PORTABLE_FORMAT_VERSION}.`);
+    if (formatVersion !== PORTABLE_FORMAT_VERSION) {
+        throw new Error(`Unsupported formatVersion "${header.formatVersion}". Expected ${PORTABLE_FORMAT_VERSION}.`);
     }
 
     if (!header.generatedAt) {
         throw new Error('Missing required metadata key "generatedAt".');
     }
 
-    validateSectionPresence(sections, formatVersion);
+    if (Number(header.currencyUnitVersion) < CURRENCY_UNIT_VERSION) {
+        throw new Error(`Unsupported currencyUnitVersion "${header.currencyUnitVersion}". Expected ${CURRENCY_UNIT_VERSION}.`);
+    }
+
+    validateSectionPresence(sections);
     return sectionsToSnapshot(header, sections);
 };
 
 export const summarizePortableSnapshot = (snapshot) => {
-    const normalized = normalizePortableSnapshot(snapshot);
+    const normalized = migrateLegacyPortableSnapshot(snapshot);
 
     return {
         quests: normalized.quests.length,
@@ -793,7 +955,7 @@ export const storePortableImportBackup = (snapshot) => {
     const key = `${PORTABLE_BACKUP_PREFIX}_${Date.now()}`;
     safeSet(key, {
         createdAt: new Date().toISOString(),
-        snapshot: normalizePortableSnapshot(snapshot)
+        snapshot: createPortableSnapshot(snapshot)
     });
     return key;
 };

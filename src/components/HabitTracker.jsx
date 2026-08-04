@@ -6,6 +6,10 @@ import clsx from 'clsx';
 import { usePersistentState } from '../utils/persistence';
 import { PROTOCOL_LOOKAHEAD_STORAGE_KEY } from '../constants/persistenceKeys.js';
 import { useDeckOrder } from '../hooks/useDeckOrder';
+import {
+    formatCurrencyAmount,
+    normalizeNonNegativeCurrencyAmount
+} from '../constants/currency.js';
 
 // Constants
 const LOOKAHEAD_DAYS_DEFAULT = 1;
@@ -42,8 +46,8 @@ const getDueStatusLabel = (habit) => {
 };
 
 const getRewardSummary = (habit) => ({
-    completionReward: Number(habit.completionReward || 0),
-    passiveReward: Number(habit.passiveReward || 0)
+    completionReward: normalizeNonNegativeCurrencyAmount(habit.completionReward),
+    passiveReward: normalizeNonNegativeCurrencyAmount(habit.passiveReward)
 });
 
 const ProtocolRewardField = ({
@@ -95,7 +99,7 @@ const ProtocolRewardField = ({
                 onClick={(e) => e.stopPropagation()}
                 className="mt-3 text-left"
             >
-                <span className="text-3xl font-game leading-none text-white">{value}</span>
+                <span className="text-3xl font-game leading-none text-white">{formatCurrencyAmount(value)}</span>
             </button>
         </div>
     );
@@ -165,7 +169,7 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
         if (!editingRewardField) return;
 
         onUpdateRewards(habit.id, {
-            [editingRewardField]: Math.max(0, parseInt(rewardDraftValue, 10) || 0)
+            [editingRewardField]: normalizeNonNegativeCurrencyAmount(rewardDraftValue)
         });
         setEditingRewardField(null);
         setRewardDraftValue('');
@@ -349,6 +353,7 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
                             <input
                                 type="number"
                                 min="0"
+                                step="0.1"
                                 value={rewardDraftValue}
                                 onChange={(e) => setRewardDraftValue(e.target.value)}
                                 onKeyDown={handleRewardEditorKeyDown}
@@ -467,10 +472,10 @@ const ProtocolListModal = ({ title, items, onClose, type, onAction, actionLabel,
                                     </div>
                                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-mono">
                                         <span className="rounded-full border border-amber-400/15 bg-amber-500/10 px-2 py-1 text-amber-200">
-                                            Bonus {completionReward}
+                                            Bonus {formatCurrencyAmount(completionReward)}
                                         </span>
                                         <span className="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-2 py-1 text-emerald-200">
-                                            Passive {passiveReward}/day
+                                            Passive {formatCurrencyAmount(passiveReward)}/day
                                         </span>
                                     </div>
                                 </div>
@@ -652,8 +657,9 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                                                     <input
                                                         type="number"
                                                         min="0"
+                                                        step="0.1"
                                                         value={completionReward}
-                                                        onChange={(e) => setCompletionReward(Math.max(0, parseInt(e.target.value) || 0))}
+                                                        onChange={(e) => setCompletionReward(normalizeNonNegativeCurrencyAmount(e.target.value))}
                                                         className="w-full bg-transparent text-right font-mono text-white focus:outline-none"
                                                     />
                                                 </div>
@@ -665,8 +671,9 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                                                     <input
                                                         type="number"
                                                         min="0"
+                                                        step="0.1"
                                                         value={passiveReward}
-                                                        onChange={(e) => setPassiveReward(Math.max(0, parseInt(e.target.value) || 0))}
+                                                        onChange={(e) => setPassiveReward(normalizeNonNegativeCurrencyAmount(e.target.value))}
                                                         className="w-full bg-transparent text-right font-mono text-white focus:outline-none"
                                                     />
                                                 </div>

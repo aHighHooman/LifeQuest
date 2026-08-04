@@ -16,11 +16,12 @@ import {
     getDashboardHexPositions
 } from '../utils/tabletopLayout';
 import healthInjectorScene from '../assets/dashboard/health-injector-tabletop-blender.webp';
+import { formatCurrencyAmount } from '../constants/currency.js';
 
 const DashboardTabletop = ({ percentage, coins, onCapacityClick, onCoinsClick, showBackdrop = true }) => {
     const displayPercentage = Math.round(percentage);
     const activeSegments = Math.round(percentage / 10);
-    const coinLabel = String(coins);
+    const coinLabel = formatCurrencyAmount(coins);
     // AppContent reserves the status-bar safe area for interactive content. The
     // artwork is a screen backdrop, though, so it must cancel that inset or the
     // shell gradient becomes visible as a strip above the scene on iOS.

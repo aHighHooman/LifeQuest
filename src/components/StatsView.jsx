@@ -22,6 +22,7 @@ import {
     YAxis
 } from 'recharts';
 import { useGame, useGameCalories } from '../context/GameContext';
+import { formatCurrencyAmount } from '../constants/currency.js';
 import { toLocalDateKey } from '../utils/dateUtils';
 
 const TONE_STYLES = {
@@ -238,7 +239,7 @@ const SectionCard = ({ title, eyebrow, icon: Icon, children }) => (
     </section>
 );
 
-const ChartTooltip = ({ active, payload, label, formatLabel = (value) => value }) => {
+const ChartTooltip = ({ active, payload, label, formatLabel = (value) => value, formatValue = (value) => value }) => {
     if (!active || !payload?.length) return null;
 
     return (
@@ -248,7 +249,7 @@ const ChartTooltip = ({ active, payload, label, formatLabel = (value) => value }
                 {payload.map((entry) => (
                     <div key={entry.name} className="flex items-center justify-between gap-4 text-xs">
                         <span style={{ color: entry.color }}>{entry.name}</span>
-                        <span className="font-semibold text-slate-100">{entry.value}</span>
+                        <span className="font-semibold text-slate-100">{formatValue(entry.value)}</span>
                     </div>
                 ))}
             </div>
@@ -380,7 +381,7 @@ const StatsView = ({ isOpen, onClose }) => {
             {
                 icon: Coins,
                 label: 'Current Balance',
-                value: `${currentBalance}`,
+                value: formatCurrencyAmount(currentBalance),
                 helper: '',
                 tone: 'amber',
                 className: 'border-0 bg-transparent shadow-none',
@@ -402,8 +403,10 @@ const StatsView = ({ isOpen, onClose }) => {
             {
                 icon: TrendingUp,
                 label: 'Earned 14D',
-                value: `+${earned14}`,
-                helper: spent14 ? `${spent14} spent in the same window` : 'No spend in the same window',
+                value: `+${formatCurrencyAmount(earned14)}`,
+                helper: spent14
+                    ? `${formatCurrencyAmount(spent14)} spent in the same window`
+                    : 'No spend in the same window',
                 tone: 'emerald',
                 variant: 'strip',
                 className: 'border-0 bg-transparent shadow-none',
@@ -492,9 +495,12 @@ const StatsView = ({ isOpen, onClose }) => {
                             tick={{ fontSize: 10, fill: hologram ? '#fde68a' : '#64748b' }}
                             axisLine={false}
                             tickLine={false}
-                            allowDecimals={false}
+                            allowDecimals
                         />
-                        <Tooltip content={<ChartTooltip formatLabel={formatAxisDate} />} cursor={{ stroke: '#fbbf24', strokeOpacity: 0.15 }} />
+                        <Tooltip
+                            content={<ChartTooltip formatLabel={formatAxisDate} formatValue={formatCurrencyAmount} />}
+                            cursor={{ stroke: '#fbbf24', strokeOpacity: 0.15 }}
+                        />
                         <Area
                             type="monotone"
                             dataKey="balance"
@@ -865,7 +871,7 @@ const StatsView = ({ isOpen, onClose }) => {
                                 <div className="relative z-10">
                                     <div className="mb-2 flex items-start justify-between gap-4">
                                         <h3 className="font-game text-base font-semibold uppercase tracking-[0.08em] text-yellow-200 drop-shadow-[0_0_14px_rgba(250,204,21,0.34)]">Current Balance</h3>
-                                        <p className="font-game text-2xl font-semibold uppercase tracking-[0.05em] text-yellow-200 drop-shadow-[0_0_14px_rgba(250,204,21,0.48)]">{stats.gold || 0}</p>
+                                        <p className="font-game text-2xl font-semibold uppercase tracking-[0.05em] text-yellow-200 drop-shadow-[0_0_14px_rgba(250,204,21,0.48)]">{formatCurrencyAmount(stats.gold)}</p>
                                     </div>
                                     <div className="relative bg-transparent">
                                         <div className="relative z-10">{renderCoinBalanceChart({ hologram: true })}</div>

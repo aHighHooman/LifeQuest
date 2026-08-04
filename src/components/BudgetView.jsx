@@ -18,6 +18,12 @@ import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { getTodayISO, toLocalDateKey } from '../utils/dateUtils';
+import {
+    DEFAULT_CREDITS_PER_USD,
+    formatCurrencyAmount,
+    normalizeCurrencyAmount,
+    normalizeNonNegativeCurrencyAmount
+} from '../constants/currency.js';
 
 // Constants
 const TAB_PROVISIONS = 'provisions';
@@ -375,6 +381,7 @@ const SettingsModal = memo(({
                                     <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
                                     <input
                                         type="number"
+                                        step="0.1"
                                         value={toCredits(totalMonthlyBudget)}
                                         onChange={(e) => setTotalMonthlyBudget(fromCredits(e.target.value))}
                                         className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
@@ -387,6 +394,7 @@ const SettingsModal = memo(({
                                     <Coins size={14} className="absolute left-3 top-3 text-amber-500/50" />
                                     <input
                                         type="number"
+                                        step="0.1"
                                         value={toCredits(groceryAllocation)}
                                         onChange={(e) => setGroceryAllocation(fromCredits(e.target.value))}
                                         className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
@@ -411,9 +419,10 @@ const SettingsModal = memo(({
                                     <input
                                         type="number"
                                         min="0"
+                                        step="0.1"
                                         value={stipendAmount}
                                         onChange={(e) => {
-                                            setStipendAmount(Math.max(0, parseInt(e.target.value, 10) || 0));
+                                            setStipendAmount(normalizeNonNegativeCurrencyAmount(e.target.value));
                                             resetStipendAnchor();
                                         }}
                                         className="w-full bg-black/50 border border-amber-900/50 rounded pl-9 pr-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
@@ -439,8 +448,12 @@ const SettingsModal = memo(({
                                 <label className="block text-[10px] font-game text-amber-700 uppercase mb-1">Exchange Rate (Credits : $1)</label>
                                 <input
                                     type="number"
+                                    step="0.1"
                                     value={goldToUsdRatio}
-                                    onChange={(e) => setGoldToUsdRatio(Number(e.target.value))}
+                                    onChange={(e) => setGoldToUsdRatio(Math.max(
+                                        0.0001,
+                                        normalizeCurrencyAmount(e.target.value, DEFAULT_CREDITS_PER_USD)
+                                    ))}
                                     className="w-full bg-black/50 border border-amber-900/50 rounded px-3 py-2 text-amber-100 font-mono focus:border-amber-500/50 outline-none transition-colors"
                                 />
                             </div>
@@ -907,7 +920,7 @@ const VaultHeader = memo(({ todayIn, liquidAssets, todayOut }) => (
             <span className="relative text-[9px] font-bold text-emerald-300/70 uppercase tracking-widest mb-0.5">Today In</span>
             <div className="flex items-center gap-1">
                 <Coins size={14} className="relative text-amber-500 drop-shadow-[0_0_6px_rgba(16,185,129,0.22)]" />
-                <span className="relative text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{Number(todayIn || 0).toLocaleString()}</span>
+                <span className="relative text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{formatCurrencyAmount(todayIn)}</span>
             </div>
         </div>
         <div className="bg-amber-950/30 border border-amber-500/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group">
@@ -915,7 +928,7 @@ const VaultHeader = memo(({ todayIn, liquidAssets, todayOut }) => (
             <span className="text-[9px] font-bold text-amber-400/80 uppercase tracking-widest mb-0.5">On Hand</span>
             <div className="flex items-center gap-1">
                 <Coins size={14} className="text-amber-400" />
-                <span className="text-lg font-black font-game text-amber-400 leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">{liquidAssets.toLocaleString()}</span>
+                <span className="text-lg font-black font-game text-amber-400 leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">{formatCurrencyAmount(liquidAssets)}</span>
             </div>
         </div>
         <div className="bg-amber-950/30 border border-red-400/20 rounded p-2 flex flex-col justify-center items-center relative overflow-hidden group shadow-[0_0_18px_rgba(248,113,113,0.04)]">
@@ -923,7 +936,7 @@ const VaultHeader = memo(({ todayIn, liquidAssets, todayOut }) => (
             <span className="relative text-[9px] font-bold text-red-300/70 uppercase tracking-widest mb-0.5">Today Out</span>
             <div className="flex items-center gap-1">
                 <Coins size={14} className="relative text-amber-500 drop-shadow-[0_0_6px_rgba(248,113,113,0.22)]" />
-                <span className="relative text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{Number(todayOut || 0).toLocaleString()}</span>
+                <span className="relative text-lg font-black font-game text-amber-100 leading-none shadow-amber-glow">{formatCurrencyAmount(todayOut)}</span>
             </div>
         </div>
     </div>
@@ -1126,6 +1139,7 @@ const ProvisionsView = memo(({
                     <div className="w-24 relative">
                         <input
                             type="number"
+                            step="0.1"
                             placeholder="0"
                             value={itemPriceCredits}
                             onChange={(e) => setItemPriceCredits(e.target.value)}
@@ -1191,7 +1205,7 @@ const LedgerTransactionRow = memo(({ tx }) => (
                 ? "text-emerald-300 bg-emerald-900/10 border-emerald-900/20 group-hover:border-emerald-500/30"
                 : "text-red-400 bg-red-900/10 border-red-900/20 group-hover:border-red-500/30"
         )}>
-            <Coins size={10} /> {tx.type === 'earned' ? '+' : '-'}{tx.amount}
+            <Coins size={10} /> {tx.type === 'earned' ? '+' : '-'}{formatCurrencyAmount(tx.amount)}
         </div>
     </div>
 ));
@@ -1216,7 +1230,7 @@ const LedgerView = memo(({ spendCoins, coinHistory }) => {
         e.preventDefault();
         if (!desc || !amount) return;
 
-        spendCoins(parseInt(amount, 10), desc);
+        spendCoins(normalizeCurrencyAmount(amount), desc);
         setDesc('');
         setAmount('');
     }, [amount, desc, spendCoins]);
@@ -1241,6 +1255,7 @@ const LedgerView = memo(({ spendCoins, coinHistory }) => {
                         <div className="w-32 relative">
                             <input
                                 type="number"
+                                step="0.1"
                                 placeholder="0"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
@@ -1304,7 +1319,9 @@ const BudgetView = () => {
 
     // Display: USD -> Credits
     const toCreditValue = useCallback((usdAmount) => {
-        return Number((Number(usdAmount || 0) * goldToUsdRatio).toFixed(0));
+        return normalizeCurrencyAmount(
+            Number(usdAmount || 0) * Number(goldToUsdRatio || DEFAULT_CREDITS_PER_USD)
+        );
     }, [goldToUsdRatio]);
 
     const toCredits = useCallback((usdAmount) => {
@@ -1314,11 +1331,11 @@ const BudgetView = () => {
     // Input: Credits -> USD
     const fromCredits = useCallback((creditAmount) => {
         if (!creditAmount) return 0;
-        return Number(creditAmount) / goldToUsdRatio;
+        return Number(creditAmount) / Number(goldToUsdRatio || DEFAULT_CREDITS_PER_USD);
     }, [goldToUsdRatio]);
 
     const formatCredits = useCallback((usdAmount) => {
-        return toCreditValue(usdAmount).toLocaleString();
+        return formatCurrencyAmount(toCreditValue(usdAmount));
     }, [toCreditValue]);
 
     const dailyLedgerSummary = useMemo(() => {

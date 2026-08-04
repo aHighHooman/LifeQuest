@@ -4,20 +4,20 @@ LifeQuest uses a gamified system to encourage productivity. This document explai
 
 ## Quests (Tasks)
 
-Quests are one-time objectives with four defined difficulty levels. Each level provides a different amount of Experience Points (XP) and Gold.
+Quests are one-time objectives with four defined difficulty levels. Each level provides a different amount of Experience Points (XP) and Credits.
 
 ### Difficulty & Default Rewards
-| Difficulty | XP Reward | Gold Reward (Default) |
+| Difficulty | XP Reward | Credit Reward (Default) |
 | :--- | :--- | :--- |
-| **Easy** | 10 XP | 5 Gold |
-| **Medium** | 25 XP | 15 Gold |
-| **Hard** | 60 XP | 40 Gold |
-| **Legendary** | 150 XP | 100 Gold |
+| **Easy** | 10 XP | 0.5 Credits |
+| **Medium** | 25 XP | 1.5 Credits |
+| **Hard** | 60 XP | 4 Credits |
+| **Legendary** | 150 XP | 10 Credits |
 
-*Note: Gold rewards for standard difficulties can be customized in the Settings menu.*
+*Note: Credit rewards for standard difficulties can be customized in the Settings menu.*
 
 ### Custom Rewards
-Users can create "Custom Reward" quests, where the XP and Gold are manually specified at creation time. These quests ignore the default settings for gold rewards.
+Users can create "Custom Reward" quests, where the XP and Credits are manually specified at creation time. These quests ignore the default settings for credit rewards.
 
 ---
 
@@ -26,7 +26,7 @@ Users can create "Custom Reward" quests, where the XP and Gold are manually spec
 Protocols are recurring actions. Unlike Quests, they have a "Streak" counter.
 
 ### Completion
-- **Positive Check**: Awards **5 XP** and the global **Protocol Reward** amount (default: 1 Gold). Increases the habit's streak.
+- **Positive Check**: Awards **5 XP** and the global **Protocol Reward** amount (default: 0.1 Credits). Increases the habit's streak.
 - **Negative Check (Failure)**: Deducts **5 HP**. Resets the habit's streak to 0.
 
 ---

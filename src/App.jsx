@@ -280,16 +280,14 @@ function AppContent({
 }
 
 function App() {
+  // Run persistence migrations before the providers initialize their state.
+  checkVersionAndEnsurePersistence();
+
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [tabletopCameraMove, setTabletopCameraMove] = useState(null);
   const pendingTabSwitchRef = useRef(null);
   const cameraMoveIdRef = useRef(0);
   const isLlmInterface = isLlmInterfaceLocation();
-
-  useEffect(() => {
-    // Check for version updates and ensure persistence validity on app launch
-    checkVersionAndEnsurePersistence();
-  }, []);
 
   const handleTabChange = useCallback((nextTab) => {
     if (currentTab === nextTab) return;

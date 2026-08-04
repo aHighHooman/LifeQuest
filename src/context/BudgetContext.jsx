@@ -2,6 +2,10 @@
 import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { usePersistentState } from '../utils/persistence';
 import { createId } from '../domain/gameState';
+import {
+    DEFAULT_CREDITS_PER_USD,
+    normalizeCurrencyAmount
+} from '../constants/currency.js';
 
 const BudgetStateContext = createContext();
 const BudgetActionsContext = createContext();
@@ -36,15 +40,15 @@ export const BudgetProvider = ({ children }) => {
     const [stipendAmount, setStipendAmount] = usePersistentState('lq_budget_stipend_amount', 0);
     const [stipendPeriod, setStipendPeriod] = usePersistentState('lq_budget_stipend_period', 'weekly');
     const [stipendPaidThrough, setStipendPaidThrough] = usePersistentState('lq_budget_stipend_paid_through', null);
-    const [goldToUsdRatio, setGoldToUsdRatio] = usePersistentState('lq_gold_ratio', 10);
+    const [goldToUsdRatio, setGoldToUsdRatio] = usePersistentState('lq_gold_ratio', DEFAULT_CREDITS_PER_USD);
 
     const addRewardFromGold = useCallback((goldAmount) => {
-        const usdValue = goldAmount / goldToUsdRatio;
+        const usdValue = normalizeCurrencyAmount(goldAmount) / Number(goldToUsdRatio || DEFAULT_CREDITS_PER_USD);
         setEarnedRewards(prev => prev + usdValue);
     }, [goldToUsdRatio, setEarnedRewards]);
 
     const removeRewardFromGold = useCallback((goldAmount) => {
-        const usdValue = Number(goldAmount) / goldToUsdRatio;
+        const usdValue = normalizeCurrencyAmount(goldAmount) / Number(goldToUsdRatio || DEFAULT_CREDITS_PER_USD);
         setEarnedRewards(prev => prev - usdValue);
     }, [goldToUsdRatio, setEarnedRewards]);
 

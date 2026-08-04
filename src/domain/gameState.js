@@ -1,4 +1,5 @@
 import { getDaysUntilDue } from '../utils/gameLogic';
+import { normalizeCurrencyAmount } from '../constants/currency.js';
 
 export const QUICK_SLOT_IDS = ['preset100', 'preset250', 'preset400', 'preset550'];
 
@@ -33,9 +34,21 @@ export const normalizeQuickSlots = (calories = {}, savedFoodIds = new Set()) => 
 
 export const normalizeQuestRecord = (quest = {}) => {
     const { isToday, isFocusedToday, ...rest } = quest;
+    const normalizeReward = (reward) => {
+        if (!reward || typeof reward !== 'object' || Array.isArray(reward)) return reward;
+
+        return {
+            ...reward,
+            gold: normalizeCurrencyAmount(reward.gold)
+        };
+    };
 
     return {
         ...rest,
+        ...(Object.prototype.hasOwnProperty.call(rest, 'reward') ? { reward: normalizeReward(rest.reward) } : {}),
+        ...(Object.prototype.hasOwnProperty.call(rest, 'completedReward')
+            ? { completedReward: normalizeReward(rest.completedReward) }
+            : {}),
         isFocusedToday: Boolean(isFocusedToday ?? isToday)
     };
 };
@@ -71,8 +84,8 @@ export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) =
         ...rest,
         history: normalizeHabitHistory(habit.history),
         isActive: habit.isActive ?? true,
-        completionReward: Number(habit.completionReward ?? protocolReward) || 0,
-        passiveReward: Number(habit.passiveReward ?? 0) || 0,
+        completionReward: normalizeCurrencyAmount(habit.completionReward ?? protocolReward),
+        passiveReward: normalizeCurrencyAmount(habit.passiveReward ?? 0),
         passivePaidThrough: habit.passivePaidThrough ?? null,
         lastCycleResetDateKey: habit.lastCycleResetDateKey ?? null
     };

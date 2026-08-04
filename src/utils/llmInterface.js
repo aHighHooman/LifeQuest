@@ -1,5 +1,6 @@
 import { getHabitCycleState } from './gameLogic';
 import { toLocalDateKey } from './dateUtils';
+import { normalizeCurrencyAmount } from '../constants/currency.js';
 
 export const LLM_INTERFACE_ROUTE = import.meta.env.VITE_LLM_INTERFACE_ROUTE || '';
 
@@ -55,7 +56,10 @@ export const buildLlmSnapshot = ({ stats = {}, quests = [], habits = [] }, now =
         difficulty: quest.difficulty || 'easy',
         dueDate: quest.dueDate || null,
         missionBrief: quest.missionBrief || '',
-        reward: quest.reward || { xp: 0, gold: 0 },
+        reward: {
+            ...(quest.reward || { xp: 0, gold: 0 }),
+            gold: normalizeCurrencyAmount(quest.reward?.gold)
+        },
         createdAt: quest.createdAt || null,
         completedAt: quest.completedAt || null,
         discardedAt: quest.discardedAt || null
@@ -74,8 +78,8 @@ export const buildLlmSnapshot = ({ stats = {}, quests = [], habits = [] }, now =
             frequency: habit.frequency || 'daily',
             frequencyParam: Number(habit.frequencyParam || 1),
             streak: Number(habit.streak || 0),
-            completionReward: Number(habit.completionReward || 0),
-            passiveReward: Number(habit.passiveReward || 0),
+            completionReward: normalizeCurrencyAmount(habit.completionReward),
+            passiveReward: normalizeCurrencyAmount(habit.passiveReward),
             dueDate: cycle.dueDateKey,
             daysUntilDue: cycle.daysUntilDue,
             isOverdue: cycle.isOverdue,
@@ -96,7 +100,7 @@ export const buildLlmSnapshot = ({ stats = {}, quests = [], habits = [] }, now =
                 current: Number(stats.hp || 0),
                 maximum: Number(stats.maxHp || 0)
             },
-            coinsOnHand: Number(stats.gold || 0),
+            coinsOnHand: normalizeCurrencyAmount(stats.gold),
             level: Number(stats.level || 1),
             xp: {
                 current: Number(stats.xp || 0),

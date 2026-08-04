@@ -12,7 +12,7 @@ import {
 import { getTodayISO, isWithinDays, toLocalDateKey } from '../utils/dateUtils';
 import {
     createPortableSnapshot,
-    normalizePortableSnapshot,
+    migrateLegacyPortableSnapshot,
     readProtocolLookaheadDays,
     storePortableImportBackup,
     writeProtocolLookaheadDays
@@ -32,6 +32,11 @@ import {
     applyHomeScreenIconMetadata,
     normalizeHomeScreenIconId
 } from '../utils/homeScreenIcons.js';
+import {
+    DEFAULT_CREDITS_PER_USD,
+    normalizeCurrencyAmount,
+    normalizeNonNegativeCurrencyAmount
+} from '../constants/currency.js';
 
 const GameContext = createContext();
 const CalorieContext = createContext();
@@ -52,13 +57,13 @@ const INITIAL_TASKS = [];
 const INITIAL_HABITS = [];
 
 const INITIAL_SETTINGS = {
-    protocolReward: 1,
+    protocolReward: 0.1,
     homeScreenIconId: DEFAULT_HOME_SCREEN_ICON_ID,
     questRewards: {
-        easy: 5,
-        medium: 15,
-        hard: 40,
-        legendary: 100
+        easy: 0.5,
+        medium: 1.5,
+        hard: 4,
+        legendary: 10
     }
 };
 
@@ -84,7 +89,7 @@ const INITIAL_BUDGET_TRANSFER = {
     stipendAmount: 0,
     stipendPeriod: 'weekly',
     stipendPaidThrough: null,
-    goldToUsdRatio: 10
+    goldToUsdRatio: DEFAULT_CREDITS_PER_USD
 };
 const STIPEND_PERIOD_DAYS = {
     weekly: 7,
@@ -181,7 +186,7 @@ const createCalorieHistoryEntry = ({
         ),
         source: safeSource,
         foodId: foodId || null,
-        coinCost: Math.max(0, normalizeCalorieNumber(coinCost))
+        coinCost: normalizeNonNegativeCurrencyAmount(coinCost)
     };
 };
 
@@ -196,7 +201,7 @@ const createSavedFoodRecord = ({
     id,
     name: normalizeCalorieLabel(name, 'Untitled Food'),
     calories: Math.max(1, normalizeCalorieNumber(calories)),
-    coinCost: Math.max(0, normalizeCalorieNumber(coinCost)),
+    coinCost: normalizeNonNegativeCurrencyAmount(coinCost),
     createdAt,
     updatedAt
 });
@@ -264,7 +269,7 @@ const normalizeCaloriesForImport = (calories = {}) => {
             const savedFood = normalizedEntry.foodId ? savedFoodsById.get(normalizedEntry.foodId) : null;
             return {
                 ...normalizedEntry,
-                coinCost: normalizeCalorieNumber(savedFood?.coinCost || 0)
+                coinCost: normalizeNonNegativeCurrencyAmount(savedFood?.coinCost || 0)
             };
         })
         : INITIAL_CALORIES.history;
@@ -316,7 +321,7 @@ const isNormalizedCalorieHistoryEntry = (entry) => {
     if (typeof entry.label !== 'string' || !entry.label.trim()) return false;
     if (typeof entry.source !== 'string' || !entry.source) return false;
     if (!Number.isInteger(Number(entry.calories))) return false;
-    if (!Number.isInteger(Number(entry.coinCost)) || Number(entry.coinCost) < 0) return false;
+    if (!Number.isFinite(Number(entry.coinCost)) || Number(entry.coinCost) < 0) return false;
 
     return Object.prototype.hasOwnProperty.call(entry, 'foodId');
 };
@@ -326,7 +331,7 @@ const isNormalizedSavedFood = (food) => {
     if (typeof food.id !== 'string' || !food.id) return false;
     if (typeof food.name !== 'string' || !food.name.trim()) return false;
     if (!Number.isInteger(Number(food.calories)) || Number(food.calories) <= 0) return false;
-    if (!Number.isInteger(Number(food.coinCost)) || Number(food.coinCost) < 0) return false;
+    if (!Number.isFinite(Number(food.coinCost)) || Number(food.coinCost) < 0) return false;
     if (typeof food.createdAt !== 'string' || !food.createdAt) return false;
     if (typeof food.updatedAt !== 'string' || !food.updatedAt) return false;
 
@@ -411,7 +416,7 @@ const createLedgerTimestamp = (dateKey) => {
 const createCoinHistoryEntry = ({ amount, description, type = 'earned', date = new Date().toISOString() }) => ({
     id: createId('coin'),
     date,
-    amount,
+    amount: normalizeCurrencyAmount(amount),
     description,
     type
 });
@@ -461,8 +466,8 @@ const settlePassiveIncome = (habits, todayKey) => {
             return habit;
         }
 
-        const passiveReward = Number(habit.passiveReward || 0);
-        totalGold += passiveReward * payoutDateKeys.length;
+        const passiveReward = normalizeCurrencyAmount(habit.passiveReward);
+        totalGold = normalizeCurrencyAmount(totalGold + (passiveReward * payoutDateKeys.length));
         payoutDateKeys.forEach((dateKey) => {
             ledgerEntries.push(createCoinHistoryEntry({
                 amount: passiveReward,
@@ -509,7 +514,7 @@ const settleBudgetStipend = (amount, period, paidThroughDateKey, todayKey) => {
     }
 
     return {
-        totalGold: stipendAmount * payoutDateKeys.length,
+        totalGold: normalizeCurrencyAmount(stipendAmount * payoutDateKeys.length),
         ledgerEntries: payoutDateKeys.map((dateKey) => createCoinHistoryEntry({
             amount: stipendAmount,
             description: 'Budget stipend',
@@ -661,11 +666,37 @@ export const GameProvider = ({ children }) => {
     }, [settlePassiveCalorieCheckpoints]);
 
     const updateStats = useCallback((newStats) => {
-        setStats(prev => ({ ...prev, ...newStats }));
+        setStats(prev => ({
+            ...prev,
+            ...newStats,
+            ...(Object.prototype.hasOwnProperty.call(newStats || {}, 'gold')
+                ? { gold: normalizeCurrencyAmount(newStats.gold) }
+                : {})
+        }));
     }, [setStats]);
 
     const updateSettings = useCallback((newSettings) => {
-        setSettings(prev => ({ ...prev, ...newSettings }));
+        setSettings(prev => ({
+            ...prev,
+            ...newSettings,
+            ...(Object.prototype.hasOwnProperty.call(newSettings || {}, 'protocolReward')
+                ? { protocolReward: normalizeNonNegativeCurrencyAmount(newSettings.protocolReward) }
+                : {}),
+            ...(newSettings?.questRewards
+                ? {
+                    questRewards: {
+                        ...prev.questRewards,
+                        ...newSettings.questRewards,
+                        ...Object.fromEntries(
+                            Object.entries(newSettings.questRewards).map(([key, value]) => [
+                                key,
+                                normalizeNonNegativeCurrencyAmount(value)
+                            ])
+                        )
+                    }
+                }
+                : {})
+        }));
     }, [setSettings]);
 
     const exportAppState = useCallback(() => createPortableSnapshot({
@@ -711,7 +742,7 @@ export const GameProvider = ({ children }) => {
 
     const importAppState = useCallback((snapshot) => {
         const backupKey = storePortableImportBackup(exportAppState());
-        const nextState = normalizePortableSnapshot(snapshot);
+        const nextState = migrateLegacyPortableSnapshot(snapshot);
 
         setStats(nextState.stats);
         setSettings(nextState.settings);
@@ -847,7 +878,7 @@ export const GameProvider = ({ children }) => {
             ? (calories.savedFoods || []).find((food) => food.id === deletedEntry.foodId)
             : null;
         const refundAmount = deletedEntry
-            ? normalizeCalorieNumber(deletedEntry.coinCost ?? savedFood?.coinCost ?? 0)
+            ? normalizeNonNegativeCurrencyAmount(deletedEntry.coinCost ?? savedFood?.coinCost ?? 0)
             : 0;
 
         setCalories(prev => {
@@ -863,7 +894,10 @@ export const GameProvider = ({ children }) => {
         });
 
         if (deletedEntry && refundAmount > 0) {
-            setStats(prev => ({ ...prev, gold: Number(prev.gold || 0) + refundAmount }));
+            setStats(prev => ({
+                ...prev,
+                gold: normalizeCurrencyAmount(Number(prev.gold || 0) + refundAmount)
+            }));
             appendCoinHistoryEntries([
                 createCoinHistoryEntry({
                     amount: refundAmount,
@@ -939,10 +973,14 @@ export const GameProvider = ({ children }) => {
     }, [setCalories]);
 
     const spendCoins = useCallback((amount, description) => {
-        setStats(prev => ({ ...prev, gold: prev.gold - amount }));
+        const currencyAmount = normalizeCurrencyAmount(amount);
+        setStats(prev => ({
+            ...prev,
+            gold: normalizeCurrencyAmount(Number(prev.gold || 0) - currencyAmount)
+        }));
         appendCoinHistoryEntries([
             createCoinHistoryEntry({
-                amount,
+                amount: currencyAmount,
                 description,
                 type: 'spent'
             })
@@ -977,8 +1015,11 @@ export const GameProvider = ({ children }) => {
     }, [setStats]);
 
     const addGold = useCallback((amount, source = 'reward', options = {}) => {
-        const numAmount = Number(amount);
-        setStats(prev => ({ ...prev, gold: Number(prev.gold || 0) + numAmount }));
+        const numAmount = normalizeCurrencyAmount(amount);
+        setStats(prev => ({
+            ...prev,
+            gold: normalizeCurrencyAmount(Number(prev.gold || 0) + numAmount)
+        }));
 
         if (numAmount !== 0) {
             appendCoinHistoryEntries([
@@ -1001,11 +1042,15 @@ export const GameProvider = ({ children }) => {
 
     const addQuest = useCallback((title, difficulty = 'easy', dueDate = null, customReward = null, missionBrief = '') => {
         const defaultRewards = {
-            easy: { xp: 10, gold: settings.questRewards.easy },
-            medium: { xp: 25, gold: settings.questRewards.medium },
-            hard: { xp: 60, gold: settings.questRewards.hard },
-            legendary: { xp: 150, gold: settings.questRewards.legendary },
+            easy: { xp: 10, gold: normalizeCurrencyAmount(settings.questRewards.easy) },
+            medium: { xp: 25, gold: normalizeCurrencyAmount(settings.questRewards.medium) },
+            hard: { xp: 60, gold: normalizeCurrencyAmount(settings.questRewards.hard) },
+            legendary: { xp: 150, gold: normalizeCurrencyAmount(settings.questRewards.legendary) },
         };
+
+        const reward = customReward
+            ? { ...customReward, gold: normalizeCurrencyAmount(customReward.gold) }
+            : defaultRewards[difficulty] || defaultRewards.easy;
 
         const newQuest = {
             id: createId('quest'),
@@ -1015,7 +1060,7 @@ export const GameProvider = ({ children }) => {
             missionBrief,
             completed: false,
             discarded: false,
-            reward: customReward || defaultRewards[difficulty] || defaultRewards.easy,
+            reward,
             isCustomReward: !!customReward,
             createdAt: new Date().toISOString(),
         };
@@ -1033,12 +1078,12 @@ export const GameProvider = ({ children }) => {
 
         const diff = quest.difficulty || 'easy';
         const xpAmount = Number(quest.reward.xp || 0);
-        let goldAmount = Number(quest.reward.gold || 0);
+        let goldAmount = normalizeCurrencyAmount(quest.reward.gold);
 
         if (!quest.isCustomReward) {
             const settingVal = settings.questRewards[diff];
             if (settingVal !== undefined) {
-                goldAmount = Number(settingVal);
+                goldAmount = normalizeCurrencyAmount(settingVal);
             }
         }
 
@@ -1068,16 +1113,16 @@ export const GameProvider = ({ children }) => {
 
         if (quest.completedReward) {
             xpAmount = Number(quest.completedReward.xp || 0);
-            goldAmount = Number(quest.completedReward.gold || 0);
+            goldAmount = normalizeCurrencyAmount(quest.completedReward.gold);
         } else {
             const diff = quest.difficulty || 'easy';
             xpAmount = Number(quest.reward.xp || 0);
-            goldAmount = Number(quest.reward.gold || 0);
+            goldAmount = normalizeCurrencyAmount(quest.reward.gold);
 
             if (!quest.isCustomReward) {
                 const settingVal = settings.questRewards[diff];
                 if (settingVal !== undefined) {
-                    goldAmount = Number(settingVal);
+                    goldAmount = normalizeCurrencyAmount(settingVal);
                 }
             }
         }
@@ -1116,8 +1161,10 @@ export const GameProvider = ({ children }) => {
             streak: 0,
             history: {},
             isActive: false,
-            completionReward: Number(rewardConfig.completionReward ?? settings.protocolReward) || 0,
-            passiveReward: Number(rewardConfig.passiveReward ?? 0) || 0,
+            completionReward: normalizeNonNegativeCurrencyAmount(
+                rewardConfig.completionReward ?? settings.protocolReward
+            ),
+            passiveReward: normalizeNonNegativeCurrencyAmount(rewardConfig.passiveReward ?? 0),
             passivePaidThrough: null,
             lastCycleResetDateKey: null,
             createdAt: new Date().toISOString(),
@@ -1154,7 +1201,9 @@ export const GameProvider = ({ children }) => {
         if (!currentHabit) return;
 
         const { isDueToday } = getHabitCycleState(currentHabit, today);
-        const completionReward = Number(currentHabit.completionReward ?? settings.protocolReward) || 0;
+        const completionReward = normalizeNonNegativeCurrencyAmount(
+            currentHabit.completionReward ?? settings.protocolReward
+        );
 
         addXp(5);
 
@@ -1178,8 +1227,10 @@ export const GameProvider = ({ children }) => {
                 isActive: true,
                 passivePaidThrough: today,
                 lastCycleResetDateKey: today,
-                completionReward: Number(h.completionReward ?? settings.protocolReward) || 0,
-                passiveReward: Number(h.passiveReward || 0) || 0
+                completionReward: normalizeNonNegativeCurrencyAmount(
+                    h.completionReward ?? settings.protocolReward
+                ),
+                passiveReward: normalizeNonNegativeCurrencyAmount(h.passiveReward)
             };
         }));
     }, [addGold, addRewardFromGold, addXp, habits, setHabits, settings.protocolReward]);
@@ -1195,8 +1246,10 @@ export const GameProvider = ({ children }) => {
                 isActive: true,
                 passivePaidThrough: today,
                 lastCycleResetDateKey: today,
-                completionReward: Number(h.completionReward ?? settings.protocolReward) || 0,
-                passiveReward: Number(h.passiveReward || 0) || 0
+                completionReward: normalizeNonNegativeCurrencyAmount(
+                    h.completionReward ?? settings.protocolReward
+                ),
+                passiveReward: normalizeNonNegativeCurrencyAmount(h.passiveReward)
             };
         }));
     }, [setHabits, settings.protocolReward]);
@@ -1277,11 +1330,11 @@ export const GameProvider = ({ children }) => {
             return {
                 ...h,
                 completionReward: hasCompletionReward
-                    ? Math.max(0, Number(rewardConfig.completionReward) || 0)
-                    : Number(h.completionReward ?? settings.protocolReward) || 0,
+                    ? normalizeNonNegativeCurrencyAmount(rewardConfig.completionReward)
+                    : normalizeNonNegativeCurrencyAmount(h.completionReward ?? settings.protocolReward),
                 passiveReward: hasPassiveReward
-                    ? Math.max(0, Number(rewardConfig.passiveReward) || 0)
-                    : Number(h.passiveReward || 0) || 0
+                    ? normalizeNonNegativeCurrencyAmount(rewardConfig.passiveReward)
+                    : normalizeNonNegativeCurrencyAmount(h.passiveReward)
             };
         }));
     }, [setHabits, settings.protocolReward]);
@@ -1363,7 +1416,7 @@ export const GameProvider = ({ children }) => {
         if (totalRolloverGold > 0) {
             setStats(prev => ({
                 ...prev,
-                gold: Number(prev.gold || 0) + totalRolloverGold,
+                gold: normalizeCurrencyAmount(Number(prev.gold || 0) + totalRolloverGold),
                 lastLoginDate: today
             }));
             appendCoinHistoryEntries(rolloverLedgerEntries);

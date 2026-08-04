@@ -10,7 +10,8 @@ import {
 describe('cloud snapshot encoding', () => {
     it('round-trips unicode JSON through fixed-size chunks', () => {
         const snapshot = {
-            formatVersion: 3,
+            formatVersion: 4,
+            currencyUnitVersion: 2,
             title: 'LifeQuest 🧭',
             entries: Array.from({ length: 30 }, (_, index) => `entry-${index}`)
         };
@@ -31,12 +32,14 @@ describe('cloud snapshot encoding', () => {
 
     it('ignores generatedAt when comparing logical app state', async () => {
         const first = await hashPortableSnapshotState({
-            formatVersion: 3,
+            formatVersion: 4,
+            currencyUnitVersion: 2,
             generatedAt: '2026-01-01T00:00:00.000Z',
             stats: { gold: 10 }
         });
         const second = await hashPortableSnapshotState({
-            formatVersion: 3,
+            formatVersion: 4,
+            currencyUnitVersion: 2,
             generatedAt: '2026-07-28T00:00:00.000Z',
             stats: { gold: 10 }
         });

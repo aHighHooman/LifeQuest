@@ -835,6 +835,7 @@ const QuestBoard = ({ showTabletopBackdrop = true }) => {
                                                 <span className="text-[10px] font-bold text-game-gold w-4">G</span>
                                                 <input
                                                     type="number"
+                                                    step="0.1"
                                                     value={customReward.gold || ''}
                                                     onChange={(e) => setCustomReward(p => ({ ...p, gold: e.target.value }))}
                                                     className="w-full bg-transparent text-[10px] text-game-gold focus:outline-none text-right font-mono"

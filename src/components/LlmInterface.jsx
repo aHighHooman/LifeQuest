@@ -13,6 +13,7 @@ import {
     buildLlmSnapshot,
     getDayTimeRemaining
 } from '../utils/llmInterface';
+import { formatCurrencyAmount } from '../constants/currency.js';
 
 const inputClassName = 'w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white';
 const buttonClassName = 'rounded border border-slate-500 bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50';
@@ -54,7 +55,7 @@ const QuestItem = ({
             <div><dt className="inline text-slate-400">Selected for today: </dt><dd className="inline">{quest.selectedForToday ? 'yes' : 'no'}</dd></div>
             <div><dt className="inline text-slate-400">Difficulty: </dt><dd className="inline">{quest.difficulty}</dd></div>
             <div><dt className="inline text-slate-400">Due date: </dt><dd className="inline">{quest.dueDate || 'none'}</dd></div>
-            <div><dt className="inline text-slate-400">Reward: </dt><dd className="inline">{quest.reward.xp || 0} XP, {quest.reward.gold || 0} coins</dd></div>
+            <div><dt className="inline text-slate-400">Reward: </dt><dd className="inline">{quest.reward.xp || 0} XP, {formatCurrencyAmount(quest.reward.gold)} credits</dd></div>
         </dl>
         {quest.missionBrief ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300"><span className="text-slate-400">Mission brief: </span>{quest.missionBrief}</p> : null}
         <div className="mt-3 flex flex-wrap gap-2" aria-label={`Actions for quest ${quest.title}`}>
@@ -90,7 +91,7 @@ const ProtocolItem = ({
             <div><dt className="inline text-slate-400">Schedule: </dt><dd className="inline">{protocol.frequency}{protocol.frequency === 'interval' ? ` every ${protocol.frequencyParam} days` : ''}</dd></div>
             <div><dt className="inline text-slate-400">Due: </dt><dd className="inline">{protocol.dueDate || 'today'} ({protocol.daysUntilDue} days)</dd></div>
             <div><dt className="inline text-slate-400">Streak: </dt><dd className="inline">{protocol.streak}</dd></div>
-            <div><dt className="inline text-slate-400">Rewards: </dt><dd className="inline">{protocol.completionReward} completion, {protocol.passiveReward} passive</dd></div>
+            <div><dt className="inline text-slate-400">Rewards: </dt><dd className="inline">{formatCurrencyAmount(protocol.completionReward)} completion, {formatCurrencyAmount(protocol.passiveReward)} passive</dd></div>
         </dl>
         <div className="mt-3 flex flex-wrap gap-2" aria-label={`Actions for protocol ${protocol.title}`}>
             <button className={buttonClassName} type="button" onClick={() => onComplete(protocol.id)}>Complete protocol</button>
@@ -422,7 +423,7 @@ const LlmInterface = () => {
                     <h2 id="dashboard-heading" className="text-2xl font-bold">Dashboard</h2>
                     <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Health remaining</dt><dd className="text-xl font-bold">{snapshot.dashboard.health.current} / {snapshot.dashboard.health.maximum}</dd></div>
-                        <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Coins on hand</dt><dd className="text-xl font-bold">{snapshot.dashboard.coinsOnHand}</dd></div>
+                        <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Credits on hand</dt><dd className="text-xl font-bold">{formatCurrencyAmount(snapshot.dashboard.coinsOnHand)}</dd></div>
                         <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Level and XP</dt><dd className="text-xl font-bold">Level {snapshot.dashboard.level}; {snapshot.dashboard.xp.current} / {snapshot.dashboard.xp.nextLevelAt} XP</dd></div>
                         <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Time remaining today</dt><dd className="font-mono text-xl font-bold">{formatTimeRemaining(timeRemaining)}</dd></div>
                     </dl>
@@ -453,7 +454,7 @@ const LlmInterface = () => {
                         <label htmlFor="llm-quest-difficulty">Difficulty</label><select id="llm-quest-difficulty" className={inputClassName} name="difficulty" defaultValue="easy"><option value="easy">easy</option><option value="medium">medium</option><option value="hard">hard</option><option value="legendary">legendary</option></select>
                         <label htmlFor="llm-quest-due-date">Due date</label><input id="llm-quest-due-date" className={inputClassName} name="dueDate" type="date" />
                         <label htmlFor="llm-quest-custom-xp">Custom XP (optional)</label><input id="llm-quest-custom-xp" className={inputClassName} min="0" name="customXp" type="number" />
-                        <label htmlFor="llm-quest-custom-gold">Custom coins (optional)</label><input id="llm-quest-custom-gold" className={inputClassName} min="0" name="customGold" type="number" />
+                        <label htmlFor="llm-quest-custom-gold">Custom credits (optional)</label><input id="llm-quest-custom-gold" className={inputClassName} min="0" step="0.1" name="customGold" type="number" />
                         <label htmlFor="llm-quest-brief" className="sm:col-span-2">Mission brief</label><textarea id="llm-quest-brief" className={`${inputClassName} sm:col-span-2`} name="missionBrief" rows="3" />
                         <button className={`${buttonClassName} sm:col-span-2`} type="submit">Create quest</button>
                     </form>
@@ -481,8 +482,8 @@ const LlmInterface = () => {
                         <label htmlFor="llm-protocol-title">Title</label><input id="llm-protocol-title" className={inputClassName} name="title" required />
                         <label htmlFor="llm-protocol-frequency">Frequency</label><select id="llm-protocol-frequency" className={inputClassName} name="frequency" defaultValue="daily"><option value="daily">daily</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="interval">interval</option></select>
                         <label htmlFor="llm-protocol-interval">Interval days</label><input id="llm-protocol-interval" className={inputClassName} defaultValue="1" min="1" name="frequencyParam" type="number" />
-                        <label htmlFor="llm-protocol-completion-reward">Completion coin reward</label><input id="llm-protocol-completion-reward" className={inputClassName} defaultValue="0" min="0" name="completionReward" type="number" />
-                        <label htmlFor="llm-protocol-passive-reward">Passive daily coin reward</label><input id="llm-protocol-passive-reward" className={inputClassName} defaultValue="0" min="0" name="passiveReward" type="number" />
+                        <label htmlFor="llm-protocol-completion-reward">Completion credit reward</label><input id="llm-protocol-completion-reward" className={inputClassName} defaultValue="0" min="0" step="0.1" name="completionReward" type="number" />
+                        <label htmlFor="llm-protocol-passive-reward">Passive daily credit reward</label><input id="llm-protocol-passive-reward" className={inputClassName} defaultValue="0" min="0" step="0.1" name="passiveReward" type="number" />
                         <button className={`${buttonClassName} sm:col-span-2`} type="submit">Create protocol</button>
                     </form>
                     {snapshot.protocols.length ? (

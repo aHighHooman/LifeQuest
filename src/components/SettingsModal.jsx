@@ -8,6 +8,7 @@ import {
 } from '../utils/portableState.js';
 import { HOME_SCREEN_ICON_IDS, getHomeScreenIcon, normalizeHomeScreenIconId } from '../utils/homeScreenIcons.js';
 import CloudAccountSettings from './CloudAccountSettings.jsx';
+import { normalizeNonNegativeCurrencyAmount } from '../constants/currency.js';
 
 const SettingsModal = ({ isOpen, onClose }) => {
     const {
@@ -54,14 +55,19 @@ const SettingsModal = ({ isOpen, onClose }) => {
         const { name, value } = e.target;
         setLocalStats(prev => ({
             ...prev,
-            [name]: parseInt(value, 10) || 0
+            [name]: name === 'gold'
+                ? normalizeNonNegativeCurrencyAmount(value)
+                : parseInt(value, 10) || 0
         }));
     };
 
     const handleSettingChange = (e) => {
         const { name, value } = e.target;
         if (name === 'protocolReward') {
-            setLocalSettings(prev => ({ ...prev, protocolReward: parseInt(value, 10) || 0 }));
+            setLocalSettings(prev => ({
+                ...prev,
+                protocolReward: normalizeNonNegativeCurrencyAmount(value)
+            }));
             return;
         }
 
@@ -69,7 +75,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
             ...prev,
             questRewards: {
                 ...prev.questRewards,
-                [name]: parseInt(value, 10) || 0
+                [name]: normalizeNonNegativeCurrencyAmount(value)
             }
         }));
     };
@@ -192,6 +198,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
                                 <label className="text-xs text-game-muted uppercase font-bold text-game-gold">Credits Balance</label>
                                 <input
                                     type="number"
+                                    step="0.1"
                                     name="gold"
                                     value={localStats.gold}
                                     onChange={handleStatChange}
@@ -208,8 +215,9 @@ const SettingsModal = ({ isOpen, onClose }) => {
                             <label className="text-sm font-bold text-gray-300">Default Protocol Bonus (Credits)</label>
                             <input
                                 type="number"
+                                step="0.1"
                                 name="protocolReward"
-                                value={localSettings?.protocolReward || 1}
+                                value={localSettings?.protocolReward ?? 0.1}
                                 onChange={handleSettingChange}
                                 className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white focus:border-game-accent focus:outline-none font-mono"
                             />
@@ -222,8 +230,9 @@ const SettingsModal = ({ isOpen, onClose }) => {
                                     <label className="text-xs text-gray-500">Easy</label>
                                     <input
                                         type="number"
+                                        step="0.1"
                                         name="easy"
-                                        value={localSettings?.questRewards?.easy || 5}
+                                        value={localSettings?.questRewards?.easy ?? 0.5}
                                         onChange={handleSettingChange}
                                         className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white focus:border-game-accent focus:outline-none font-mono"
                                     />
@@ -232,8 +241,9 @@ const SettingsModal = ({ isOpen, onClose }) => {
                                     <label className="text-xs text-gray-500">Medium</label>
                                     <input
                                         type="number"
+                                        step="0.1"
                                         name="medium"
-                                        value={localSettings?.questRewards?.medium || 15}
+                                        value={localSettings?.questRewards?.medium ?? 1.5}
                                         onChange={handleSettingChange}
                                         className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white focus:border-game-accent focus:outline-none font-mono"
                                     />
@@ -242,8 +252,9 @@ const SettingsModal = ({ isOpen, onClose }) => {
                                     <label className="text-xs text-gray-500">Hard</label>
                                     <input
                                         type="number"
+                                        step="0.1"
                                         name="hard"
-                                        value={localSettings?.questRewards?.hard || 40}
+                                        value={localSettings?.questRewards?.hard ?? 4}
                                         onChange={handleSettingChange}
                                         className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white focus:border-game-accent focus:outline-none font-mono"
                                     />
@@ -252,8 +263,9 @@ const SettingsModal = ({ isOpen, onClose }) => {
                                     <label className="text-xs text-gray-500">Legendary</label>
                                     <input
                                         type="number"
+                                        step="0.1"
                                         name="legendary"
-                                        value={localSettings?.questRewards?.legendary || 100}
+                                        value={localSettings?.questRewards?.legendary ?? 10}
                                         onChange={handleSettingChange}
                                         className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white focus:border-game-accent focus:outline-none font-mono"
                                     />

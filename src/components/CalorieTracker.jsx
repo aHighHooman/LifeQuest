@@ -17,6 +17,10 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { getTodayISO, toLocalISOString } from '../utils/dateUtils';
+import {
+    formatCurrencyAmount,
+    normalizeNonNegativeCurrencyAmount
+} from '../constants/currency.js';
 
 const GENERIC_ENTRY_LABELS = new Set(['Manual Entry']);
 const EMPTY_LIST = [];
@@ -42,6 +46,7 @@ const createBubbles = () => Array.from({ length: 8 }).map((_, i) => ({
 const getSafeTarget = (target) => Math.max(1, Number(target) || 1);
 const normalizeCalories = (value) => Math.max(0, Math.round(Number(value) || 0));
 const normalizeSignedCalories = (value) => Math.round(Number(value) || 0);
+const normalizeCoinCost = (value) => normalizeNonNegativeCurrencyAmount(value);
 const getFoodTimestamp = (food) => Date.parse(food?.updatedAt || food?.createdAt || 0) || 0;
 const preventNumberStepperKeys = (event) => {
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -349,8 +354,8 @@ const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
     };
     const labelDisplay = `${label}`.trim() ? shortenLabel(label, 16).toUpperCase() : 'LABEL';
     const labelActive = labelFocused || Boolean(`${label}`.trim());
-    const coinDisplay = normalizeCalories(coinCost) > 0 ? `${normalizeCalories(coinCost)} COINS` : 'COINS';
-    const coinActive = coinFocused || normalizeCalories(coinCost) > 0;
+    const coinDisplay = normalizeCoinCost(coinCost) > 0 ? `${formatCurrencyAmount(coinCost)} CREDITS` : 'CREDITS';
+    const coinActive = coinFocused || normalizeCoinCost(coinCost) > 0;
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -359,7 +364,7 @@ const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
         onSubmit({
             calories: signedCalories,
             label: `${label}`.trim(),
-            coinCost: normalizeCalories(coinCost)
+            coinCost: normalizeCoinCost(coinCost)
         });
 
         setCalories('');
@@ -481,7 +486,7 @@ const ManualEntryPanel = ({ onSubmit, onClose, liteMode = false }) => {
                 <input
                     type="number"
                     min="0"
-                    step="1"
+                    step="0.1"
                     value={coinCost}
                     onChange={(event) => setCoinCost(event.target.value)}
                     onFocus={() => setCoinFocused(true)}
@@ -621,6 +626,7 @@ const SavedFoodEditor = ({ food, onSave, onCancel }) => {
                 <input
                     type="number"
                     min="0"
+                    step="0.1"
                     value={coinCost}
                     onChange={(event) => setCoinCost(event.target.value)}
                     placeholder="Coins"
@@ -639,7 +645,7 @@ const SavedFoodEditor = ({ food, onSave, onCancel }) => {
                 <button
                     type="button"
                     disabled={!canSave}
-                    onClick={() => onSave({ name, calories: normalizeCalories(calories), coinCost: normalizeCalories(coinCost) })}
+                    onClick={() => onSave({ name, calories: normalizeCalories(calories), coinCost: normalizeCoinCost(coinCost) })}
                     className="flex-1 rounded-xl bg-rose-500 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-black disabled:cursor-not-allowed disabled:bg-rose-900/60 disabled:text-rose-200/50"
                 >
                     Save
@@ -684,7 +690,7 @@ const HistoryVaultModal = memo(({
         onCreateFood({
             name: newFoodName,
             calories: normalizeCalories(newFoodCalories),
-            coinCost: normalizeCalories(newFoodCoinCost)
+            coinCost: normalizeCoinCost(newFoodCoinCost)
         });
         setNewFoodName('');
         setNewFoodCalories('');
@@ -872,6 +878,7 @@ const HistoryVaultModal = memo(({
                                     <input
                                         type="number"
                                         min="0"
+                                        step="0.1"
                                         value={newFoodCoinCost}
                                         onChange={(event) => setNewFoodCoinCost(event.target.value)}
                                         placeholder="Coins"
@@ -926,9 +933,9 @@ const HistoryVaultModal = memo(({
                                                 </div>
                                                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                                                     <span>{food.calories} kcal</span>
-                                                    {normalizeCalories(food.coinCost) > 0 && (
+                                                    {normalizeCoinCost(food.coinCost) > 0 && (
                                                         <span className="rounded-full border border-amber-500/20 bg-amber-950/25 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.12em] text-amber-200">
-                                                            {food.coinCost} coins
+                                                            {formatCurrencyAmount(food.coinCost)} credits
                                                         </span>
                                                     )}
                                                 </div>
@@ -1651,15 +1658,15 @@ const CalorieTracker = () => {
 
     const handleQuickFood = useCallback((food) => {
         setActiveSheet(null);
-        if (normalizeCalories(food?.coinCost) > 0) {
-            spendCoins(normalizeCalories(food.coinCost), `Food inject: ${food.name}`);
+        if (normalizeCoinCost(food?.coinCost) > 0) {
+            spendCoins(normalizeCoinCost(food.coinCost), `Food inject: ${food.name}`);
         }
         logCalories({
             calories: food.calories,
             label: food.name,
             source: 'saved-food',
             foodId: food.id,
-            coinCost: normalizeCalories(food.coinCost)
+            coinCost: normalizeCoinCost(food.coinCost)
         });
     }, [logCalories, spendCoins]);
 
@@ -1695,27 +1702,27 @@ const CalorieTracker = () => {
                 coinCost
             });
 
-            if (normalizeCalories(food.coinCost) > 0) {
-                spendCoins(normalizeCalories(food.coinCost), `Food inject: ${food.name}`);
+            if (normalizeCoinCost(food.coinCost) > 0) {
+                spendCoins(normalizeCoinCost(food.coinCost), `Food inject: ${food.name}`);
             }
             logCalories({
                 calories: food.calories,
                 label: food.name,
                 source: 'saved-food',
                 foodId: food.id,
-                coinCost: normalizeCalories(food.coinCost)
+                coinCost: normalizeCoinCost(food.coinCost)
             });
             return;
         }
 
-        if (normalizeCalories(coinCost) > 0 && amount > 0) {
-            spendCoins(normalizeCalories(coinCost), `Manual inject: ${label || 'Unnamed item'}`);
+        if (normalizeCoinCost(coinCost) > 0 && amount > 0) {
+            spendCoins(normalizeCoinCost(coinCost), `Manual inject: ${label || 'Unnamed item'}`);
         }
         logCalories({
             calories: amount,
             label: label || (amount < 0 ? 'Exercise Burn' : 'Manual Entry'),
             source: 'manual',
-            coinCost: amount > 0 ? normalizeCalories(coinCost) : 0
+            coinCost: amount > 0 ? normalizeCoinCost(coinCost) : 0
         });
     }, [createSavedFood, logCalories, spendCoins]);
 
