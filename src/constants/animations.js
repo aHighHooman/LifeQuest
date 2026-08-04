@@ -11,6 +11,7 @@ export const SPRING_CONFIG = {
 
 // Softer spring for navigation wheel animations
 export const NAV_SPRING_CONFIG = {
+    type: "spring",
     stiffness: 160,
     damping: 20
 };

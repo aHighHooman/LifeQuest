@@ -1,8 +1,3 @@
-export const TABLETOP_CONTENT_INSET = {
-    mobileRem: 0.5,
-    desktopRem: 0.75
-};
-
 export const DASHBOARD_COORDINATE_PLANE_TOP = 'calc(-1 * var(--tabletop-content-inset, calc(0.5rem + env(safe-area-inset-top))))';
 
 export const DASHBOARD_HOTSPOTS = {

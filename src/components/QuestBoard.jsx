@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
@@ -866,7 +866,6 @@ const QuestBoard = ({ showTabletopBackdrop = true }) => {
                 document.body
             )}
 
-            {/* 3. LOGS & HISTORY (Moved from Radial) */}
             <div className="px-4 grid grid-cols-2 gap-8 -mt-4 mb-24 md:mt-2 md:mb-8">
                 <button
                     type="button"

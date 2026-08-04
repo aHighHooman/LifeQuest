@@ -1,4 +1,4 @@
-import React, { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGameCalories } from '../context/GameContext';
 import { AnimatePresence, motion as Motion, useDragControls, useReducedMotion } from 'framer-motion';

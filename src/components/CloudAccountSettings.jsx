@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Cloud, CloudOff, LogIn, LogOut, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext.jsx';

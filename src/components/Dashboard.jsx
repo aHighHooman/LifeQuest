@@ -401,10 +401,6 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
         return pendingQueue.slice(0, 7);
     }, [quests, habits, today]);
 
-    // Override isFocusEmpty for the Matrix view if we want to show specific empty state
-    // But existing isActiveTodayHabits logic basically does this for the legacy view.
-    // For Matrix, we check if matrixNodes is empty.
-
     const handleNodeClick = (node) => {
         if (node.type === 'quest') {
             if (!node.completed) completeQuest(node.id);

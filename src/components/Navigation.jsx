@@ -1,7 +1,8 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LayoutDashboard, Scroll, Zap, Coins, ChevronUp, Heart } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
+import { NAV_SPRING_CONFIG } from '../constants/animations';
 
 const OUTER_TABS = [
     { id: 'quests', label: 'Quests', icon: Scroll, color: 'text-emerald-400' },
@@ -18,8 +19,6 @@ const OUTER_ANGLES = [-45, 0, 45];
 const INNER_ANGLES = [-25, 25];
 
 const animateToTab = (targetTabId, innerRotationMV, outerRotationMV) => {
-    const springConfig = { stiffness: 160, damping: 20 };
-
     const targetOuterIndex = OUTER_TABS.findIndex(t => t.id === targetTabId);
     const targetValidOuterIndex = targetOuterIndex !== -1 ? targetOuterIndex : 1;
     const targetOuterRotation = -OUTER_ANGLES[targetValidOuterIndex];
@@ -28,8 +27,8 @@ const animateToTab = (targetTabId, innerRotationMV, outerRotationMV) => {
     const targetValidInnerIndex = targetInnerIndex !== -1 ? targetInnerIndex : 0;
     const targetInnerRotation = -INNER_ANGLES[targetValidInnerIndex];
 
-    animate(innerRotationMV, targetInnerRotation, springConfig);
-    animate(outerRotationMV, targetOuterRotation, springConfig);
+    animate(innerRotationMV, targetInnerRotation, NAV_SPRING_CONFIG);
+    animate(outerRotationMV, targetOuterRotation, NAV_SPRING_CONFIG);
 };
 
 const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
@@ -37,9 +36,6 @@ const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
     const contentViewportRef = useRef(null);
     const locksContentScroll = ['dashboard', 'quests', 'budget', 'protocols'].includes(currentTab);
     const locksNativePan = currentTab === 'dashboard' || currentTab === 'quests';
-
-    // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
-
 
     // OPTIMIZATION: Use MotionValues instead of State for drag to prevent re-renders
     const dragOffset = useMotionValue(0);
@@ -229,7 +225,7 @@ const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
                         style={{
                             rotate: innerRotationTransform
                         }}
-                        transition={{ type: "spring", stiffness: 160, damping: 20 }}
+                        transition={NAV_SPRING_CONFIG}
                         onPan={onPan}
                         onPanEnd={onPanEnd}
                         className="absolute bottom-[-200px] w-[300px] h-[300px] rounded-full flex justify-center items-start pt-6 z-40 pointer-events-auto bg-slate-900/90 backdrop-blur-md"
@@ -289,7 +285,7 @@ const Navigation = ({ currentTab, onTabChange, onPreloadTab, children }) => {
                         style={{
                             rotate: outerRotationTransform
                         }}
-                        transition={{ type: "spring", stiffness: 160, damping: 20 }}
+                        transition={NAV_SPRING_CONFIG}
                         onPan={onPan}
                         onPanEnd={onPanEnd}
                         className="absolute bottom-[-360px] w-[500px] h-[500px] rounded-full bg-gradient-to-r from-black via-slate-950 to-black shadow-2xl z-30 flex justify-center items-start pt-10 pointer-events-auto border-t border-white/5"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X, CheckCircle, Circle, Shield, Swords, Crosshair } from 'lucide-react';
@@ -48,7 +48,6 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                 onClose();
                             }
                         }}
-                        // Hanging Style: rounded-b-2xl ONLY. No border-t.
                         className="relative w-full max-w-lg bg-slate-900 border-b-2 border-x border-slate-700/80 rounded-b-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col max-h-[75vh]"
                         style={{ marginTop: 0, touchAction: 'none' }}
                     >
@@ -61,7 +60,6 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                 <Swords size={20} className="text-game-accent" />
                                 Mission Control
                             </h2>
-                            {/* "X" Button Removed for Blindfold Style */}
                         </div>
 
                         {/* Content List - Middle (Scrollable) */}
@@ -168,8 +166,6 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                             </button>
                         </div>
 
-                        {/* Footer Button */}
-                        {/* Drag Handle (Footer) - Blindfold Pull-Up Indicator */}
                         <div
                             onPointerDown={(e) => dragControls.start(e)}
                             className="w-full flex justify-center py-8 pb-10 active:pb-10 bg-slate-900 border-t border-slate-800/50 cursor-grab active:cursor-grabbing z-20 shrink-0 touch-none"

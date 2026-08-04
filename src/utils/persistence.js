@@ -5,7 +5,7 @@ import {
     scaleLegacyCurrencyAmount
 } from '../constants/currency.js';
 
-export const APP_VERSION = '1.5.0'; // Incrementing for this update
+export const APP_VERSION = '1.5.0';
 export const VERSION_KEY = 'lq_version';
 export const CURRENCY_VERSION_KEY = 'lq_currency_unit_version';
 const PERSISTENCE_DEBOUNCE_MS = 180;

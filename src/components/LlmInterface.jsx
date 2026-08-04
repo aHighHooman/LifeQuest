@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useCloudSync } from '../context/CloudSyncContext.jsx';

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { CheckCircle, Trash2, Plus, Zap, X, RotateCcw, Power, Coins } from 'lucide-react';
@@ -220,7 +220,6 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
                 initial: (direction) => {
                     // Cycle Prev (Drop In)
                     if (direction < 0) {
-                        // MATCH QUESTBOARD: Start from -300 instead of -800 for consistent feel
                         return { y: -300, opacity: 0, scale: 1.1 };
                     }
                     // Next (Enter from bottom/stack)
@@ -241,8 +240,7 @@ const ProtocolDeckCard = ({ habit, index, onComplete, onSkip, onCycleNext, onCyc
                         return { x: -200, opacity: 0, transition: { duration: 0.2 } };
                     }
                     if (direction === 2) {
-                        // Cycle Next (Swipe Up): Fly Up (MATCH QUESTBOARD)
-                        // Changed from y: -800 / duration 0.25 to y: -400 / duration 0.2
+                        // Cycle next (swipe up): move the card upward.
                         return { y: -400, opacity: 0, transition: { duration: 0.2 } };
                     }
                     // Cycle Prev (Swipe Down): The card that was at the top and is now moving to the bottom of the stack.

@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: ['apple-touch-icon.png'],
       workbox: {
         globPatterns: ['**/*.{js,wasm,css,html}', 'assets/*.webp']
       },
@@ -49,7 +49,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'framer-motion', 'uuid'],
+          vendor: ['react', 'react-dom', 'framer-motion'],
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           charts: ['recharts'],
           icons: ['lucide-react']

@@ -36,6 +36,10 @@ firebase-adminsdk*.json
 firebase-debug.log*
 .firebaserc
 firestore.rules
+*.blend[0-9]
+**/_transition_frames/
+**/_transition_frames_reverse/
+**/_transition_preview/
 .sanitization-replacements.txt
 .gemini
 .agent
