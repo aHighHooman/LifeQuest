@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useGame } from '../context/GameContext';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
@@ -462,6 +462,51 @@ const QuestBoard = ({ showTabletopBackdrop = true }) => {
     const [showVictoryLog, setShowVictoryLog] = useState(false);
     const [showDiscardedLog, setShowDiscardedLog] = useState(false);
     const [isCreationOpen, setIsCreationOpen] = useState(false);
+    const questBoardRef = useRef(null);
+    const creationSwipeStartRef = useRef(null);
+
+    useEffect(() => {
+        const isSwipeIsolated = (target) => (
+            target instanceof Element && target.closest('[data-no-swipe="true"]')
+        );
+
+        const handlePointerDown = (event) => {
+            if (!questBoardRef.current?.contains(event.target)) return;
+
+            creationSwipeStartRef.current = isSwipeIsolated(event.target)
+                ? null
+                : { x: event.clientX, y: event.clientY };
+        };
+
+        const handlePointerUp = (event) => {
+            const start = creationSwipeStartRef.current;
+            creationSwipeStartRef.current = null;
+
+            if (!start || isCreationOpen) return;
+
+            const offsetX = event.clientX - start.x;
+            const offsetY = event.clientY - start.y;
+            const shouldOpen = offsetY > 80 && offsetY > Math.abs(offsetX) && window.scrollY < 50;
+
+            if (shouldOpen) {
+                setIsCreationOpen(true);
+            }
+        };
+
+        const clearPointerStart = () => {
+            creationSwipeStartRef.current = null;
+        };
+
+        window.addEventListener('pointerdown', handlePointerDown, true);
+        window.addEventListener('pointerup', handlePointerUp, true);
+        window.addEventListener('pointercancel', clearPointerStart, true);
+
+        return () => {
+            window.removeEventListener('pointerdown', handlePointerDown, true);
+            window.removeEventListener('pointerup', handlePointerUp, true);
+            window.removeEventListener('pointercancel', clearPointerStart, true);
+        };
+    }, [isCreationOpen]);
 
     // Animation State
     const [slideDirection, setSlideDirection] = useState('next');
@@ -565,6 +610,7 @@ const QuestBoard = ({ showTabletopBackdrop = true }) => {
 
     return (
         <motion.div
+            ref={questBoardRef}
             className="quest-board-tabletop-surface pb-4 md:pb-0 relative flex flex-col w-full touch-none"
             onPanEnd={(event, info) => {
                 if (deckGestureActive.current) return;
@@ -607,9 +653,10 @@ const QuestBoard = ({ showTabletopBackdrop = true }) => {
                 />
             </div>
 
-            <AnimatePresence>
-                {isCreationOpen && createPortal(
-                    <>
+            {createPortal(
+                <AnimatePresence>
+                    {isCreationOpen && (
+                        <>
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -812,10 +859,11 @@ const QuestBoard = ({ showTabletopBackdrop = true }) => {
                     </AnimatePresence>
                 </form>
                         </motion.div>
-                    </>,
-                    document.body
-                )}
-            </AnimatePresence>
+                        </>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
 
             {/* 3. LOGS & HISTORY (Moved from Radial) */}
             <div className="px-4 grid grid-cols-2 gap-8 -mt-4 mb-24 md:mt-2 md:mb-8">
