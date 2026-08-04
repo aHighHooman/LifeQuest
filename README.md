@@ -1,6 +1,12 @@
 # LifeQuest
 
-LifeQuest is a tabletop-inspired personal progress app that turns everyday goals into quests, protocols, and measurable progress.
+LifeQuest is a tabletop-inspired personal operating system that turns intentions into quests, recurring protocols, and measurable daily progress. Assistant actions can become concrete tasks and routines, while the spatial interface keeps the resulting work visible and actionable.
+
+> **Status:** Functional and actively evolving. The core quest, protocol, health, budget, stats, local persistence, and cloud-sync flows are in place, with the interaction design and assistant-action layer continuing to develop.
+
+![LifeQuest dashboard](docs/lifequest-dashboard.png)
+
+*The tabletop dashboard turns active goals into a visible, spatial board.*
 
 ## Features
 
