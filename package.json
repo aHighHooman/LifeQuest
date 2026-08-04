@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint src eslint.config.js vite.config.js postcss.config.js tailwind.config.js",
-    "test": "vitest run",
+    "test": "vitest run src tools",
     "validate:production-env": "node tools/validate-production-env.mjs",
     "validate:dashboard-alignment": "python tools/validate_dashboard_alignment.py",
     "preview": "vite preview"
