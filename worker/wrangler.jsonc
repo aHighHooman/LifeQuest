@@ -1,0 +1,13 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "lifequest-action-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-29",
+  "workers_dev": true,
+  "vars": {
+    "FIREBASE_PROJECT_ID": "lifequest-aabed",
+    "LIFEQUEST_OWNER_UID": "H1d4eIEvescWcNYoEpsvhWekpX82",
+    "LIFEQUEST_TIME_ZONE": "America/Vancouver",
+    "LIFEQUEST_DEBUG": "false"
+  }
+}

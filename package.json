@@ -8,11 +8,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint src eslint.config.js vite.config.js postcss.config.js tailwind.config.js",
-    "test": "vitest run src tools",
+    "lint": "eslint src worker/src eslint.config.js vite.config.js postcss.config.js tailwind.config.js",
+    "test": "vitest run src tools worker",
     "validate:production-env": "node tools/validate-production-env.mjs",
     "validate:dashboard-alignment": "python tools/validate_dashboard_alignment.py",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "action:dev": "wrangler dev --config worker/wrangler.jsonc",
+    "action:deploy": "wrangler deploy --config worker/wrangler.jsonc",
+    "action:types": "wrangler types --config worker/wrangler.jsonc worker/worker-configuration.d.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -37,6 +40,7 @@
     "tailwindcss": "^3.4.17",
     "vite": "^5.4.11",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "wrangler": "4.20.0"
   }
 }

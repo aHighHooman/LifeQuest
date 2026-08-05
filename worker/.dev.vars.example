@@ -1,0 +1,6 @@
+# Copy this file to worker/.dev.vars for local development only.
+# Never commit worker/.dev.vars.
+LIFEQUEST_ACTION_TOKEN="replace-with-a-long-random-token"
+FIREBASE_API_KEY="copy-VITE_FIREBASE_API_KEY-from-env-local"
+FIREBASE_LLM_EMAIL="dedicated-llm-firebase-account@example.com"
+FIREBASE_LLM_PASSWORD="dedicated-llm-firebase-account-password"
