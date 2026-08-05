@@ -6,7 +6,7 @@ LifeQuest is a tabletop-inspired personal operating system that turns intentions
 
 ![LifeQuest dashboard](docs/lifequest-dashboard.png)
 
-*The tabletop dashboard turns active goals into a visible, spatial board.*
+*The tabletop dashboard gives daily progress a physical, spatial home.*
 
 ## Features
 
