@@ -20,7 +20,7 @@ The application treats your life as an RPG character, where completing tasks and
 The main source code directory.
 
 - **`components/`**: Contains all the React UI components.
-  - **`App.jsx`**: The root component. Handles the main tab-based navigation state, wraps the app in Providers (`GameProvider`, `BudgetProvider`), and renders the active view.
+  - **`App.jsx`**: The root component. Handles navigation, wraps the app in `AppStateProvider`, `GameProvider`, and `CloudSyncProvider`, and renders the active view.
   - **`Dashboard.jsx`**: The landing page/overview. Shows a summary of today's progress.
   - **`QuestBoard.jsx`**: Task management. Users can create "Quests" (tasks), assign difficulty/rewards, and complete them.
   - **`HabitTracker.jsx`**: Referred to as **"Protocols"** in the UI. Tracks recurring daily/weekly habits.
@@ -29,8 +29,8 @@ The main source code directory.
   - **`Navigation.jsx`**: The main navigation bar/menu component.
 
 - **`context/`**: Global state management.
-  - **`GameContext.jsx`**: Handles the gamification logic (XP, Level, Coins, Inventory) and likely shared state for Quests/Habits.
-  - **`BudgetContext.jsx`**: Handles financial data state.
+  - **`AppStateContext.jsx`**: Owns the coherent game/budget state and its local checkpoint.
+  - **`GameContext.jsx`**: Adapts domain commands to quest, protocol, calorie, and wallet interactions. `useBudget` exposes budget editing from the same state.
 
 - **`utils/`**: Helper functions.
   - **`persistence.js`**: Logic for saving/loading data (Local Storage or File System).

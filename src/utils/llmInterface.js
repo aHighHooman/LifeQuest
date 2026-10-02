@@ -1,4 +1,4 @@
-import { getHabitCycleState } from './gameLogic';
+import { questView, protocolView } from '../domain/views.js';
 import { toLocalDateKey } from './dateUtils';
 import { normalizeCurrencyAmount } from '../constants/currency.js';
 
@@ -46,46 +46,10 @@ export const applyCloudSnapshotToDevice = (cloud, importAppState) => {
     return { status: 'loaded', backupKey };
 };
 
-export const buildLlmSnapshot = ({ stats = {}, quests = [], habits = [] }, now = new Date()) => {
+export const buildLlmSnapshot = ({ stats = {}, settings = {}, quests = [], habits = [] }, now = new Date()) => {
     const todayKey = toLocalDateKey(now);
-    const normalizedQuests = quests.map((quest) => ({
-        id: quest.id,
-        title: quest.title,
-        status: quest.discarded ? 'discarded' : quest.completed ? 'completed' : 'active',
-        selectedForToday: Boolean(quest.isFocusedToday),
-        difficulty: quest.difficulty || 'easy',
-        dueDate: quest.dueDate || null,
-        missionBrief: quest.missionBrief || '',
-        reward: {
-            ...(quest.reward || { xp: 0, gold: 0 }),
-            gold: normalizeCurrencyAmount(quest.reward?.gold)
-        },
-        createdAt: quest.createdAt || null,
-        completedAt: quest.completedAt || null,
-        discardedAt: quest.discardedAt || null
-    }));
-    const normalizedProtocols = habits.map((habit) => {
-        const cycle = getHabitCycleState(habit, now);
-        const completionsToday = Number(habit.history?.[todayKey] || 0);
-
-        return {
-            id: habit.id,
-            title: habit.title,
-            status: habit.isActive === false ? 'inactive' : 'active',
-            selectedForToday: habit.isActive !== false && cycle.daysUntilDue <= 0,
-            completedToday: completionsToday > 0,
-            completionsToday,
-            frequency: habit.frequency || 'daily',
-            frequencyParam: Number(habit.frequencyParam || 1),
-            streak: Number(habit.streak || 0),
-            completionReward: normalizeCurrencyAmount(habit.completionReward),
-            passiveReward: normalizeCurrencyAmount(habit.passiveReward),
-            dueDate: cycle.dueDateKey,
-            daysUntilDue: cycle.daysUntilDue,
-            isOverdue: cycle.isOverdue,
-            createdAt: habit.createdAt || null
-        };
-    });
+    const normalizedQuests = quests.map((quest) => questView(quest, settings));
+    const normalizedProtocols = habits.map((habit) => protocolView(habit, todayKey));
     const timeRemaining = getDayTimeRemaining(now);
 
     return {

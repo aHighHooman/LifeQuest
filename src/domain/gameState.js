@@ -1,4 +1,5 @@
-import { getDaysUntilDue } from '../utils/gameLogic';
+import { getProtocolCycleState, getProtocolCycleAnchorDateKey, getProtocolDueDateKey } from './protocols.js';
+import { toLocalDateKey } from '../utils/dateUtils.js';
 import { normalizeCurrencyAmount } from '../constants/currency.js';
 
 export const QUICK_SLOT_IDS = ['preset100', 'preset250', 'preset400', 'preset550'];
@@ -61,14 +62,14 @@ export const isQuestPendingForFocus = (quest) => (
     Boolean(quest?.isFocusedToday) && isQuestAvailableForFocus(quest)
 );
 
-export const markQuestDiscarded = (quest, discardedAt = new Date().toISOString()) => ({
+export const markQuestDiscarded = (quest, discardedAt) => ({
     ...quest,
     discarded: true,
     discardedAt,
     isFocusedToday: false
 });
 
-export const normalizeHabitHistory = (history = {}) => {
+const normalizeHabitHistory = (history = {}) => {
     if (!history || typeof history !== 'object' || Array.isArray(history)) return {};
 
     return Object.fromEntries(
@@ -90,7 +91,11 @@ export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) =
         lastCycleResetDateKey: habit.lastCycleResetDateKey ?? null
     };
 
-    if (nextHabit.passivePaidThrough === null && todayKey && getDaysUntilDue(nextHabit, todayKey) > 0) {
+    if (habit.passivePaidThrough === undefined && todayKey) {
+        const anchor = getProtocolCycleAnchorDateKey(nextHabit);
+        const due = getProtocolDueDateKey(nextHabit);
+        nextHabit.passivePaidThrough = anchor ? (due ? (todayKey < due ? todayKey : due) : anchor) : null;
+    } else if (nextHabit.passivePaidThrough === null && todayKey && getProtocolCycleState(nextHabit, todayKey).daysUntilDue > 0) {
         nextHabit.passivePaidThrough = todayKey;
     }
 
@@ -99,5 +104,5 @@ export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) =
 
 export const isHabitDueForFocus = (habit, referenceDate = new Date()) => {
     if (habit?.isActive === false) return false;
-    return getDaysUntilDue(habit, referenceDate) <= 0;
+    return getProtocolCycleState(habit, toLocalDateKey(referenceDate)).daysUntilDue <= 0;
 };

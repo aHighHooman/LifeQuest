@@ -6,6 +6,7 @@ import { CheckCircle, Trash2, Plus, Sword, Settings, Calendar, X, RotateCcw } fr
 import clsx from 'clsx';
 import { SPRING_CONFIG } from '../constants/animations';
 import { isWithinDays, getTodayISO, toLocalISOString } from '../utils/dateUtils';
+import { parseDateKey } from '../utils/gameLogic';
 import { useDeckOrder } from '../hooks/useDeckOrder';
 import questTabletopBase from '../assets/quests/quest-tabletop-base-blender.webp';
 import easyActiveRender from '../assets/quests/quest-card-active-easy-blender.webp';
@@ -68,6 +69,7 @@ const QuestDeckCard = ({
     const [showDetails, setShowDetails] = useState(false);
     const [isEditingBrief, setIsEditingBrief] = useState(false);
     const [localBrief, setLocalBrief] = useState(quest.missionBrief || '');
+    const dueDate = parseDateKey(quest.dueDate);
 
     const handleDragEnd = (event, info) => {
         const distanceThreshold = 88;
@@ -277,7 +279,7 @@ const QuestDeckCard = ({
                                         <div className="quest-due-date">
                                             <Calendar size={14} />
                                             <span>DUE</span>
-                                            <strong>{quest.dueDate ? new Date(quest.dueDate).toLocaleDateString() : 'NO LIMIT'}</strong>
+                                            <strong>{dueDate ? dueDate.toLocaleDateString() : quest.dueDate ? 'Invalid Date' : 'NO LIMIT'}</strong>
                                         </div>
                                         <div className="quest-brief-heading">
                                             <span>MISSION BRIEF</span>

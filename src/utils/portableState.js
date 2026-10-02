@@ -14,8 +14,10 @@ import {
     DEFAULT_CREDITS_PER_USD,
     normalizeCurrencyAmount,
     normalizeNonNegativeCurrencyAmount,
-    scaleLegacyCurrencyAmount
+    normalizeConversionRate
 } from '../constants/currency.js';
+import { scaleLegacyPortableCurrency } from '../domain/currencyMigration.js';
+import { DEFAULT_PROTOCOL_REWARD, DEFAULT_QUEST_GOLD } from '../domain/rewards.js';
 
 export const PORTABLE_FORMAT_VERSION = 4;
 export const PORTABLE_APP_NAME = 'LifeQuest';
@@ -122,14 +124,9 @@ const INITIAL_STATS = {
 };
 
 const INITIAL_SETTINGS = {
-    protocolReward: 0.1,
+    protocolReward: DEFAULT_PROTOCOL_REWARD,
     homeScreenIconId: DEFAULT_HOME_SCREEN_ICON_ID,
-    questRewards: {
-        easy: 0.5,
-        medium: 1.5,
-        hard: 4,
-        legendary: 10
-    }
+    questRewards: DEFAULT_QUEST_GOLD
 };
 
 const INITIAL_CALORIES = {
@@ -207,136 +204,6 @@ export const isPortableSnapshotCurrent = (snapshot = {}) => (
     Number(snapshot?.currencyUnitVersion) >= CURRENCY_UNIT_VERSION
     && Number(snapshot?.formatVersion) >= PORTABLE_FORMAT_VERSION
 );
-
-const scaleLegacyReward = (reward) => {
-    if (!isPlainObject(reward)) return reward;
-
-    return {
-        ...reward,
-        ...(Object.prototype.hasOwnProperty.call(reward, 'gold')
-            ? { gold: scaleLegacyCurrencyAmount(reward.gold) }
-            : {})
-    };
-};
-
-const scaleLegacyPortableCurrency = (snapshot = {}) => {
-    const source = isPlainObject(snapshot) ? snapshot : {};
-    const stats = isPlainObject(source.stats) ? source.stats : {};
-    const rawSettings = isPlainObject(source.settings) ? source.settings : {};
-    const questRewards = isPlainObject(rawSettings.questRewards)
-        ? Object.fromEntries(
-            Object.entries(rawSettings.questRewards).map(([key, value]) => [
-                key,
-                scaleLegacyCurrencyAmount(value)
-            ])
-        )
-        : rawSettings.questRewards;
-    const quests = Array.isArray(source.quests)
-        ? source.quests.map((quest) => (
-            isPlainObject(quest)
-                ? {
-                    ...quest,
-                    ...(Object.prototype.hasOwnProperty.call(quest, 'reward')
-                        ? { reward: scaleLegacyReward(quest.reward) }
-                        : {}),
-                    ...(Object.prototype.hasOwnProperty.call(quest, 'completedReward')
-                        ? { completedReward: scaleLegacyReward(quest.completedReward) }
-                        : {})
-                }
-                : quest
-        ))
-        : source.quests;
-    const habits = Array.isArray(source.habits)
-        ? source.habits.map((habit) => (
-            isPlainObject(habit)
-                ? {
-                    ...habit,
-                    ...(Object.prototype.hasOwnProperty.call(habit, 'completionReward')
-                        ? { completionReward: scaleLegacyCurrencyAmount(habit.completionReward) }
-                        : {}),
-                    ...(Object.prototype.hasOwnProperty.call(habit, 'passiveReward')
-                        ? { passiveReward: scaleLegacyCurrencyAmount(habit.passiveReward) }
-                        : {})
-                }
-                : habit
-        ))
-        : source.habits;
-    const calories = isPlainObject(source.calories) ? source.calories : {};
-    const calorieHistory = Array.isArray(calories.history)
-        ? calories.history.map((entry) => (
-            isPlainObject(entry) && Object.prototype.hasOwnProperty.call(entry, 'coinCost')
-                ? {
-                    ...entry,
-                    coinCost: scaleLegacyCurrencyAmount(entry.coinCost)
-                }
-                : entry
-        ))
-        : calories.history;
-    const savedFoods = Array.isArray(calories.savedFoods)
-        ? calories.savedFoods.map((food) => (
-            isPlainObject(food) && Object.prototype.hasOwnProperty.call(food, 'coinCost')
-                ? {
-                    ...food,
-                    coinCost: scaleLegacyCurrencyAmount(food.coinCost)
-                }
-                : food
-        ))
-        : calories.savedFoods;
-    const coinHistory = Array.isArray(source.coinHistory)
-        ? source.coinHistory.map((entry) => (
-            isPlainObject(entry) && Object.prototype.hasOwnProperty.call(entry, 'amount')
-                ? {
-                    ...entry,
-                    amount: scaleLegacyCurrencyAmount(entry.amount)
-                }
-                : entry
-        ))
-        : source.coinHistory;
-    const budget = isPlainObject(source.budget) ? source.budget : {};
-
-    return {
-        ...source,
-        stats: {
-            ...stats,
-            ...(Object.prototype.hasOwnProperty.call(stats, 'gold')
-                ? { gold: scaleLegacyCurrencyAmount(stats.gold) }
-                : {})
-        },
-        settings: {
-            ...rawSettings,
-            ...(Object.prototype.hasOwnProperty.call(rawSettings, 'protocolReward')
-                ? { protocolReward: scaleLegacyCurrencyAmount(rawSettings.protocolReward) }
-                : {}),
-            ...(questRewards ? { questRewards } : {}),
-            ...Object.fromEntries(
-                ['easy', 'medium', 'hard', 'legendary']
-                    .map((key) => `questReward${key[0].toUpperCase()}${key.slice(1)}`)
-                    .filter((key) => Object.prototype.hasOwnProperty.call(rawSettings, key))
-                    .map((key) => [
-                        key,
-                        scaleLegacyCurrencyAmount(rawSettings[key])
-                    ])
-            )
-        },
-        quests,
-        habits,
-        calories: {
-            ...calories,
-            ...(calorieHistory ? { history: calorieHistory } : {}),
-            ...(savedFoods ? { savedFoods } : {})
-        },
-        coinHistory,
-        budget: {
-            ...budget,
-            ...(Object.prototype.hasOwnProperty.call(budget, 'stipendAmount')
-                ? { stipendAmount: scaleLegacyCurrencyAmount(budget.stipendAmount) }
-                : {}),
-            ...(Object.prototype.hasOwnProperty.call(budget, 'goldToUsdRatio')
-                ? { goldToUsdRatio: scaleLegacyCurrencyAmount(budget.goldToUsdRatio) }
-                : {})
-        }
-    };
-};
 
 const parseKeyValueLines = (sectionName, lines, allowedKeys = null) => {
     const values = {};
@@ -614,10 +481,7 @@ const normalizeBudget = (budget = {}) => ({
     ),
     stipendPeriod: budget.stipendPeriod || INITIAL_BUDGET.stipendPeriod,
     stipendPaidThrough: budget.stipendPaidThrough ?? null,
-    goldToUsdRatio: Math.max(
-        0.0001,
-        normalizeCurrencyAmount(budget.goldToUsdRatio ?? INITIAL_BUDGET.goldToUsdRatio, INITIAL_BUDGET.goldToUsdRatio)
-    )
+    goldToUsdRatio: normalizeConversionRate(budget.goldToUsdRatio ?? INITIAL_BUDGET.goldToUsdRatio)
 });
 
 export const normalizePortableSnapshot = (snapshot = {}) => {

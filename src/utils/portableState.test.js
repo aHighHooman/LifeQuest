@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { completeQuest, purchaseGrocery, refundGrocery } from '../domain/transactions.js';
+import { prepareSnapshot, undoQuest } from '../../worker/src/stateEngine.js';
 import {
     PORTABLE_SECTION_ORDER,
     PORTABLE_SNAPSHOT_KEYS,
@@ -186,6 +188,21 @@ const legacySnapshot = {
 };
 
 describe('portableState', () => {
+    it('keeps receipts through text export, import, and an assistant snapshot reload', () => {
+        const event = { id: 'coin-reward', date: '2026-01-15T12:00:00.000Z', todayKey: '2026-01-15' };
+        const completed = completeQuest(structuredClone(populatedSnapshot), 'quest-1', event);
+        const purchased = purchaseGrocery(completed, 'grocery-1', { ...event, id: 'coin-purchase' });
+        const imported = parsePortableSnapshot(formatPortableSnapshot(purchased));
+        const reloaded = prepareSnapshot(JSON.parse(JSON.stringify(imported)));
+        expect(reloaded.quests[0].completedReward).toEqual({ xp: 60, gold: 4, earnedRewardsDelta: 5 });
+        expect(reloaded.budget.groceryList[0].coinCost).toBe(7.2);
+        reloaded.budget.goldToUsdRatio = 2;
+        undoQuest(reloaded, 'quest-1', new Date(event.date));
+        const refunded = refundGrocery(reloaded, 'grocery-1', { ...event, id: 'coin-refund' });
+        expect(refunded.stats.gold).toBe(populatedSnapshot.stats.gold);
+        expect(refunded.budget.earnedRewards).toBe(populatedSnapshot.budget.earnedRewards);
+    });
+
     it('round-trips a populated snapshot through the readable format', () => {
         const normalized = normalizePortableSnapshot(populatedSnapshot);
         const text = formatPortableSnapshot(populatedSnapshot);

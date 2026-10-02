@@ -67,7 +67,7 @@ describe('LifeQuest Action state engine', () => {
         discardQuest(snapshot, 'quest-1', new Date('2026-07-29T18:00:00.000Z'));
         expect(snapshot.quests[0]).toMatchObject({
             discarded: true,
-            isFocusedToday: true
+            isFocusedToday: false
         });
 
         restoreQuest(snapshot, 'quest-1');
@@ -75,6 +75,28 @@ describe('LifeQuest Action state engine', () => {
             discarded: false,
             discardedAt: null
         });
+    });
+
+    it('undoes an assistant completion using the recorded conversion delta after a rate change', () => {
+        const snapshot = makeSnapshot();
+        completeQuest(snapshot, 'quest-1');
+        expect(snapshot.quests[0].completedReward).toEqual({ xp: 25, gold: 1.5, earnedRewardsDelta: 1.875 });
+        snapshot.budget.goldToUsdRatio = 2;
+        snapshot.settings.questRewards.medium = 8;
+        undoQuest(snapshot, 'quest-1');
+        expect(snapshot.stats).toMatchObject({ xp: 0, gold: 0 });
+        expect(snapshot.budget.earnedRewards).toBe(0);
+        expect(snapshot.coinHistory[1]).toMatchObject({ type: 'spent', amount: 1.5 });
+    });
+
+    it('keeps conversion receipts usable after a snapshot reload', () => {
+        const snapshot = makeSnapshot();
+        snapshot.budget.earnedRewards = 1.234567;
+        completeQuest(snapshot, 'quest-1');
+        const reloaded = prepareSnapshot(JSON.parse(JSON.stringify(snapshot)));
+        reloaded.budget.goldToUsdRatio = 2;
+        undoQuest(reloaded, 'quest-1');
+        expect(prepareSnapshot(reloaded).budget.earnedRewards).toBeCloseTo(1.234567, 12);
     });
 
     it('deactivates a protocol explicitly', () => {

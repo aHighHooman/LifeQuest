@@ -107,6 +107,7 @@ const ProtocolItem = ({
 const LlmInterface = () => {
     const {
         stats,
+        settings,
         quests,
         habits,
         addQuest,
@@ -186,8 +187,8 @@ const LlmInterface = () => {
     }, [user]);
 
     const snapshot = useMemo(
-        () => buildLlmSnapshot({ stats, quests, habits }, now),
-        [stats, quests, habits, now]
+        () => buildLlmSnapshot({ stats, settings, quests, habits }, now),
+        [stats, settings, quests, habits, now]
     );
     const jsonSnapshot = useMemo(() => JSON.stringify(snapshot, null, 2), [snapshot]);
     const timeRemaining = getDayTimeRemaining(now);

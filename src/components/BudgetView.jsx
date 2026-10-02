@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { useBudget } from '../context/BudgetContext';
+import { useBudget } from '../hooks/useBudget.js';
 import {
     Plus,
     Trash2,
@@ -22,7 +22,9 @@ import {
     DEFAULT_CREDITS_PER_USD,
     formatCurrencyAmount,
     normalizeCurrencyAmount,
-    normalizeNonNegativeCurrencyAmount
+    normalizeNonNegativeCurrencyAmount,
+    creditsToUsd,
+    usdToCredits
 } from '../constants/currency.js';
 
 // Constants
@@ -993,7 +995,9 @@ const GroceryItemRow = memo(({
             <div className="flex items-center gap-3 relative z-10">
                 <div className={clsx("font-mono text-sm flex items-center gap-1", item.completed ? "text-xs text-slate-700" : "text-amber-400 font-bold")}>
                     <Coins size={12} />
-                    {toCredits(item.price * (item.quantity || 1))}
+                    {item.completed && item.coinCost != null
+                        ? formatCurrencyAmount(item.coinCost)
+                        : toCredits(item.price * (item.quantity || 1))}
                 </div>
                 <button
                     onClick={() => onRemove(item.id)}
@@ -1017,16 +1021,12 @@ const ProvisionsView = memo(({
     priceDatabase,
     priceDatabaseKeys,
     addGroceryItem,
-    markGroceryItemCompleted,
-    unmarkGroceryItemCompleted,
+    purchaseGroceryItem,
+    refundGroceryItem,
     removeGroceryItem,
-    spendCoins,
-    addGold,
-    toCreditValue,
     toCredits,
     fromCredits,
-    formatCredits,
-    updatePrice
+    formatCredits
 }) => {
     const [itemName, setItemName] = useState('');
     const [itemQuantity, setItemQuantity] = useState('1');
@@ -1051,16 +1051,12 @@ const ProvisionsView = memo(({
         if (!itemName) return;
 
         const quantity = Math.max(1, parseInt(itemQuantity, 10) || 1);
-        if (itemPriceCredits) {
-            updatePrice(itemName, fromCredits(itemPriceCredits));
-        }
-
-        addGroceryItem(itemName, quantity);
+        addGroceryItem(itemName, quantity, itemPriceCredits ? fromCredits(itemPriceCredits) : undefined);
         setItemName('');
         setItemQuantity('1');
         setItemPriceCredits('');
         setIsDropdownOpen(false);
-    }, [addGroceryItem, fromCredits, itemName, itemPriceCredits, itemQuantity, updatePrice]);
+    }, [addGroceryItem, fromCredits, itemName, itemPriceCredits, itemQuantity]);
 
     const selectFromDb = useCallback((name) => {
         setItemName(name);
@@ -1069,28 +1065,9 @@ const ProvisionsView = memo(({
     }, [priceDatabase, toCredits]);
 
     const handleTogglePurchased = useCallback((item) => {
-        const quantity = Number(item.quantity || 1);
-        const totalCoinCost = toCreditValue(item.price * quantity);
-
-        if (!item.completed) {
-            markGroceryItemCompleted(item.id, todayKey);
-            if (totalCoinCost > 0) {
-                spendCoins(totalCoinCost, `Groceries: ${item.name} x${quantity}`);
-            }
-            return;
-        }
-
-        if (item.completedDateKey !== todayKey) {
-            return;
-        }
-
-        unmarkGroceryItemCompleted(item.id);
-        if (totalCoinCost > 0) {
-            addGold(totalCoinCost, 'Grocery Refund', {
-                description: `Grocery refund: ${item.name} x${quantity}`
-            });
-        }
-    }, [addGold, markGroceryItemCompleted, spendCoins, toCreditValue, todayKey, unmarkGroceryItemCompleted]);
+        if (item.completed) refundGroceryItem(item.id);
+        else purchaseGroceryItem(item.id);
+    }, [purchaseGroceryItem, refundGroceryItem]);
 
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
@@ -1299,12 +1276,12 @@ const BudgetView = () => {
         groceryPeriod, setGroceryPeriod,
         stipendAmount, setStipendAmount,
         stipendPeriod, setStipendPeriod, setStipendPaidThrough,
-        addGroceryItem, markGroceryItemCompleted, unmarkGroceryItemCompleted, removeGroceryItem,
+        addGroceryItem, removeGroceryItem,
         clearGroceryList,
         totalGroceryEstimated,
         goldToUsdRatio, setGoldToUsdRatio
     } = useBudget();
-    const { stats, spendCoins, addGold, coinHistory } = useGame();
+    const { stats, spendCoins, purchaseGroceryItem, refundGroceryItem, coinHistory } = useGame();
 
     const [activeTab, setActiveTab] = useState(TAB_LEDGER);
     const [showSettings, setShowSettings] = useState(false);
@@ -1319,9 +1296,7 @@ const BudgetView = () => {
 
     // Display: USD -> Credits
     const toCreditValue = useCallback((usdAmount) => {
-        return normalizeCurrencyAmount(
-            Number(usdAmount || 0) * Number(goldToUsdRatio || DEFAULT_CREDITS_PER_USD)
-        );
+        return usdToCredits(usdAmount, goldToUsdRatio);
     }, [goldToUsdRatio]);
 
     const toCredits = useCallback((usdAmount) => {
@@ -1330,8 +1305,7 @@ const BudgetView = () => {
 
     // Input: Credits -> USD
     const fromCredits = useCallback((creditAmount) => {
-        if (!creditAmount) return 0;
-        return Number(creditAmount) / Number(goldToUsdRatio || DEFAULT_CREDITS_PER_USD);
+        return creditsToUsd(creditAmount, goldToUsdRatio);
     }, [goldToUsdRatio]);
 
     const formatCredits = useCallback((usdAmount) => {
@@ -1419,16 +1393,12 @@ const BudgetView = () => {
                                 priceDatabase={priceDatabase}
                                 priceDatabaseKeys={priceDatabaseKeys}
                                 addGroceryItem={addGroceryItem}
-                                markGroceryItemCompleted={markGroceryItemCompleted}
-                                unmarkGroceryItemCompleted={unmarkGroceryItemCompleted}
+                                purchaseGroceryItem={purchaseGroceryItem}
+                                refundGroceryItem={refundGroceryItem}
                                 removeGroceryItem={removeGroceryItem}
-                                spendCoins={spendCoins}
-                                addGold={addGold}
-                                toCreditValue={toCreditValue}
                                 toCredits={toCredits}
                                 fromCredits={fromCredits}
                                 formatCredits={formatCredits}
-                                updatePrice={updatePrice}
                             />
                         </motion.div>
                     ) : (

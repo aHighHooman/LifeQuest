@@ -1,10 +1,16 @@
-import { HttpError, assertHttp } from './errors.js';
+import { assertHttp } from './errors.js';
+import {
+    CURRENCY_UNIT_VERSION,
+    normalizeCurrencyAmount,
+    normalizeNonNegativeCurrencyAmount,
+    normalizeConversionRate
+} from '../../src/constants/currency.js';
+import { scaleLegacyPortableCurrency } from '../../src/domain/currencyMigration.js';
+import { DEFAULT_PROTOCOL_REWARD, DEFAULT_QUEST_GOLD } from '../../src/domain/rewards.js';
 
 export const CURRENT_SNAPSHOT_FORMAT_VERSION = 4;
-export const CURRENT_CURRENCY_UNIT_VERSION = 2;
+export const CURRENT_CURRENCY_UNIT_VERSION = CURRENCY_UNIT_VERSION;
 
-const LEGACY_CURRENCY_DIVISOR = 10;
-const CURRENCY_PRECISION = 4;
 const LEGACY_FORMAT_VERSIONS = new Set([1, 2, 3]);
 
 const isPlainObject = (value) => Boolean(
@@ -12,139 +18,6 @@ const isPlainObject = (value) => Boolean(
 );
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
-
-export const normalizeCurrencyAmount = (value, fallback = 0) => {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return fallback;
-
-    const factor = 10 ** CURRENCY_PRECISION;
-    return Math.round((parsed + Number.EPSILON) * factor) / factor;
-};
-
-export const normalizeNonNegativeCurrencyAmount = (value, fallback = 0) => (
-    Math.max(0, normalizeCurrencyAmount(value, fallback))
-);
-
-const scaleLegacyCurrencyAmount = (value) => {
-    if (value === null || value === undefined || value === '') return value;
-
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return value;
-
-    return normalizeCurrencyAmount(parsed / LEGACY_CURRENCY_DIVISOR);
-};
-
-const scaleLegacyReward = (reward) => {
-    if (!isPlainObject(reward)) return reward;
-
-    return {
-        ...reward,
-        ...(hasOwn(reward, 'gold') ? { gold: scaleLegacyCurrencyAmount(reward.gold) } : {}),
-    };
-};
-
-const scaleLegacyPortableCurrency = (snapshot) => {
-    const source = isPlainObject(snapshot) ? snapshot : {};
-    const stats = isPlainObject(source.stats) ? source.stats : {};
-    const rawSettings = isPlainObject(source.settings) ? source.settings : {};
-    const questRewards = isPlainObject(rawSettings.questRewards)
-        ? Object.fromEntries(
-            Object.entries(rawSettings.questRewards).map(([key, value]) => [
-                key,
-                scaleLegacyCurrencyAmount(value)
-            ])
-        )
-        : rawSettings.questRewards;
-    const quests = Array.isArray(source.quests)
-        ? source.quests.map((quest) => (
-            isPlainObject(quest)
-                ? {
-                    ...quest,
-                    ...(hasOwn(quest, 'reward') ? { reward: scaleLegacyReward(quest.reward) } : {}),
-                    ...(hasOwn(quest, 'completedReward')
-                        ? { completedReward: scaleLegacyReward(quest.completedReward) }
-                        : {})
-                }
-                : quest
-        ))
-        : source.quests;
-    const habits = Array.isArray(source.habits)
-        ? source.habits.map((habit) => (
-            isPlainObject(habit)
-                ? {
-                    ...habit,
-                    ...(hasOwn(habit, 'completionReward')
-                        ? { completionReward: scaleLegacyCurrencyAmount(habit.completionReward) }
-                        : {}),
-                    ...(hasOwn(habit, 'passiveReward')
-                        ? { passiveReward: scaleLegacyCurrencyAmount(habit.passiveReward) }
-                        : {})
-                }
-                : habit
-        ))
-        : source.habits;
-    const calories = isPlainObject(source.calories) ? source.calories : {};
-    const history = Array.isArray(calories.history)
-        ? calories.history.map((entry) => (
-            isPlainObject(entry) && hasOwn(entry, 'coinCost')
-                ? { ...entry, coinCost: scaleLegacyCurrencyAmount(entry.coinCost) }
-                : entry
-        ))
-        : calories.history;
-    const savedFoods = Array.isArray(calories.savedFoods)
-        ? calories.savedFoods.map((food) => (
-            isPlainObject(food) && hasOwn(food, 'coinCost')
-                ? { ...food, coinCost: scaleLegacyCurrencyAmount(food.coinCost) }
-                : food
-        ))
-        : calories.savedFoods;
-    const coinHistory = Array.isArray(source.coinHistory)
-        ? source.coinHistory.map((entry) => (
-            isPlainObject(entry) && hasOwn(entry, 'amount')
-                ? { ...entry, amount: scaleLegacyCurrencyAmount(entry.amount) }
-                : entry
-        ))
-        : source.coinHistory;
-    const budget = isPlainObject(source.budget) ? source.budget : {};
-
-    return {
-        ...source,
-        stats: {
-            ...stats,
-            ...(hasOwn(stats, 'gold') ? { gold: scaleLegacyCurrencyAmount(stats.gold) } : {})
-        },
-        settings: {
-            ...rawSettings,
-            ...(hasOwn(rawSettings, 'protocolReward')
-                ? { protocolReward: scaleLegacyCurrencyAmount(rawSettings.protocolReward) }
-                : {}),
-            ...(questRewards ? { questRewards } : {}),
-            ...Object.fromEntries(
-                ['easy', 'medium', 'hard', 'legendary']
-                    .map((key) => `questReward${key[0].toUpperCase()}${key.slice(1)}`)
-                    .filter((key) => hasOwn(rawSettings, key))
-                    .map((key) => [key, scaleLegacyCurrencyAmount(rawSettings[key])])
-            )
-        },
-        quests,
-        habits,
-        calories: {
-            ...calories,
-            ...(history ? { history } : {}),
-            ...(savedFoods ? { savedFoods } : {})
-        },
-        coinHistory,
-        budget: {
-            ...budget,
-            ...(hasOwn(budget, 'stipendAmount')
-                ? { stipendAmount: scaleLegacyCurrencyAmount(budget.stipendAmount) }
-                : {}),
-            ...(hasOwn(budget, 'goldToUsdRatio')
-                ? { goldToUsdRatio: scaleLegacyCurrencyAmount(budget.goldToUsdRatio) }
-                : {})
-        }
-    };
-};
 
 const normalizeReward = (reward) => {
     if (!isPlainObject(reward)) return reward;
@@ -163,12 +36,7 @@ const normalizeSnapshotCurrency = (snapshot) => {
     const settings = isPlainObject(normalized.settings) ? normalized.settings : {};
     const budget = isPlainObject(normalized.budget) ? normalized.budget : {};
     const questRewards = isPlainObject(settings.questRewards) ? settings.questRewards : {};
-    const defaultQuestRewards = {
-        easy: 0.5,
-        medium: 1.5,
-        hard: 4,
-        legendary: 10
-    };
+    const defaultQuestRewards = DEFAULT_QUEST_GOLD;
 
     normalized.formatVersion = CURRENT_SNAPSHOT_FORMAT_VERSION;
     normalized.currencyUnitVersion = CURRENT_CURRENCY_UNIT_VERSION;
@@ -178,7 +46,7 @@ const normalizeSnapshotCurrency = (snapshot) => {
     };
     normalized.settings = {
         ...settings,
-        protocolReward: normalizeNonNegativeCurrencyAmount(settings.protocolReward, 0.1),
+        protocolReward: normalizeNonNegativeCurrencyAmount(settings.protocolReward, DEFAULT_PROTOCOL_REWARD),
         questRewards: {
             ...defaultQuestRewards,
             easy: normalizeNonNegativeCurrencyAmount(
@@ -250,9 +118,11 @@ const normalizeSnapshotCurrency = (snapshot) => {
         : [];
     normalized.budget = {
         ...budget,
-        earnedRewards: normalizeCurrencyAmount(budget.earnedRewards),
+        // USD balances may contain conversion precision. Preserve it so a
+        // recorded completion delta can be reversed without losing value.
+        earnedRewards: Number.isFinite(Number(budget.earnedRewards)) ? Number(budget.earnedRewards) : 0,
         stipendAmount: normalizeNonNegativeCurrencyAmount(budget.stipendAmount),
-        goldToUsdRatio: Math.max(0.0001, normalizeCurrencyAmount(budget.goldToUsdRatio, 1))
+        goldToUsdRatio: normalizeConversionRate(budget.goldToUsdRatio)
     };
 
     return normalized;

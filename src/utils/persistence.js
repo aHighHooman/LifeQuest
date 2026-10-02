@@ -106,14 +106,11 @@ export const safeSet = (key, value) => {
 export const usePersistentState = (key, initialValue) => {
     // efficient initialization: function passed to useState only runs once
     const [state, setState] = useState(() => safeGet(key, initialValue));
+    usePersistedValue(key, state);
+    return [state, setState];
+};
 
-    // useRef to track if it's the first render to avoid unnecessary writes, 
-    // although safeSet is cheap enough usually.
-    // However, we DO want to write immediately if the key didn't exist 
-    // (to Initialize defaults), or just wait for updates.
-    // The original code wrote on every change, including mount if dependencies matched.
-    // Let's stick to standard behavior: write whenever state changes.
-
+export const usePersistedValue = (key, state) => {
     useEffect(() => {
         scheduleSafeSet(key, state);
     }, [key, state]);
@@ -123,8 +120,6 @@ export const usePersistentState = (key, initialValue) => {
             flushPendingWrite(key);
         };
     }, [key]);
-
-    return [state, setState];
 };
 
 const readStoredJson = (key) => {
@@ -309,6 +304,7 @@ export const checkVersionAndEnsurePersistence = () => {
 const performSafetyBackup = () => {
     try {
         const keysToBackup = [
+            'lq_app_checkpoint',
             'lq_stats', 'lq_quests', 'lq_habits', 'lq_settings',
             'lq_calories', 'lq_coin_history',
             'lq_budget_total', 'lq_grocery_list', 'lq_price_db', 'lq_grocery_period',

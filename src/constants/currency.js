@@ -16,6 +16,18 @@ export const normalizeNonNegativeCurrencyAmount = (value, fallback = 0) => (
     Math.max(0, normalizeCurrencyAmount(value, fallback))
 );
 
+export const normalizeConversionRate = (value) => Math.max(
+    0.0001, normalizeCurrencyAmount(value, DEFAULT_CREDITS_PER_USD)
+);
+
+export const usdToCredits = (amount, creditsPerUsd) => normalizeCurrencyAmount(
+    (Number(amount) || 0) * normalizeConversionRate(creditsPerUsd)
+);
+
+export const creditsToUsd = (amount, creditsPerUsd) => (
+    (Number(amount) || 0) / normalizeConversionRate(creditsPerUsd)
+);
+
 export const scaleLegacyCurrencyAmount = (value) => {
     if (value === null || value === undefined || value === '') return value;
 

@@ -102,7 +102,7 @@ const mutationResponse = (snapshot, clock, result, metadata, kind) => ({
     ok: true,
     changed: result.changed !== false,
     [kind]: kind === 'quest'
-        ? questView(result.quest)
+        ? questView(result.quest, snapshot.settings)
         : protocolView(result.protocol, clock.todayKey),
     dashboard: dashboardView(snapshot, clock.todayKey),
     revisionId: metadata.revisionId
@@ -111,11 +111,11 @@ const mutationResponse = (snapshot, clock, result, metadata, kind) => ({
 const handleQuestMutation = async (action, id, snapshot, clock) => {
     switch (action) {
         case 'complete':
-            return completeQuest(snapshot, id, clock.now);
+            return completeQuest(snapshot, id, clock.now, clock.todayKey);
         case 'undo':
-            return undoQuest(snapshot, id, clock.now);
+            return undoQuest(snapshot, id, clock.now, clock.todayKey);
         case 'discard':
-            return discardQuest(snapshot, id, clock.now);
+            return discardQuest(snapshot, id, clock.now, clock.todayKey);
         case 'restore':
             return restoreQuest(snapshot, id);
         case 'select-for-today':
@@ -134,7 +134,7 @@ const handleProtocolMutation = async (action, id, snapshot, clock, body) => {
         case 'skip':
             return skipProtocol(snapshot, id, clock.todayKey);
         case 'activate':
-            return activateProtocol(snapshot, id);
+            return activateProtocol(snapshot, id, clock.todayKey);
         case 'deactivate':
             return deactivateProtocol(snapshot, id, clock.todayKey);
         default:
@@ -185,10 +185,10 @@ const handleRequest = async (request, env) => {
     let kind;
 
     if (request.method === 'POST' && pathname === '/v1/quests') {
-        result = { quest: createQuest(snapshot, body, clock.now), changed: true };
+        result = { quest: createQuest(snapshot, body, clock.now, clock.todayKey), changed: true };
         kind = 'quest';
     } else if (request.method === 'POST' && pathname === '/v1/protocols') {
-        result = { protocol: createProtocol(snapshot, body, clock.now), changed: true };
+        result = { protocol: createProtocol(snapshot, body, clock.now, clock.todayKey), changed: true };
         kind = 'protocol';
     } else {
         const questMatch = pathname.match(/^\/v1\/quests\/([^/]+)\/([^/]+)$/);

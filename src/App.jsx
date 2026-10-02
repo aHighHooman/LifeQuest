@@ -1,6 +1,6 @@
 import React, { Profiler, useCallback, useEffect, useRef, useState } from 'react';
 import { GameProvider } from './context/GameContext';
-import { BudgetProvider } from './context/BudgetContext';
+import { AppStateProvider } from './context/AppStateContext.jsx';
 import SettingsModal from './components/SettingsModal';
 import { checkVersionAndEnsurePersistence } from './utils/persistence';
 import { animate, AnimatePresence, motion as Motion, useMotionValue } from 'framer-motion';
@@ -318,7 +318,7 @@ function App() {
   }, []);
 
     return (
-    <BudgetProvider>
+    <AppStateProvider>
       <GameProvider>
         <CloudSyncProvider>
           {isLlmInterface
@@ -334,7 +334,7 @@ function App() {
             )}
         </CloudSyncProvider>
       </GameProvider>
-    </BudgetProvider>
+    </AppStateProvider>
   );
 }
 

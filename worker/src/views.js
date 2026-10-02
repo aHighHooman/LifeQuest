@@ -1,46 +1,9 @@
-import { getProtocolCycleState } from './date.js';
+import { questView, protocolView } from '../../src/domain/views.js';
 
-export const questView = (quest) => ({
-    id: quest.id,
-    title: quest.title,
-    status: quest.discarded ? 'discarded' : quest.completed ? 'completed' : 'active',
-    selectedForToday: Boolean(quest.isFocusedToday),
-    difficulty: quest.difficulty || 'easy',
-    dueDate: quest.dueDate || null,
-    missionBrief: quest.missionBrief || '',
-    reward: {
-        xp: Number(quest.reward?.xp || 0),
-        gold: Number(quest.reward?.gold || 0)
-    },
-    createdAt: quest.createdAt || null,
-    completedAt: quest.completedAt || null,
-    discardedAt: quest.discardedAt || null
-});
-
-export const protocolView = (protocol, todayKey) => {
-    const cycle = getProtocolCycleState(protocol, todayKey);
-    const completionsToday = Number(protocol.history?.[todayKey] || 0);
-    return {
-        id: protocol.id,
-        title: protocol.title,
-        status: protocol.isActive === false ? 'inactive' : 'active',
-        selectedForToday: protocol.isActive !== false && cycle.daysUntilDue <= 0,
-        completedToday: completionsToday > 0,
-        completionsToday,
-        frequency: protocol.frequency || 'daily',
-        frequencyParam: Number(protocol.frequencyParam || 1),
-        streak: Number(protocol.streak || 0),
-        completionReward: Number(protocol.completionReward || 0),
-        passiveReward: Number(protocol.passiveReward || 0),
-        dueDate: cycle.dueDateKey,
-        daysUntilDue: cycle.daysUntilDue,
-        isOverdue: cycle.isOverdue,
-        createdAt: protocol.createdAt || null
-    };
-};
+export { questView, protocolView } from '../../src/domain/views.js';
 
 export const dashboardView = (snapshot, todayKey) => {
-    const quests = snapshot.quests.map(questView);
+    const quests = snapshot.quests.map((quest) => questView(quest, snapshot.settings));
     const protocols = snapshot.habits.map((protocol) => protocolView(protocol, todayKey));
     return {
         today: todayKey,
@@ -67,7 +30,7 @@ export const listQuestView = (snapshot, todayKey, searchParams) => {
     const status = searchParams.get('status') || 'active';
     const query = `${searchParams.get('query') || ''}`.trim().toLowerCase();
     const items = snapshot.quests
-        .map(questView)
+        .map((quest) => questView(quest, snapshot.settings))
         .filter((quest) => status === 'all' || quest.status === status)
         .filter((quest) => !query || quest.title.toLowerCase().includes(query))
         .slice(0, boundedLimit(searchParams.get('limit')));

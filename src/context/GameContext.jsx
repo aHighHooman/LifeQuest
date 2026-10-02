@@ -1,14 +1,23 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
-import { useBudget } from './BudgetContext';
-import { usePersistentState } from '../utils/persistence';
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import { useAppState, useAppStateField } from './AppStateContext.jsx';
+import { createInitialAppState } from '../domain/initialState.js';
 import {
-    addDaysToDateKey,
-    getHabitCycleState,
-    getLatestHabitCycleAnchorDateKey,
-    getHabitDueDateKey,
-    getHabitPassivePayoutDateKeys,
-} from '../utils/gameLogic';
+    changeCoins,
+    completeQuest as completeQuestTransaction,
+    undoQuest as undoQuestTransaction,
+    completeProtocol as completeProtocolTransaction,
+    createQuest as createQuestTransaction,
+    discardQuest as discardQuestTransaction,
+    restoreQuest as restoreQuestTransaction,
+    setQuestFocus,
+    createProtocol as createProtocolTransaction,
+    setProtocolActive,
+    skipProtocol as skipProtocolTransaction,
+    purchaseGrocery, refundGrocery, purchaseCalories, refundCalories
+} from '../domain/transactions.js';
+import { addDays } from '../domain/calendar.js';
+import { settleDaily } from '../domain/settlement.js';
 import { getTodayISO, isWithinDays, toLocalDateKey } from '../utils/dateUtils';
 import {
     createPortableSnapshot,
@@ -21,19 +30,15 @@ import {
     QUICK_SLOT_IDS,
     createDefaultQuickSlots,
     createId,
-    normalizeHabitHistory,
-    normalizeHabitRecord as normalizeDomainHabitRecord,
+    normalizeHabitRecord,
     normalizeQuestRecord,
-    normalizeQuickSlots,
-    markQuestDiscarded
+    normalizeQuickSlots
 } from '../domain/gameState.js';
 import {
-    DEFAULT_HOME_SCREEN_ICON_ID,
     applyHomeScreenIconMetadata,
     normalizeHomeScreenIconId
 } from '../utils/homeScreenIcons.js';
 import {
-    DEFAULT_CREDITS_PER_USD,
     normalizeCurrencyAmount,
     normalizeNonNegativeCurrencyAmount
 } from '../constants/currency.js';
@@ -44,58 +49,7 @@ const CalorieContext = createContext();
 export const useGame = () => useContext(GameContext);
 export const useGameCalories = () => useContext(CalorieContext);
 
-const INITIAL_STATS = {
-    level: 1,
-    xp: 0,
-    maxXp: 100,
-    hp: 0,
-    maxHp: 100,
-    gold: 0,
-};
-
-const INITIAL_TASKS = [];
-const INITIAL_HABITS = [];
-
-const INITIAL_SETTINGS = {
-    protocolReward: 0.1,
-    homeScreenIconId: DEFAULT_HOME_SCREEN_ICON_ID,
-    questRewards: {
-        easy: 0.5,
-        medium: 1.5,
-        hard: 4,
-        legendary: 10
-    }
-};
-
-const INITIAL_CALORIES = {
-    current: 0,
-    target: 2000,
-    history: [],
-    savedFoods: [],
-    recentFoodIds: [],
-    passiveCheckpointDate: null,
-    passiveCheckpoints: [],
-    passiveCheckpointLedger: {},
-    quickSlots: createDefaultQuickSlots()
-};
-const INITIAL_COIN_HISTORY = [];
-const INITIAL_BUDGET_TRANSFER = {
-    totalMonthlyBudget: 0,
-    groceryAllocation: 0,
-    earnedRewards: 0,
-    groceryList: [],
-    priceDatabase: {},
-    groceryPeriod: 'weekly',
-    stipendAmount: 0,
-    stipendPeriod: 'weekly',
-    stipendPaidThrough: null,
-    goldToUsdRatio: DEFAULT_CREDITS_PER_USD
-};
-const STIPEND_PERIOD_DAYS = {
-    weekly: 7,
-    'bi-weekly': 14,
-    monthly: 30
-};
+const INITIAL_CALORIES = createInitialAppState().calories;
 const PASSIVE_CALORIE_SOURCE = 'passive';
 const PASSIVE_CALORIE_LOOKBACK_DAYS = 7;
 const PASSIVE_CALORIE_CHECKPOINTS = [
@@ -135,17 +89,10 @@ const normalizePassiveCheckpoints = (checkpoints) => {
 };
 
 const getPassiveSettlementDateKeys = (now = new Date()) => {
-    const dateKeys = [];
-    const cursor = new Date(now);
-    cursor.setHours(12, 0, 0, 0);
-    cursor.setDate(cursor.getDate() - (PASSIVE_CALORIE_LOOKBACK_DAYS - 1));
-
-    for (let index = 0; index < PASSIVE_CALORIE_LOOKBACK_DAYS; index += 1) {
-        dateKeys.push(toLocalDateKey(cursor));
-        cursor.setDate(cursor.getDate() + 1);
-    }
-
-    return dateKeys;
+    const todayKey = toLocalDateKey(now);
+    return Array.from({ length: PASSIVE_CALORIE_LOOKBACK_DAYS }, (_, index) => (
+        addDays(todayKey, index - (PASSIVE_CALORIE_LOOKBACK_DAYS - 1))
+    ));
 };
 
 const normalizePassiveCheckpointLedger = (ledger) => {
@@ -246,12 +193,8 @@ const recomputeCalorieCurrent = (history, todayKey = getTodayISO()) => {
     }, 0);
 };
 
-const getEditableCalorieDateKeys = () => {
-    const today = getTodayISO();
-    const yesterdayDate = new Date();
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-
-    return new Set([today, toLocalDateKey(yesterdayDate)]);
+const getEditableCalorieDateKeys = (todayKey) => {
+    return new Set([todayKey, addDays(todayKey, -1)]);
 };
 
 const normalizeCaloriesForImport = (calories = {}) => {
@@ -413,152 +356,18 @@ const createLedgerTimestamp = (dateKey) => {
     return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
 };
 
-const createCoinHistoryEntry = ({ amount, description, type = 'earned', date = new Date().toISOString() }) => ({
-    id: createId('coin'),
-    date,
-    amount: normalizeCurrencyAmount(amount),
-    description,
-    type
+const createTransactionEvent = (prefix = 'coin', now = new Date()) => ({
+    id: createId(prefix), date: now.toISOString(), todayKey: toLocalDateKey(now)
 });
 
-const getDefaultPassivePaidThrough = (habit, todayKey) => {
-    const latestCycleAnchorDateKey = getLatestHabitCycleAnchorDateKey(habit);
-    if (!latestCycleAnchorDateKey) return null;
-
-    const dueDateKey = getHabitDueDateKey(habit);
-    if (!dueDateKey) return latestCycleAnchorDateKey;
-
-    return todayKey < dueDateKey ? todayKey : dueDateKey;
-};
-
-const normalizeHabitRecord = (habit, protocolReward, todayKey) => {
-    const normalized = normalizeDomainHabitRecord(habit, protocolReward, todayKey);
-    const passivePaidThrough = habit.passivePaidThrough === undefined
-        ? getDefaultPassivePaidThrough(normalized, todayKey)
-        : normalized.passivePaidThrough;
-
-    return {
-        ...normalized,
-        passivePaidThrough
-    };
-};
-
-const getPausedPassivePaidThrough = (habit, todayKey) => {
-    const dueDateKey = getHabitDueDateKey(habit);
-    if (!dueDateKey) return habit.passivePaidThrough ?? null;
-
-    const pauseBoundary = todayKey < dueDateKey ? todayKey : dueDateKey;
-    if (!habit.passivePaidThrough || pauseBoundary > habit.passivePaidThrough) {
-        return pauseBoundary;
-    }
-
-    return habit.passivePaidThrough;
-};
-
-const settlePassiveIncome = (habits, todayKey) => {
-    let totalGold = 0;
-    const ledgerEntries = [];
-    let didChange = false;
-
-    const updatedHabits = habits.map((habit) => {
-        const payoutDateKeys = getHabitPassivePayoutDateKeys(habit, habit.passivePaidThrough, todayKey);
-        if (!payoutDateKeys.length) {
-            return habit;
-        }
-
-        const passiveReward = normalizeCurrencyAmount(habit.passiveReward);
-        totalGold = normalizeCurrencyAmount(totalGold + (passiveReward * payoutDateKeys.length));
-        payoutDateKeys.forEach((dateKey) => {
-            ledgerEntries.push(createCoinHistoryEntry({
-                amount: passiveReward,
-                description: `Protocol passive income: ${habit.title}`,
-                type: 'earned',
-                date: createLedgerTimestamp(dateKey)
-            }));
-        });
-
-        didChange = true;
-        return {
-            ...habit,
-            passivePaidThrough: payoutDateKeys[payoutDateKeys.length - 1]
-        };
-    });
-
-    return { updatedHabits, totalGold, ledgerEntries, didChange };
-};
-
-const getStipendPayoutDateKeys = (paidThroughDateKey, period, todayKey) => {
-    if (!paidThroughDateKey) return [];
-
-    const intervalDays = STIPEND_PERIOD_DAYS[period] || STIPEND_PERIOD_DAYS.weekly;
-    const payoutDateKeys = [];
-    let cursor = addDaysToDateKey(paidThroughDateKey, intervalDays);
-
-    while (cursor && cursor <= todayKey) {
-        payoutDateKeys.push(cursor);
-        cursor = addDaysToDateKey(cursor, intervalDays);
-    }
-
-    return payoutDateKeys;
-};
-
-const settleBudgetStipend = (amount, period, paidThroughDateKey, todayKey) => {
-    const stipendAmount = Number(amount || 0);
-    if (stipendAmount <= 0 || !paidThroughDateKey) {
-        return { totalGold: 0, ledgerEntries: [], paidThrough: paidThroughDateKey };
-    }
-
-    const payoutDateKeys = getStipendPayoutDateKeys(paidThroughDateKey, period, todayKey);
-    if (!payoutDateKeys.length) {
-        return { totalGold: 0, ledgerEntries: [], paidThrough: paidThroughDateKey };
-    }
-
-    return {
-        totalGold: normalizeCurrencyAmount(stipendAmount * payoutDateKeys.length),
-        ledgerEntries: payoutDateKeys.map((dateKey) => createCoinHistoryEntry({
-            amount: stipendAmount,
-            description: 'Budget stipend',
-            type: 'earned',
-            date: createLedgerTimestamp(dateKey)
-        })),
-        paidThrough: payoutDateKeys[payoutDateKeys.length - 1]
-    };
-};
-
 export const GameProvider = ({ children }) => {
-    const {
-        totalMonthlyBudget,
-        setTotalMonthlyBudget,
-        groceryAllocation,
-        setGroceryAllocation,
-        earnedRewards,
-        setEarnedRewards,
-        groceryList,
-        setGroceryList,
-        priceDatabase,
-        setPriceDatabase,
-        groceryPeriod,
-        setGroceryPeriod,
-        goldToUsdRatio,
-        setGoldToUsdRatio,
-        addRewardFromGold,
-        removeRewardFromGold,
-        stipendAmount,
-        setStipendAmount,
-        stipendPeriod,
-        setStipendPeriod,
-        stipendPaidThrough,
-        setStipendPaidThrough,
-        removeCompletedGroceriesBefore
-    } = useBudget();
-    const dailyRolloverRef = useRef('');
-
-    const [stats, setStats] = usePersistentState('lq_stats', INITIAL_STATS);
-    const [quests, setQuests] = usePersistentState('lq_quests', INITIAL_TASKS);
-    const [habits, setHabits] = usePersistentState('lq_habits', INITIAL_HABITS);
-    const [settings, setSettings] = usePersistentState('lq_settings', INITIAL_SETTINGS);
-    const [calories, setCalories] = usePersistentState('lq_calories', INITIAL_CALORIES);
-    const [coinHistory, setCoinHistory] = usePersistentState('lq_coin_history', INITIAL_COIN_HISTORY);
+    const { state, updateState } = useAppState();
+    const [stats, setStats] = useAppStateField('stats');
+    const [quests, setQuests] = useAppStateField('quests');
+    const [habits, setHabits] = useAppStateField('habits');
+    const [settings, setSettings] = useAppStateField('settings');
+    const [calories, setCalories] = useAppStateField('calories');
+    const coinHistory = state.coinHistory;
 
     useEffect(() => {
         setCalories((prev) => (isCaloriesStateNormalized(prev) ? prev : normalizeCaloriesForImport(prev)));
@@ -700,137 +509,46 @@ export const GameProvider = ({ children }) => {
     }, [setSettings]);
 
     const exportAppState = useCallback(() => createPortableSnapshot({
-        stats,
-        settings,
-        quests,
-        habits,
-        calories,
-        coinHistory,
-        budget: {
-            totalMonthlyBudget,
-            groceryAllocation,
-            earnedRewards,
-            groceryList,
-            priceDatabase,
-            groceryPeriod,
-            stipendAmount,
-            stipendPeriod,
-            stipendPaidThrough,
-            goldToUsdRatio
-        },
-        ui: {
-            protocolLookaheadDays: readProtocolLookaheadDays()
-        }
-    }), [
-        calories,
-        coinHistory,
-        earnedRewards,
-        goldToUsdRatio,
-        groceryAllocation,
-        groceryList,
-        groceryPeriod,
-        habits,
-        priceDatabase,
-        quests,
-        settings,
-        stats,
-        stipendAmount,
-        stipendPaidThrough,
-        stipendPeriod,
-        totalMonthlyBudget
-    ]);
+        ...state,
+        ui: { protocolLookaheadDays: readProtocolLookaheadDays() }
+    }), [state]);
 
     const importAppState = useCallback((snapshot) => {
+        const next = migrateLegacyPortableSnapshot(snapshot);
         const backupKey = storePortableImportBackup(exportAppState());
-        const nextState = migrateLegacyPortableSnapshot(snapshot);
-
-        setStats(nextState.stats);
-        setSettings(nextState.settings);
-        setQuests(nextState.quests);
-        setHabits(nextState.habits);
-        setCalories(nextState.calories);
-        setCoinHistory(nextState.coinHistory);
-
-        setTotalMonthlyBudget(nextState.budget.totalMonthlyBudget);
-        setGroceryAllocation(nextState.budget.groceryAllocation);
-        setEarnedRewards(nextState.budget.earnedRewards);
-        setGroceryList(nextState.budget.groceryList);
-        setPriceDatabase(nextState.budget.priceDatabase);
-        setGroceryPeriod(nextState.budget.groceryPeriod);
-        setStipendAmount(nextState.budget.stipendAmount);
-        setStipendPeriod(nextState.budget.stipendPeriod);
-        setStipendPaidThrough(nextState.budget.stipendPaidThrough);
-        setGoldToUsdRatio(nextState.budget.goldToUsdRatio);
-
-        writeProtocolLookaheadDays(nextState.ui.protocolLookaheadDays);
-
+        updateState({
+            stats: next.stats, settings: next.settings, quests: next.quests,
+            habits: next.habits, calories: next.calories, coinHistory: next.coinHistory,
+            budget: next.budget
+        });
+        writeProtocolLookaheadDays(next.ui.protocolLookaheadDays);
         return { backupKey };
-    }, [
-        exportAppState,
-        setCalories,
-        setCoinHistory,
-        setEarnedRewards,
-        setGoldToUsdRatio,
-        setGroceryAllocation,
-        setGroceryList,
-        setGroceryPeriod,
-        setHabits,
-        setPriceDatabase,
-        setQuests,
-        setSettings,
-        setStats,
-        setStipendAmount,
-        setStipendPaidThrough,
-        setStipendPeriod,
-        setTotalMonthlyBudget
-    ]);
+    }, [exportAppState, updateState]);
 
     const logCalories = useCallback(({
-        calories: amount,
-        label,
-        source = 'manual',
-        foodId = null,
-        coinCost = 0
+        calories: amount, label, source = 'manual', foodId = null, coinCost = 0, saveAsFood = false
     }) => {
         const safeCalories = normalizeSignedCalorieNumber(amount);
         if (safeCalories === 0) return false;
-
-        const now = new Date().toISOString();
-        const nextEntry = createCalorieHistoryEntry({
-            timestamp: now,
+        const event = createTransactionEvent();
+        const savedFood = saveAsFood && safeCalories > 0
+            ? createSavedFoodRecord({ name: label, calories: safeCalories, coinCost, createdAt: event.date })
+            : null;
+        const entry = createCalorieHistoryEntry({
+            timestamp: event.date,
+            dateKey: event.todayKey,
             calories: safeCalories,
             label,
-            source,
-            foodId,
-            coinCost
+            source: savedFood ? 'saved-food' : source,
+            foodId: savedFood?.id || foodId,
+            coinCost: safeCalories > 0 ? coinCost : 0
         });
-
-        setCalories(prev => {
-            const nextRecentFoodIds = foodId
-                ? [foodId, ...(prev.recentFoodIds || []).filter((id) => id !== foodId)].slice(0, 10)
-                : prev.recentFoodIds || [];
-            const nextHistory = [...(prev.history || []), nextEntry];
-            return {
-                ...prev,
-                history: nextHistory,
-                recentFoodIds: nextRecentFoodIds,
-                current: recomputeCalorieCurrent(nextHistory)
-            };
-        });
-
+        updateState((previous) => purchaseCalories(previous, entry, event, savedFood));
         return true;
-    }, [setCalories]);
-
-    const addCalories = useCallback((amount) => {
-        return logCalories({
-            calories: amount,
-            label: `Quick Add ${normalizeCalorieNumber(amount)}`,
-            source: 'preset'
-        });
-    }, [logCalories]);
+    }, [updateState]);
 
     const updateCalorieEntry = useCallback((entryId, updates = {}) => {
-        const editableDateKeys = getEditableCalorieDateKeys();
+        const editableDateKeys = getEditableCalorieDateKeys(getTodayISO());
 
         setCalories(prev => {
             const nextHistory = (prev.history || []).map((entry) => {
@@ -865,48 +583,11 @@ export const GameProvider = ({ children }) => {
         });
     }, [setCalories]);
 
-    const appendCoinHistoryEntries = useCallback((entries) => {
-        if (!entries.length) return;
-        setCoinHistory(prev => [...prev, ...entries]);
-    }, [setCoinHistory]);
-
     const deleteCalorieEntry = useCallback((entryId) => {
-        const editableDateKeys = getEditableCalorieDateKeys();
-        const history = calories.history || [];
-        const deletedEntry = history.find((entry) => entry.id === entryId && editableDateKeys.has(entry.dateKey));
-        const savedFood = deletedEntry?.foodId
-            ? (calories.savedFoods || []).find((food) => food.id === deletedEntry.foodId)
-            : null;
-        const refundAmount = deletedEntry
-            ? normalizeNonNegativeCurrencyAmount(deletedEntry.coinCost ?? savedFood?.coinCost ?? 0)
-            : 0;
-
-        setCalories(prev => {
-            const nextHistory = (prev.history || []).filter(
-                (entry) => !(entry.id === entryId && editableDateKeys.has(entry.dateKey))
-            );
-
-            return {
-                ...prev,
-                history: nextHistory,
-                current: recomputeCalorieCurrent(nextHistory)
-            };
-        });
-
-        if (deletedEntry && refundAmount > 0) {
-            setStats(prev => ({
-                ...prev,
-                gold: normalizeCurrencyAmount(Number(prev.gold || 0) + refundAmount)
-            }));
-            appendCoinHistoryEntries([
-                createCoinHistoryEntry({
-                    amount: refundAmount,
-                    description: `Refunded food removal: ${deletedEntry.label || 'Calorie entry'}`,
-                    type: 'earned'
-                })
-            ]);
-        }
-    }, [appendCoinHistoryEntries, calories.history, calories.savedFoods, setCalories, setStats]);
+        const event = createTransactionEvent();
+        const editableDateKeys = getEditableCalorieDateKeys(event.todayKey);
+        updateState((previous) => refundCalories(previous, entryId, editableDateKeys, event));
+    }, [updateState]);
 
     const createSavedFood = useCallback(({ name, calories, coinCost = 0 }) => {
         const nextFood = createSavedFoodRecord({ name, calories, coinCost });
@@ -973,350 +654,72 @@ export const GameProvider = ({ children }) => {
     }, [setCalories]);
 
     const spendCoins = useCallback((amount, description) => {
-        const currencyAmount = normalizeCurrencyAmount(amount);
-        setStats(prev => ({
-            ...prev,
-            gold: normalizeCurrencyAmount(Number(prev.gold || 0) - currencyAmount)
-        }));
-        appendCoinHistoryEntries([
-            createCoinHistoryEntry({
-                amount: currencyAmount,
-                description,
-                type: 'spent'
-            })
-        ]);
+        const event = createTransactionEvent();
+        updateState((previous) => changeCoins(previous, -normalizeCurrencyAmount(amount), event, description));
         return true;
-    }, [appendCoinHistoryEntries, setStats]);
+    }, [updateState]);
 
-    const addXp = useCallback((amount) => {
-        const numAmount = Number(amount);
-        setStats(prev => {
-            let newXp = Number(prev.xp || 0) + numAmount;
-            let newLevel = prev.level;
-            let newMaxXp = prev.maxXp;
-            let newHp = prev.hp;
-            let newMaxHp = prev.maxHp;
+    const purchaseGroceryItem = useCallback((id) => {
+        const event = createTransactionEvent();
+        updateState((previous) => purchaseGrocery(previous, id, event));
+    }, [updateState]);
 
-            while (newXp >= newMaxXp) {
-                newLevel += 1;
-                newXp -= newMaxXp;
-                newMaxXp = Math.floor(newMaxXp * 1.2);
-                newHp = newMaxHp;
-            }
-
-            while (newXp < 0 && newLevel > 1) {
-                newLevel -= 1;
-                newMaxXp = Math.ceil(newMaxXp / 1.2);
-                newXp += newMaxXp;
-            }
-
-            return { ...prev, xp: newXp, level: newLevel, maxXp: newMaxXp, hp: newHp };
-        });
-    }, [setStats]);
-
-    const addGold = useCallback((amount, source = 'reward', options = {}) => {
-        const numAmount = normalizeCurrencyAmount(amount);
-        setStats(prev => ({
-            ...prev,
-            gold: normalizeCurrencyAmount(Number(prev.gold || 0) + numAmount)
-        }));
-
-        if (numAmount !== 0) {
-            appendCoinHistoryEntries([
-                createCoinHistoryEntry({
-                    amount: numAmount,
-                    description: options.description || (numAmount > 0 ? `Earned from ${source}` : `Reverted ${source}`),
-                    type: numAmount > 0 ? 'earned' : 'spent',
-                    date: options.date || new Date().toISOString()
-                })
-            ]);
-        }
-    }, [appendCoinHistoryEntries, setStats]);
-
-    const takeDamage = useCallback((amount) => {
-        setStats(prev => ({
-            ...prev,
-            hp: Math.max(0, prev.hp - amount)
-        }));
-    }, [setStats]);
+    const refundGroceryItem = useCallback((id) => {
+        const event = createTransactionEvent();
+        updateState((previous) => refundGrocery(previous, id, event));
+    }, [updateState]);
 
     const addQuest = useCallback((title, difficulty = 'easy', dueDate = null, customReward = null, missionBrief = '') => {
-        const defaultRewards = {
-            easy: { xp: 10, gold: normalizeCurrencyAmount(settings.questRewards.easy) },
-            medium: { xp: 25, gold: normalizeCurrencyAmount(settings.questRewards.medium) },
-            hard: { xp: 60, gold: normalizeCurrencyAmount(settings.questRewards.hard) },
-            legendary: { xp: 150, gold: normalizeCurrencyAmount(settings.questRewards.legendary) },
-        };
-
-        const reward = customReward
-            ? { ...customReward, gold: normalizeCurrencyAmount(customReward.gold) }
-            : defaultRewards[difficulty] || defaultRewards.easy;
-
-        const newQuest = {
-            id: createId('quest'),
-            title,
-            difficulty,
-            dueDate,
-            missionBrief,
-            completed: false,
-            discarded: false,
-            reward,
-            isCustomReward: !!customReward,
-            createdAt: new Date().toISOString(),
-        };
-
-        setQuests(prev => [newQuest, ...prev]);
-    }, [setQuests, settings.questRewards]);
+        const event = createTransactionEvent('quest');
+        updateState((previous) => createQuestTransaction(previous, {
+            title, difficulty, dueDate, reward: customReward, missionBrief
+        }, event));
+    }, [updateState]);
 
     const updateQuest = useCallback((id, updates) => {
         setQuests(prev => prev.map(q => q.id === id ? { ...q, ...updates } : q));
     }, [setQuests]);
 
     const completeQuest = useCallback((id) => {
-        const quest = quests.find(q => q.id === id);
-        if (!quest || quest.completed) return;
-
-        const diff = quest.difficulty || 'easy';
-        const xpAmount = Number(quest.reward.xp || 0);
-        let goldAmount = normalizeCurrencyAmount(quest.reward.gold);
-
-        if (!quest.isCustomReward) {
-            const settingVal = settings.questRewards[diff];
-            if (settingVal !== undefined) {
-                goldAmount = normalizeCurrencyAmount(settingVal);
-            }
-        }
-
-        addXp(xpAmount);
-        addGold(goldAmount, 'Quest');
-        addRewardFromGold(goldAmount);
-
-        setQuests(prev => prev.map(q => {
-            if (q.id === id) {
-                return {
-                    ...q,
-                    completed: true,
-                    completedAt: new Date().toISOString(),
-                    completedReward: { xp: xpAmount, gold: goldAmount }
-                };
-            }
-            return q;
-        }));
-    }, [addGold, addRewardFromGold, addXp, quests, setQuests, settings.questRewards]);
+        const event = createTransactionEvent();
+        updateState((previous) => completeQuestTransaction(previous, id, event));
+    }, [updateState]);
 
     const undoCompleteQuest = useCallback((id) => {
-        const quest = quests.find(q => q.id === id);
-        if (!quest || !quest.completed) return;
-
-        let xpAmount = 0;
-        let goldAmount = 0;
-
-        if (quest.completedReward) {
-            xpAmount = Number(quest.completedReward.xp || 0);
-            goldAmount = normalizeCurrencyAmount(quest.completedReward.gold);
-        } else {
-            const diff = quest.difficulty || 'easy';
-            xpAmount = Number(quest.reward.xp || 0);
-            goldAmount = normalizeCurrencyAmount(quest.reward.gold);
-
-            if (!quest.isCustomReward) {
-                const settingVal = settings.questRewards[diff];
-                if (settingVal !== undefined) {
-                    goldAmount = normalizeCurrencyAmount(settingVal);
-                }
-            }
-        }
-
-        addXp(-xpAmount);
-        addGold(-goldAmount, 'Quest Undo');
-        removeRewardFromGold(goldAmount);
-
-        setQuests(prev => prev.map(q => (
-            q.id === id ? { ...q, completed: false, completedAt: null, completedReward: null } : q
-        )));
-    }, [addGold, addXp, quests, removeRewardFromGold, setQuests, settings.questRewards]);
+        const event = createTransactionEvent();
+        updateState((previous) => undoQuestTransaction(previous, id, event));
+    }, [updateState]);
 
     const deleteQuest = useCallback((id) => {
-        setQuests(prev => prev.map(q => (
-            q.id === id ? markQuestDiscarded(q) : q
-        )));
-    }, [setQuests]);
+        const event = createTransactionEvent();
+        updateState((previous) => discardQuestTransaction(previous, id, event));
+    }, [updateState]);
 
     const restoreQuest = useCallback((id) => {
-        setQuests(prev => prev.map(q => (
-            q.id === id ? { ...q, discarded: false, discardedAt: null } : q
-        )));
-    }, [setQuests]);
-
-    const permanentDeleteQuest = useCallback((id) => {
-        setQuests(prev => prev.filter(q => q.id !== id));
-    }, [setQuests]);
+        updateState((previous) => restoreQuestTransaction(previous, id));
+    }, [updateState]);
 
     const addHabit = useCallback((title, frequency = 'daily', frequencyParam = 1, rewardConfig = {}) => {
-        const newHabit = {
-            id: createId('habit'),
-            title,
-            frequency,
-            frequencyParam,
-            streak: 0,
-            history: {},
-            isActive: false,
-            completionReward: normalizeNonNegativeCurrencyAmount(
-                rewardConfig.completionReward ?? settings.protocolReward
-            ),
-            passiveReward: normalizeNonNegativeCurrencyAmount(rewardConfig.passiveReward ?? 0),
-            passivePaidThrough: null,
-            lastCycleResetDateKey: null,
-            createdAt: new Date().toISOString(),
-        };
-
-        setHabits(prev => [newHabit, ...prev]);
-    }, [setHabits, settings.protocolReward]);
+        const event = createTransactionEvent('habit');
+        updateState((previous) => createProtocolTransaction(previous, {
+            title, frequency, frequencyParam, ...rewardConfig, active: false
+        }, event));
+    }, [updateState]);
 
     const toggleHabitActivation = useCallback((id, isActive) => {
         const todayKey = getTodayISO();
-
-        setHabits(prev => prev.map(h => {
-            if (h.id !== id) return h;
-
-            if (isActive) {
-                return {
-                    ...h,
-                    isActive: true
-                };
-            }
-
-            return {
-                ...h,
-                isActive: false,
-                passivePaidThrough: getPausedPassivePaidThrough(h, todayKey)
-            };
-        }));
-    }, [setHabits]);
+        updateState((previous) => setProtocolActive(previous, id, Boolean(isActive), todayKey));
+    }, [updateState]);
 
     const completeHabit = useCallback((id) => {
-        const today = getTodayISO();
-        const currentHabit = habits.find(h => h.id === id);
-
-        if (!currentHabit) return;
-
-        const { isDueToday } = getHabitCycleState(currentHabit, today);
-        const completionReward = normalizeNonNegativeCurrencyAmount(
-            currentHabit.completionReward ?? settings.protocolReward
-        );
-
-        addXp(5);
-
-        if (isDueToday && completionReward > 0) {
-            addGold(completionReward, 'Protocol', {
-                description: `Protocol due bonus: ${currentHabit.title}`
-            });
-            addRewardFromGold(completionReward);
-        }
-
-        setHabits(prev => prev.map(h => {
-            if (h.id !== id) return h;
-
-            const newHistory = normalizeHabitHistory(h.history);
-            const count = Number(newHistory[today] || 0);
-
-            return {
-                ...h,
-                streak: Number(h.streak || 0) + 1,
-                history: { ...newHistory, [today]: count + 1 },
-                isActive: true,
-                passivePaidThrough: today,
-                lastCycleResetDateKey: today,
-                completionReward: normalizeNonNegativeCurrencyAmount(
-                    h.completionReward ?? settings.protocolReward
-                ),
-                passiveReward: normalizeNonNegativeCurrencyAmount(h.passiveReward)
-            };
-        }));
-    }, [addGold, addRewardFromGold, addXp, habits, setHabits, settings.protocolReward]);
+        const event = createTransactionEvent();
+        updateState((previous) => completeProtocolTransaction(previous, id, event));
+    }, [updateState]);
 
     const skipHabitCycle = useCallback((id) => {
-        const today = getTodayISO();
-
-        setHabits(prev => prev.map(h => {
-            if (h.id !== id) return h;
-
-            return {
-                ...h,
-                isActive: true,
-                passivePaidThrough: today,
-                lastCycleResetDateKey: today,
-                completionReward: normalizeNonNegativeCurrencyAmount(
-                    h.completionReward ?? settings.protocolReward
-                ),
-                passiveReward: normalizeNonNegativeCurrencyAmount(h.passiveReward)
-            };
-        }));
-    }, [setHabits, settings.protocolReward]);
-
-    const recordHabitFailure = useCallback((id) => {
-        const today = getTodayISO();
-        takeDamage(5);
-        setHabits(prev => prev.map(h => {
-            if (h.id !== id) return h;
-
-            const newHistory = normalizeHabitHistory(h.history);
-            const count = Number(newHistory[today] || 0);
-            const nextCount = Math.max(0, count - 1);
-            const nextHistory = { ...newHistory };
-
-            if (nextCount > 0) {
-                nextHistory[today] = nextCount;
-            } else {
-                delete nextHistory[today];
-            }
-
-            return {
-                ...h,
-                streak: 0,
-                history: nextHistory
-            };
-        }));
-    }, [setHabits, takeDamage]);
-
-    const undoHabitCompletion = useCallback((id) => {
-        const today = getTodayISO();
-
-        setHabits(prev => prev.map(h => {
-            if (h.id !== id) return h;
-
-            const newHistory = normalizeHabitHistory(h.history);
-            const count = Number(newHistory[today] || 0);
-            const nextCount = Math.max(0, count - 1);
-            const nextHistory = { ...newHistory };
-
-            if (nextCount > 0) {
-                nextHistory[today] = nextCount;
-            } else {
-                delete nextHistory[today];
-            }
-
-            return {
-                ...h,
-                streak: Math.max(0, Number(h.streak || 0) - 1),
-                history: nextHistory
-            };
-        }));
-    }, [setHabits]);
-
-    const checkHabit = useCallback((id, direction = 'positive') => {
-        if (direction === 'skip') {
-            skipHabitCycle(id);
-            return;
-        }
-
-        if (direction === 'negative' || direction === 'failure') {
-            recordHabitFailure(id);
-            return;
-        }
-
-        completeHabit(id);
-    }, [completeHabit, recordHabitFailure, skipHabitCycle]);
+        const todayKey = getTodayISO();
+        updateState((previous) => skipProtocolTransaction(previous, id, todayKey));
+    }, [updateState]);
 
     const updateHabitRewards = useCallback((id, rewardConfig = {}) => {
         const hasCompletionReward = Object.prototype.hasOwnProperty.call(rewardConfig, 'completionReward');
@@ -1345,14 +748,12 @@ export const GameProvider = ({ children }) => {
 
     const toggleToday = useCallback((id, type) => {
         if (type === 'quest') {
-            setQuests(prev => prev.map(q => q.id === id ? { ...q, isFocusedToday: !q.isFocusedToday } : q));
-            return;
+            updateState((previous) => {
+                const quest = previous.quests.find((entry) => entry.id === id);
+                return setQuestFocus(previous, id, !quest?.isFocusedToday);
+            });
         }
-
-        if (type === 'habit') {
-            return;
-        }
-    }, [setQuests]);
+    }, [updateState]);
 
     useEffect(() => {
         const todayKey = getTodayISO();
@@ -1374,77 +775,10 @@ export const GameProvider = ({ children }) => {
     }, [quests, setQuests]);
 
     useEffect(() => {
-        const today = getTodayISO();
-        const lastLoginDate = stats.lastLoginDate;
-        const rolloverKey = `${lastLoginDate || 'none'}=>${today}`;
-
-        if (lastLoginDate === today) {
-            dailyRolloverRef.current = '';
-            return;
-        }
-
-        if (dailyRolloverRef.current === rolloverKey) {
-            return;
-        }
-
-        dailyRolloverRef.current = rolloverKey;
-
-        const normalizedHabits = habits.map(habit => normalizeHabitRecord(habit, settings.protocolReward, today));
-        const passiveSettlement = settlePassiveIncome(normalizedHabits, today);
-        const stipendSettlement = settleBudgetStipend(stipendAmount, stipendPeriod, stipendPaidThrough, today);
-        const nextHabits = passiveSettlement.updatedHabits;
-        const habitsChanged = nextHabits.some((habit, index) => habit !== habits[index]);
-
-        if (habitsChanged) {
-            setHabits(nextHabits);
-        }
-
-        removeCompletedGroceriesBefore(today);
-
-        if (Number(stipendAmount) > 0 && !stipendPaidThrough) {
-            setStipendPaidThrough(today);
-        } else if (stipendSettlement.paidThrough !== stipendPaidThrough) {
-            setStipendPaidThrough(stipendSettlement.paidThrough);
-        }
-
-        const totalRolloverGold = passiveSettlement.totalGold + stipendSettlement.totalGold;
-        const rolloverLedgerEntries = [
-            ...passiveSettlement.ledgerEntries,
-            ...stipendSettlement.ledgerEntries
-        ];
-
-        if (totalRolloverGold > 0) {
-            setStats(prev => ({
-                ...prev,
-                gold: normalizeCurrencyAmount(Number(prev.gold || 0) + totalRolloverGold),
-                lastLoginDate: today
-            }));
-            appendCoinHistoryEntries(rolloverLedgerEntries);
-            addRewardFromGold(passiveSettlement.totalGold);
-        } else {
-            setStats(prev => ({ ...prev, lastLoginDate: today }));
-        }
-
-        setCalories(prev => ({
-            ...prev,
-            current: recomputeCalorieCurrent(prev.history || [], today)
-        }));
-    }, [
-        addRewardFromGold,
-        appendCoinHistoryEntries,
-        habits,
-        removeCompletedGroceriesBefore,
-        setCalories,
-        setHabits,
-        setQuests,
-        setStipendPaidThrough,
-        setStats,
-        settings.protocolReward,
-        stats.lastLoginDate,
-        stipendAmount,
-        stipendPaidThrough,
-        stipendPeriod
-    ]);
+        const event = { ...createTransactionEvent(), dateForDay: createLedgerTimestamp };
+        updateState((previous) => settleDaily(previous, event));
+    }, [habits, settings.protocolReward, stats.lastLoginDate, calories.passiveCheckpointDate,
+        state.budget.stipendAmount, state.budget.stipendPeriod, state.budget.stipendPaidThrough, updateState]);
 
     useEffect(() => {
         const hasExpiredDiscardedQuests = quests.some(
@@ -1460,7 +794,6 @@ export const GameProvider = ({ children }) => {
 
     const calorieContextValue = useMemo(() => ({
         calories,
-        addCalories,
         logCalories,
         updateCalorieEntry,
         deleteCalorieEntry,
@@ -1468,11 +801,9 @@ export const GameProvider = ({ children }) => {
         updateSavedFood,
         deleteSavedFood,
         setCalorieGoal,
-        assignQuickSlotFood,
-        spendCoins
+        assignQuickSlotFood
     }), [
         calories,
-        addCalories,
         logCalories,
         updateCalorieEntry,
         deleteCalorieEntry,
@@ -1480,23 +811,22 @@ export const GameProvider = ({ children }) => {
         updateSavedFood,
         deleteSavedFood,
         setCalorieGoal,
-        assignQuickSlotFood,
-        spendCoins
+        assignQuickSlotFood
     ]);
 
     const contextValue = useMemo(() => ({
         stats, quests, habits, settings, coinHistory,
-        addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
-        addHabit, completeHabit, skipHabitCycle, recordHabitFailure, undoHabitCompletion, checkHabit,
+        addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, undoCompleteQuest,
+        addHabit, completeHabit, skipHabitCycle,
         deleteHabit, toggleHabitActivation, updateHabitRewards,
-        updateStats, updateSettings, spendCoins, addGold,
+        updateStats, updateSettings, spendCoins, purchaseGroceryItem, refundGroceryItem,
         toggleToday, exportAppState, importAppState
     }), [
         stats, quests, habits, settings, coinHistory,
-        addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, permanentDeleteQuest, undoCompleteQuest,
-        addHabit, completeHabit, skipHabitCycle, recordHabitFailure, undoHabitCompletion, checkHabit,
+        addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, undoCompleteQuest,
+        addHabit, completeHabit, skipHabitCycle,
         deleteHabit, toggleHabitActivation, updateHabitRewards,
-        updateStats, updateSettings, spendCoins, addGold,
+        updateStats, updateSettings, spendCoins, purchaseGroceryItem, refundGroceryItem,
         toggleToday, exportAppState, importAppState
     ]);
 

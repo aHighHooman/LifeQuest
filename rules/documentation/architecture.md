@@ -6,16 +6,14 @@ LifeQuest is a gamified life management application built with **React** and **V
 - **Frontend Framework:** React (with Hooks and Context API)
 - **Styling:** Tailwind CSS for utility-first styling.
 - **Animations:** Framer Motion for smooth UI transitions and interactions.
-- **State Management:** React Context API (`GameContext`, `BudgetContext`).
+- **State Management:** One shared application state, exposed through `GameContext`, `CalorieContext`, and `useBudget`.
 - **Persistence:** LocalStorage with custom hooks and error handling.
 - **Build Tool:** Vite.
 
 ## High-Level Structure
 
 ### 1. State Management (Context)
-The application state is primarily managed using two contexts:
-- **`GameContext`**: Handles the core "game" logic, including user stats (level, XP, HP, gold), quests, habits, and settings.
-- **`BudgetContext`**: Manages the financial tracking part of the app.
+`AppStateProvider` owns game and budget data together. `GameContext`, `CalorieContext`, and `useBudget` expose screen actions and views of that state. Completion, undo, purchase, and refund use the transitions in `src/domain/transactions.js`; see [State and transactions](context.md).
 
 ### 2. UI Components
 The UI is divided into several main views, accessible via a bottom navigation bar:
@@ -28,8 +26,8 @@ The UI is divided into several main views, accessible via a bottom navigation ba
 ### 3. Data Flow
 1. **User Interaction**: User interacts with a component (e.g., completes a quest).
 2. **Action Dispatch**: The component calls an action provided by `useGame` or `useBudget` (e.g., `completeQuest(id)`).
-3. **Logic Execution**: The context updates the local state and triggers side effects (e.g., adding XP, gold).
-4. **Persistence**: Updates are automatically saved to `localStorage` via the `usePersistentState` utility.
+3. **Logic Execution**: A functional transaction updates balances, ledger, status, and receipts together in the shared application state.
+4. **Persistence**: The complete game/budget state is saved as one local checkpoint. Compatibility readers load the existing per-field keys when no checkpoint exists.
 5. **Re-render**: React re-renders the affected components with the new state.
 
 ## Navigation & Routing

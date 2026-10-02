@@ -5,7 +5,7 @@ The LifeQuest UI is built with functional React components, utilizing **Tailwind
 ## Primary Layout Components
 
 ### `App.jsx`
-The root component that wraps the application in context providers (`BudgetProvider`, `GameProvider`). It manages the top-level tab state (`currentTab`) and renders the `Navigation` wrapper.
+The root component that wraps the application in context providers (`AppStateProvider`, `GameProvider`, `CloudSyncProvider`). It manages the top-level tab state (`currentTab`) and renders the `Navigation` wrapper.
 
 ### `Navigation.jsx`
 A wrapper component that provides the bottom navigation bar. It handles tab switching and includes a responsive side-navigation for desktop views. It also manages global swipe gestures for tab navigation.

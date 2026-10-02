@@ -1579,8 +1579,7 @@ const CalorieTracker = () => {
         updateSavedFood,
         deleteSavedFood,
         setCalorieGoal,
-        assignQuickSlotFood,
-        spendCoins
+        assignQuickSlotFood
     } = useGameCalories();
 
     const todayKey = getTodayISO();
@@ -1658,9 +1657,6 @@ const CalorieTracker = () => {
 
     const handleQuickFood = useCallback((food) => {
         setActiveSheet(null);
-        if (normalizeCoinCost(food?.coinCost) > 0) {
-            spendCoins(normalizeCoinCost(food.coinCost), `Food inject: ${food.name}`);
-        }
         logCalories({
             calories: food.calories,
             label: food.name,
@@ -1668,7 +1664,7 @@ const CalorieTracker = () => {
             foodId: food.id,
             coinCost: normalizeCoinCost(food.coinCost)
         });
-    }, [logCalories, spendCoins]);
+    }, [logCalories]);
 
     const handleQuickSlotFoodSelect = useCallback((food) => {
         if (foodPickerTarget) {
@@ -1695,36 +1691,14 @@ const CalorieTracker = () => {
     }, [handleQuickFood, logCalories]);
 
     const handleManualSubmit = useCallback(({ calories: amount, label, coinCost = 0 }) => {
-        if (`${label}`.trim() && amount > 0) {
-            const food = createSavedFood({
-                name: label,
-                calories: amount,
-                coinCost
-            });
-
-            if (normalizeCoinCost(food.coinCost) > 0) {
-                spendCoins(normalizeCoinCost(food.coinCost), `Food inject: ${food.name}`);
-            }
-            logCalories({
-                calories: food.calories,
-                label: food.name,
-                source: 'saved-food',
-                foodId: food.id,
-                coinCost: normalizeCoinCost(food.coinCost)
-            });
-            return;
-        }
-
-        if (normalizeCoinCost(coinCost) > 0 && amount > 0) {
-            spendCoins(normalizeCoinCost(coinCost), `Manual inject: ${label || 'Unnamed item'}`);
-        }
         logCalories({
             calories: amount,
             label: label || (amount < 0 ? 'Exercise Burn' : 'Manual Entry'),
             source: 'manual',
-            coinCost: amount > 0 ? normalizeCoinCost(coinCost) : 0
+            coinCost: amount > 0 ? normalizeCoinCost(coinCost) : 0,
+            saveAsFood: Boolean(`${label}`.trim()) && amount > 0
         });
-    }, [createSavedFood, logCalories, spendCoins]);
+    }, [logCalories]);
 
     const toggleSheet = useCallback((sheetId) => {
         startTransition(() => {
