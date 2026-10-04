@@ -1,5 +1,5 @@
-// Every assistant surface (the REST Action and the MCP server) reads and
-// changes LifeQuest through these operations, so their behavior cannot drift.
+// The operations an assistant can perform on LifeQuest: each loads the cloud
+// snapshot, applies shared domain rules, and saves under a revision guard.
 import { HttpError, assertHttp } from './errors.js';
 import { loadSnapshot, saveSnapshot } from './snapshotStore.js';
 import {
@@ -72,8 +72,7 @@ export const getToday = async (env) => {
     return { dashboard: dashboardView(snapshot, clock.todayKey) };
 };
 
-// `searchParams` only needs `get(name)`, so URL query strings and tool
-// arguments wrapped in URLSearchParams both work.
+// `searchParams` only needs `get(name)`.
 export const listQuests = async (env, searchParams) => {
     const { clock, snapshot } = await loadState(env);
     return listQuestView(snapshot, clock.todayKey, searchParams);

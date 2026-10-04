@@ -233,27 +233,3 @@ describe('LifeQuest MCP tools', () => {
         expect(result.structuredContent.error.code).toBe('quest_not_found');
     });
 });
-
-describe('REST Action parity', () => {
-    it('applies the same operation through the REST route', async () => {
-        const response = await worker.fetch(new Request('https://worker.example/v1/quests/quest-1/complete', {
-            method: 'POST',
-            headers: { authorization: 'Bearer correct' }
-        }), ENV);
-        await expect(response.json()).resolves.toMatchObject({
-            ok: true,
-            changed: true,
-            quest: { id: 'quest-1', status: 'completed' },
-            revisionId: 'revision-1'
-        });
-    });
-
-    it('rejects unknown REST actions without loading the snapshot', async () => {
-        const response = await worker.fetch(new Request('https://worker.example/v1/quests/quest-1/explode', {
-            method: 'POST',
-            headers: { authorization: 'Bearer correct' }
-        }), ENV);
-        expect(response.status).toBe(404);
-        expect(store.saves).toBe(0);
-    });
-});

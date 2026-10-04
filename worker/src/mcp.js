@@ -1,7 +1,6 @@
 // Stateless Model Context Protocol endpoint (Streamable HTTP transport).
 // Each POST carries one JSON-RPC message and is answered with plain JSON, so
-// no session or server-sent event stream is needed. Tools call the same
-// operations as the REST Action.
+// no session or server-sent event stream is needed.
 import { HttpError } from './errors.js';
 import { authorize, json, readJsonBody } from './http.js';
 import {
