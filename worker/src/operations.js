@@ -16,7 +16,9 @@ import {
     setQuestToday,
     skipProtocol,
     touchSnapshot,
-    undoQuest
+    undoQuest,
+    updateProtocol,
+    updateQuest
 } from './stateEngine.js';
 import {
     dashboardView,
@@ -105,4 +107,14 @@ export const applyProtocolAction = (env, id, action, input = {}) => {
     if (!run) throw new HttpError(404, 'Unknown protocol action.', 'route_not_found');
     assertHttp(id, 400, 'A protocol ID is required.', 'invalid_protocol');
     return mutate(env, 'protocol', (snapshot, clock) => run(snapshot, id, clock, input));
+};
+
+export const updateQuestRecord = (env, id, input) => {
+    assertHttp(id, 400, 'A quest ID is required.', 'invalid_quest');
+    return mutate(env, 'quest', (snapshot) => updateQuest(snapshot, id, input));
+};
+
+export const updateProtocolRecord = (env, id, input) => {
+    assertHttp(id, 400, 'A protocol ID is required.', 'invalid_protocol');
+    return mutate(env, 'protocol', (snapshot, clock) => updateProtocol(snapshot, id, input, clock.todayKey, clock.now));
 };

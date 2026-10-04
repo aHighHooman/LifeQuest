@@ -8,7 +8,9 @@ import {
     setQuestFocus,
     createProtocol as createProtocolTransaction,
     setProtocolActive,
-    skipProtocol as skipProtocolTransaction
+    skipProtocol as skipProtocolTransaction,
+    updateProtocolDetails,
+    updateQuestDetails
 } from '../../src/domain/transactions.js';
 import { DEFAULT_QUEST_GOLD, DEFAULT_PROTOCOL_REWARD } from '../../src/domain/rewards.js';
 import { getDateKey } from './date.js';
@@ -129,6 +131,36 @@ export const setQuestToday = (snapshot, id, selected) => {
     return { quest: findQuest(snapshot, id), changed: true };
 };
 
+const QUEST_DETAIL_FIELDS = ['title', 'missionBrief', 'dueDate', 'difficulty', 'reward'];
+const PROTOCOL_DETAIL_FIELDS = ['title', 'frequency', 'frequencyParam', 'completionReward', 'passiveReward'];
+
+const pickChanges = (input, fields) => Object.fromEntries(
+    fields.filter((key) => input[key] !== undefined && input[key] !== null).map((key) => [key, input[key]])
+);
+
+export const updateQuest = (snapshot, id, input) => {
+    const quest = findQuest(snapshot, id);
+    const changes = pickChanges(input, QUEST_DETAIL_FIELDS);
+    assertHttp(Object.keys(changes).length, 400, 'Provide at least one quest detail to change.', 'invalid_quest');
+    if (changes.title !== undefined) assertHttp(cleanText(changes.title), 400, 'Quest title cannot be empty.', 'invalid_quest');
+    if (changes.difficulty !== undefined) {
+        changes.difficulty = cleanText(changes.difficulty).toLowerCase();
+        assertHttp(DIFFICULTIES.has(changes.difficulty), 400, 'Quest difficulty must be easy, medium, hard, or legendary.', 'invalid_quest');
+    }
+    if (changes.dueDate !== undefined) changes.dueDate = cleanText(changes.dueDate) || null;
+    if (changes.missionBrief !== undefined) changes.missionBrief = cleanText(changes.missionBrief);
+    assertHttp(
+        !quest.completed || (changes.difficulty === undefined && changes.reward === undefined),
+        409,
+        'Undo the quest before changing its difficulty or reward; its completion already paid out.',
+        'quest_completed'
+    );
+    const next = updateQuestDetails(snapshot, id, changes);
+    if (next === snapshot) return { quest, changed: false };
+    Object.assign(snapshot, next);
+    return { quest: findQuest(snapshot, id), changed: true };
+};
+
 export const createProtocol = (snapshot, input, now = new Date(), todayKey = getDateKey(now)) => {
     const requestId = cleanText(input.requestId);
     if (requestId) {
@@ -173,6 +205,27 @@ export const skipProtocol = (snapshot, id, todayKey, now = new Date()) => {
     const protocol = findProtocol(snapshot, id);
     Object.assign(snapshot, skipProtocolTransaction(snapshot, id, transactionEvent(now, todayKey)));
     return { protocol: findProtocol(snapshot, id), changed: true, previous: protocol };
+};
+
+export const updateProtocol = (snapshot, id, input, todayKey, now = new Date()) => {
+    const protocol = findProtocol(snapshot, id);
+    const changes = pickChanges(input, PROTOCOL_DETAIL_FIELDS);
+    assertHttp(Object.keys(changes).length, 400, 'Provide at least one protocol detail to change.', 'invalid_protocol');
+    if (changes.title !== undefined) assertHttp(cleanText(changes.title), 400, 'Protocol title cannot be empty.', 'invalid_protocol');
+    if (changes.frequency !== undefined) {
+        changes.frequency = cleanText(changes.frequency).toLowerCase();
+        assertHttp(FREQUENCIES.has(changes.frequency), 400, 'Protocol frequency must be daily, weekly, monthly, or interval.', 'invalid_protocol');
+    }
+    assertHttp(
+        changes.frequencyParam === undefined || (changes.frequency ?? protocol.frequency) === 'interval',
+        400,
+        'frequencyParam only applies to interval protocols; set frequency to interval as well.',
+        'invalid_protocol'
+    );
+    const next = updateProtocolDetails(snapshot, id, changes, transactionEvent(now, todayKey));
+    if (next === snapshot) return { protocol, changed: false };
+    Object.assign(snapshot, next);
+    return { protocol: findProtocol(snapshot, id), changed: true };
 };
 
 export const touchSnapshot = (snapshot, now = new Date()) => {

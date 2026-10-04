@@ -13,7 +13,9 @@ import {
     createQuestRecord,
     getToday,
     listProtocols,
-    listQuests
+    listQuests,
+    updateProtocolRecord,
+    updateQuestRecord
 } from './operations.js';
 
 export const MCP_PATH = '/mcp';
@@ -37,6 +39,7 @@ Changing:
 - Only change LifeQuest when the user clearly asks to record or change something.
 - Use the exact record ID returned by a tool.
 - For create_quest, create_protocol, and completing a protocol, generate a unique requestId and reuse it if the identical call is retried.
+- To edit a quest or protocol (title, notes, schedule, or rewards), use update_quest or update_protocol and send only the fields that change. Never recreate a record to edit it.
 - Discarding a quest is reversible; use restore to recover it.
 - Use activate and deactivate for protocols; never simulate deactivation by skipping a cycle.
 - Never claim success unless the tool result has ok: true.
@@ -144,6 +147,33 @@ const TOOLS = [
         run: (env, args) => applyQuestAction(env, args.id, args.action)
     },
     {
+        name: 'update_quest',
+        title: 'Update quest',
+        description: 'Edit a quest\'s details. Send only the fields to change. Changing difficulty re-prices a quest that uses the difficulty defaults; giving reward sets a custom reward, and an omitted xp or gold keeps its current value. A completed quest must be undone before its difficulty or reward can change.',
+        inputSchema: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+                id: { type: 'string', minLength: 1, description: 'Exact quest ID returned by another tool.' },
+                title: { type: 'string', minLength: 1 },
+                missionBrief: { type: 'string', description: 'Notes or context for the quest. An empty string clears them.' },
+                dueDate: { type: 'string', pattern: '^(\\d{4}-\\d{2}-\\d{2})?$', description: 'Local date in YYYY-MM-DD form. An empty string clears it.' },
+                difficulty: { type: 'string', enum: ['easy', 'medium', 'hard', 'legendary'] },
+                reward: {
+                    type: 'object',
+                    properties: {
+                        xp: { type: 'number', minimum: 0 },
+                        gold: { type: 'number', minimum: 0 }
+                    },
+                    additionalProperties: false
+                }
+            },
+            additionalProperties: false
+        },
+        annotations: { ...CHANGE, idempotentHint: true },
+        run: (env, args) => updateQuestRecord(env, args.id, args)
+    },
+    {
         name: 'create_protocol',
         title: 'Create protocol',
         description: 'Create a LifeQuest protocol (recurring habit). The next due date is counted from the last completion: daily, weekly (7 days), monthly (30 days), or every frequencyParam days for interval.',
@@ -180,6 +210,26 @@ const TOOLS = [
         },
         annotations: CHANGE,
         run: (env, args) => applyProtocolAction(env, args.id, args.action, args)
+    },
+    {
+        name: 'update_protocol',
+        title: 'Update protocol',
+        description: 'Edit a protocol\'s details. Send only the fields to change. A new schedule or passive reward takes effect from tomorrow; passive income already owed through today is paid at the old rate first.',
+        inputSchema: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+                id: { type: 'string', minLength: 1, description: 'Exact protocol ID returned by another tool.' },
+                title: { type: 'string', minLength: 1 },
+                frequency: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'interval'] },
+                frequencyParam: { type: 'integer', minimum: 1, description: 'Days between cycles; only for interval protocols.' },
+                completionReward: { type: 'number', minimum: 0, description: 'Coins paid when completed on its due day.' },
+                passiveReward: { type: 'number', minimum: 0, description: 'Coins paid per day while the current cycle is kept.' }
+            },
+            additionalProperties: false
+        },
+        annotations: { ...CHANGE, idempotentHint: true },
+        run: (env, args) => updateProtocolRecord(env, args.id, args)
     }
 ];
 

@@ -40,8 +40,10 @@ protocol versions 2025-03-26 through 2025-11-25).
 | `list_protocols` | List or search protocols |
 | `create_quest` | Create a quest (idempotent with `requestId`) |
 | `update_quest_status` | `complete`, `undo`, `discard`, `restore`, `select-for-today`, `remove-from-today` |
+| `update_quest` | Edit title, notes, due date, difficulty, or reward |
 | `create_protocol` | Create a protocol (idempotent with `requestId`) |
 | `update_protocol_status` | `complete`, `skip`, `activate`, `deactivate` |
+| `update_protocol` | Edit title, schedule, or rewards |
 
 The server sends its usage rules as MCP `instructions` during initialization,
 so clients do not need a separate instructions file.

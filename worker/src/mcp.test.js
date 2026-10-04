@@ -156,8 +156,10 @@ describe('LifeQuest MCP tools', () => {
             'list_protocols',
             'create_quest',
             'update_quest_status',
+            'update_quest',
             'create_protocol',
-            'update_protocol_status'
+            'update_protocol_status',
+            'update_protocol'
         ]);
         result.tools.forEach((tool) => {
             expect(tool.run).toBeUndefined();
@@ -232,6 +234,42 @@ describe('LifeQuest MCP tools', () => {
             id: 'habit-1', action: 'complete', requestId: 'req-c'
         });
         expect(retried.structuredContent.changed).toBe(false);
+    });
+
+    it('edits quest details and reward', async () => {
+        const result = await callTool('update_quest', {
+            id: 'quest-1', title: 'Ship v2', missionBrief: 'Release notes too', dueDate: '2026-10-12', reward: { gold: 2 }
+        });
+        expect(result.structuredContent).toMatchObject({
+            ok: true,
+            changed: true,
+            quest: { title: 'Ship v2', missionBrief: 'Release notes too', dueDate: '2026-10-12', reward: { xp: 25, gold: 2 } }
+        });
+
+        const cleared = await callTool('update_quest', { id: 'quest-1', dueDate: '' });
+        expect(cleared.structuredContent.quest.dueDate).toBeNull();
+    });
+
+    it('refuses to re-price a completed quest or accept an empty edit', async () => {
+        await callTool('update_quest_status', { id: 'quest-1', action: 'complete' });
+        const repriced = await callTool('update_quest', { id: 'quest-1', reward: { gold: 9 } });
+        expect(repriced.structuredContent.error.code).toBe('quest_completed');
+        expect(store.snapshot.quests[0].reward.gold).toBe(1.5);
+
+        const empty = await callTool('update_quest', { id: 'quest-1' });
+        expect(empty.structuredContent.error.code).toBe('invalid_quest');
+    });
+
+    it('edits protocol schedule and rewards', async () => {
+        const result = await callTool('update_protocol', {
+            id: 'habit-1', frequency: 'interval', frequencyParam: 2, completionReward: 1, passiveReward: 0.25
+        });
+        expect(result.structuredContent.protocol).toMatchObject({
+            frequency: 'interval', frequencyParam: 2, completionReward: 1, passiveReward: 0.25
+        });
+
+        const stray = await callTool('update_protocol', { id: 'habit-1', frequency: 'daily', frequencyParam: 4 });
+        expect(stray.structuredContent.error.code).toBe('invalid_protocol');
     });
 
     it('returns domain failures as tool errors', async () => {

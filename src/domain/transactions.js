@@ -99,6 +99,38 @@ export const setQuestFocus = (state, id, selected) => {
     return { ...state, quests: state.quests.map((entry) => entry.id === id ? { ...entry, isFocusedToday: selected } : entry) };
 };
 
+const changedFields = (record, fields) => Object.fromEntries(
+    Object.entries(fields).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(record[key]))
+);
+
+// A new difficulty re-prices a quest that uses the difficulty defaults; an
+// explicit reward makes it custom. A completed quest's reward is fixed by its
+// receipt, so it must be undone before it can be re-priced.
+export const updateQuestDetails = (state, id, changes) => {
+    const quest = state.quests.find((entry) => entry.id === id);
+    const repricing = changes.difficulty !== undefined || changes.reward !== undefined;
+    if (!quest || (quest.completed && repricing)) return state;
+    const difficulty = changes.difficulty ?? quest.difficulty ?? 'easy';
+    const fields = {
+        ...(changes.title !== undefined ? { title: `${changes.title}`.trim() } : {}),
+        ...(changes.missionBrief !== undefined ? { missionBrief: `${changes.missionBrief}` } : {}),
+        ...(changes.dueDate !== undefined ? { dueDate: changes.dueDate || null } : {}),
+        ...(changes.difficulty !== undefined ? { difficulty } : {})
+    };
+    if (changes.reward) {
+        const current = resolveQuestReward(state.settings, quest);
+        fields.reward = createQuestReward(state.settings, difficulty, {
+            xp: changes.reward.xp ?? current.xp, gold: changes.reward.gold ?? current.gold
+        });
+        fields.isCustomReward = true;
+    } else if (changes.difficulty !== undefined && !quest.isCustomReward) {
+        fields.reward = createQuestReward(state.settings, difficulty);
+    }
+    const edits = changedFields(quest, fields);
+    if (!Object.keys(edits).length) return state;
+    return { ...state, quests: state.quests.map((entry) => entry.id === id ? { ...entry, ...edits } : entry) };
+};
+
 export const completeQuest = (state, id, event) => {
     const quest = state.quests.find((entry) => entry.id === id);
     if (!quest || quest.completed || quest.discarded) return state;
@@ -219,6 +251,34 @@ export const skipProtocol = (state, id, event) => {
         completionReward: normalizeNonNegativeCurrencyAmount(entry.completionReward, state.settings.protocolReward),
         passiveReward: normalizeNonNegativeCurrencyAmount(entry.passiveReward)
     } : entry) };
+};
+
+// A new passive rate or schedule applies from tomorrow: days already owed,
+// today included, are paid at the old terms first.
+export const updateProtocolDetails = (state, id, changes, event) => {
+    const protocol = state.habits.find((entry) => entry.id === id);
+    if (!protocol) return state;
+    const frequency = changes.frequency ?? protocol.frequency ?? 'daily';
+    const fields = {
+        ...(changes.title !== undefined ? { title: `${changes.title}`.trim() } : {}),
+        ...(changes.completionReward !== undefined
+            ? { completionReward: normalizeNonNegativeCurrencyAmount(changes.completionReward) }
+            : {}),
+        ...(changes.passiveReward !== undefined
+            ? { passiveReward: normalizeNonNegativeCurrencyAmount(changes.passiveReward) }
+            : {}),
+        ...(changes.frequency !== undefined || changes.frequencyParam !== undefined ? {
+            frequency,
+            frequencyParam: frequency === 'interval'
+                ? Math.max(1, Math.round(numberOr(changes.frequencyParam ?? protocol.frequencyParam, 1)))
+                : 1
+        } : {})
+    };
+    const edits = changedFields(protocol, fields);
+    if (!Object.keys(edits).length) return state;
+    const reschedules = ['passiveReward', 'frequency', 'frequencyParam'].some((key) => key in edits);
+    const settled = reschedules ? payOwedPassiveIncome(state, id, event) : state;
+    return { ...settled, habits: settled.habits.map((entry) => entry.id === id ? { ...entry, ...edits } : entry) };
 };
 
 export const purchaseGrocery = (state, id, event) => {

@@ -3,7 +3,8 @@ import { createInitialAppState } from './initialState.js';
 import { usdToCredits, creditsToUsd } from '../constants/currency.js';
 import {
     changeCoins, completeQuest, undoQuest, completeProtocol, setCoinBalance,
-    purchaseGrocery, refundGrocery, purchaseCalories, refundCalories
+    purchaseGrocery, refundGrocery, purchaseCalories, refundCalories,
+    updateQuestDetails, updateProtocolDetails
 } from './transactions.js';
 
 const event = { id: 'coin-1', date: '2026-10-02T12:00:00.000Z', todayKey: '2026-10-02' };
@@ -194,5 +195,56 @@ describe('LifeQuest transactions', () => {
         expect(lowered.coinHistory[1]).toMatchObject({ amount: 8.3457, type: 'spent' });
         expect(lowered.budget.earnedRewards).toBe(2);
         expect(setCoinBalance(lowered, 4, event)).toBe(lowered);
+    });
+});
+
+describe('LifeQuest record edits', () => {
+    it('re-prices a default-reward quest when its difficulty changes', () => {
+        const edited = updateQuestDetails(makeState(), 'quest-1', { difficulty: 'hard', title: ' Renamed ' });
+        expect(edited.quests[0]).toMatchObject({
+            title: 'Renamed', difficulty: 'hard', reward: { xp: 60, gold: 4 }
+        });
+    });
+
+    it('makes a partial reward custom and keeps the other half', () => {
+        const edited = updateQuestDetails(makeState(), 'quest-1', { reward: { gold: 3 } });
+        expect(edited.quests[0]).toMatchObject({ reward: { xp: 10, gold: 3 }, isCustomReward: true });
+        const harder = updateQuestDetails(edited, 'quest-1', { difficulty: 'legendary' });
+        expect(harder.quests[0].reward).toEqual({ xp: 10, gold: 3 });
+    });
+
+    it('returns the same state when nothing changes or a completed quest would be re-priced', () => {
+        const state = makeState();
+        expect(updateQuestDetails(state, 'quest-1', { difficulty: 'easy' })).toBe(state);
+        const completed = completeQuest(state, 'quest-1', event);
+        expect(updateQuestDetails(completed, 'quest-1', { reward: { gold: 9 } })).toBe(completed);
+        expect(updateQuestDetails(completed, 'quest-1', { missionBrief: 'notes' }).quests[0].missionBrief).toBe('notes');
+    });
+
+    it('pays owed passive income at the old rate before changing it', () => {
+        const state = makeState();
+        state.budget.goldToUsdRatio = 1;
+        state.habits = [{
+            id: 'habit-1', title: 'Walk', frequency: 'weekly', frequencyParam: 1, isActive: true,
+            history: { '2026-09-29': 1 }, completionReward: 0.2, passiveReward: 0.1, passivePaidThrough: '2026-09-30'
+        }];
+        const edited = updateProtocolDetails(state, 'habit-1', { passiveReward: 0.5, title: 'Long walk' }, event);
+        expect(edited.stats.gold).toBe(10.2);
+        expect(edited.habits[0]).toMatchObject({
+            title: 'Long walk', passiveReward: 0.5, passivePaidThrough: '2026-10-02'
+        });
+    });
+
+    it('does not settle passive income for a rename and resets frequencyParam off interval', () => {
+        const state = makeState();
+        state.habits = [{
+            id: 'habit-1', title: 'Walk', frequency: 'interval', frequencyParam: 3, isActive: true,
+            history: { '2026-09-29': 1 }, completionReward: 0.2, passiveReward: 0.1, passivePaidThrough: '2026-09-30'
+        }];
+        const renamed = updateProtocolDetails(state, 'habit-1', { title: 'Stroll' }, event);
+        expect(renamed.stats.gold).toBe(10);
+        expect(updateProtocolDetails(state, 'habit-1', { frequency: 'daily' }, event).habits[0])
+            .toMatchObject({ frequency: 'daily', frequencyParam: 1 });
+        expect(updateProtocolDetails(state, 'habit-1', { title: 'Walk' }, event)).toBe(state);
     });
 });
