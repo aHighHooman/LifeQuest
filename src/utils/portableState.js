@@ -79,6 +79,7 @@ const SECTION_TYPES = Object.fromEntries(
 );
 
 const ALLOWED_SCALAR_KEYS = {
+    // hp/maxHp are accepted from older files and dropped; health is calorie capacity.
     stats: new Set(['level', 'xp', 'maxXp', 'hp', 'maxHp', 'gold', 'lastLoginDate']),
     settings: new Set([
         'protocolReward',
@@ -117,8 +118,6 @@ const INITIAL_STATS = {
     level: 1,
     xp: 0,
     maxXp: 100,
-    hp: 0,
-    maxHp: 100,
     gold: 0,
     lastLoginDate: null
 };
@@ -401,14 +400,12 @@ const recomputeCalorieCurrent = (history, todayKey = getTodayISO()) => history.r
     entry.dateKey === todayKey ? sum + normalizeInteger(entry.calories, 0) : sum
 ), 0);
 
-const normalizeStats = (stats = {}) => ({
+const normalizeStats = ({ hp: _legacyHp, maxHp: _legacyMaxHp, ...stats } = {}) => ({
     ...INITIAL_STATS,
     ...stats,
     level: normalizePositiveInteger(stats.level ?? INITIAL_STATS.level, INITIAL_STATS.level),
     xp: normalizeNonNegativeInteger(stats.xp ?? INITIAL_STATS.xp, INITIAL_STATS.xp),
     maxXp: normalizePositiveInteger(stats.maxXp ?? INITIAL_STATS.maxXp, INITIAL_STATS.maxXp),
-    hp: normalizeNonNegativeInteger(stats.hp ?? INITIAL_STATS.hp, INITIAL_STATS.hp),
-    maxHp: normalizePositiveInteger(stats.maxHp ?? INITIAL_STATS.maxHp, INITIAL_STATS.maxHp),
     gold: normalizeCurrencyAmount(stats.gold ?? INITIAL_STATS.gold, INITIAL_STATS.gold),
     lastLoginDate: stats.lastLoginDate ?? null
 });
@@ -613,8 +610,6 @@ export const formatPortableSnapshot = (snapshot) => {
             level: normalized.stats.level,
             xp: normalized.stats.xp,
             maxXp: normalized.stats.maxXp,
-            hp: normalized.stats.hp,
-            maxHp: normalized.stats.maxHp,
             gold: normalized.stats.gold,
             lastLoginDate: normalized.stats.lastLoginDate
         }),

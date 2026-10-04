@@ -4,7 +4,7 @@ import { DEFAULT_HOME_SCREEN_ICON_ID } from '../utils/homeScreenIcons.js';
 import { DEFAULT_PROTOCOL_REWARD, DEFAULT_QUEST_GOLD } from './rewards.js';
 
 export const createInitialAppState = () => ({
-    stats: { level: 1, xp: 0, maxXp: 100, hp: 0, maxHp: 100, gold: 0 },
+    stats: { level: 1, xp: 0, maxXp: 100, gold: 0 },
     settings: {
         protocolReward: DEFAULT_PROTOCOL_REWARD,
         homeScreenIconId: DEFAULT_HOME_SCREEN_ICON_ID,

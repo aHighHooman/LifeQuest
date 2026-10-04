@@ -1,4 +1,4 @@
-import { questView, protocolView } from '../../src/domain/views.js';
+import { healthView, questView, protocolView } from '../../src/domain/views.js';
 
 export { questView, protocolView } from '../../src/domain/views.js';
 
@@ -7,10 +7,7 @@ export const dashboardView = (snapshot, todayKey) => {
     const protocols = snapshot.habits.map((protocol) => protocolView(protocol, todayKey));
     return {
         today: todayKey,
-        health: {
-            current: Number(snapshot.stats.hp || 0),
-            maximum: Number(snapshot.stats.maxHp || 0)
-        },
+        health: healthView(snapshot.calories, todayKey),
         coinsOnHand: Number(snapshot.stats.gold || 0),
         level: Number(snapshot.stats.level || 1),
         xp: {

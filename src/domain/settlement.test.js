@@ -46,23 +46,34 @@ describe('daily LifeQuest settlement', () => {
         expect(settleDaily(explicitNull, event).stats.gold).toBe(10.7);
     });
 
-    it('caps paused income and resumes from that cursor without paying inactive days', () => {
-        const paused = setProtocolActive(makeState(), 'weekly', false, '2026-03-10');
+    it('pays owed days on pause, then resumes from that cursor without paying inactive days', () => {
+        const paused = setProtocolActive(makeState(), 'weekly', false, { ...event, todayKey: '2026-03-10' });
+        expect(paused.stats.gold).toBe(10.3);
         const inactive = settleDaily(paused, { ...event, todayKey: '2026-03-10' });
-        expect(inactive.stats.gold).toBe(10);
+        expect(inactive.stats.gold).toBe(10.3);
         expect(inactive.habits[0].passivePaidThrough).toBe('2026-03-10');
-        const resumed = setProtocolActive(inactive, 'weekly', true, '2026-03-11');
-        expect(settleDaily(resumed, event).coinHistory).toHaveLength(4);
+        const resumed = setProtocolActive(inactive, 'weekly', true, { ...event, todayKey: '2026-03-11' });
+        expect(settleDaily(resumed, event).coinHistory.map((entry) => entry.date.slice(0, 10))).toEqual([
+            '2026-03-08', '2026-03-09', '2026-03-10', '2026-03-11', '2026-03-12', '2026-03-13', '2026-03-14'
+        ]);
     });
 
-    it('uses the same cycle anchor after skipping or completing before the due day', () => {
-        const skipped = skipProtocol(makeState(), 'weekly', '2026-03-10');
+    it('pays the old window before skipping or completing moves the cycle anchor', () => {
+        const skipped = skipProtocol(makeState(), 'weekly', { ...event, todayKey: '2026-03-10' });
+        expect(skipped.coinHistory).toHaveLength(3);
         const afterSkip = settleDaily(skipped, event);
-        expect(afterSkip.coinHistory).toHaveLength(5);
+        expect(afterSkip.coinHistory).toHaveLength(8);
         const early = completeProtocol(makeState(), 'weekly', { ...event, todayKey: '2026-03-10' });
-        expect(early.stats.gold).toBe(10);
+        expect(early.stats.gold).toBe(10.3);
         expect(early.stats.xp).toBe(5);
-        expect(settleDaily(early, event).stats.gold).toBe(10.5);
+        expect(settleDaily(early, event).stats.gold).toBe(10.8);
+    });
+
+    it('pays nothing extra when the day was already settled before the action', () => {
+        const settled = settleDaily(makeState(), { ...event, todayKey: '2026-03-10' });
+        const completed = completeProtocol(settled, 'weekly', { ...event, todayKey: '2026-03-10' });
+        expect(completed.stats.gold).toBe(settled.stats.gold);
+        expect(completed.coinHistory).toHaveLength(settled.coinHistory.length);
     });
 
     it('keeps the bi-weekly stipend schedule, conversion precision and same-day idempotence', () => {

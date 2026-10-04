@@ -4,6 +4,7 @@ import { useAppState, useAppStateField } from './AppStateContext.jsx';
 import { createInitialAppState } from '../domain/initialState.js';
 import {
     changeCoins,
+    setCoinBalance,
     completeQuest as completeQuestTransaction,
     undoQuest as undoQuestTransaction,
     completeProtocol as completeProtocolTransaction,
@@ -17,7 +18,6 @@ import {
     purchaseGrocery, refundGrocery, purchaseCalories, refundCalories
 } from '../domain/transactions.js';
 import { addDays } from '../domain/calendar.js';
-import { settleDaily } from '../domain/settlement.js';
 import { getTodayISO, isWithinDays, toLocalDateKey } from '../utils/dateUtils';
 import {
     createPortableSnapshot,
@@ -356,13 +356,14 @@ const createLedgerTimestamp = (dateKey) => {
     return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
 };
 
-const createTransactionEvent = (prefix = 'coin', now = new Date()) => ({
-    id: createId(prefix), date: now.toISOString(), todayKey: toLocalDateKey(now)
+export const createTransactionEvent = (prefix = 'coin', now = new Date()) => ({
+    id: createId(prefix), date: now.toISOString(), todayKey: toLocalDateKey(now),
+    dateForDay: createLedgerTimestamp
 });
 
 export const GameProvider = ({ children }) => {
     const { state, updateState } = useAppState();
-    const [stats, setStats] = useAppStateField('stats');
+    const stats = state.stats;
     const [quests, setQuests] = useAppStateField('quests');
     const [habits, setHabits] = useAppStateField('habits');
     const [settings, setSettings] = useAppStateField('settings');
@@ -474,15 +475,14 @@ export const GameProvider = ({ children }) => {
         return () => window.clearInterval(intervalId);
     }, [settlePassiveCalorieCheckpoints]);
 
-    const updateStats = useCallback((newStats) => {
-        setStats(prev => ({
-            ...prev,
-            ...newStats,
-            ...(Object.prototype.hasOwnProperty.call(newStats || {}, 'gold')
-                ? { gold: normalizeCurrencyAmount(newStats.gold) }
-                : {})
-        }));
-    }, [setStats]);
+    const updateStats = useCallback((newStats = {}) => {
+        const { gold, ...otherStats } = newStats;
+        const event = createTransactionEvent();
+        updateState((previous) => {
+            const next = { ...previous, stats: { ...previous.stats, ...otherStats } };
+            return gold === undefined ? next : setCoinBalance(next, gold, event);
+        });
+    }, [updateState]);
 
     const updateSettings = useCallback((newSettings) => {
         setSettings(prev => ({
@@ -513,9 +513,9 @@ export const GameProvider = ({ children }) => {
         ui: { protocolLookaheadDays: readProtocolLookaheadDays() }
     }), [state]);
 
-    const importAppState = useCallback((snapshot) => {
+    const importAppState = useCallback((snapshot, { backup = true } = {}) => {
         const next = migrateLegacyPortableSnapshot(snapshot);
-        const backupKey = storePortableImportBackup(exportAppState());
+        const backupKey = backup ? storePortableImportBackup(exportAppState()) : null;
         updateState({
             stats: next.stats, settings: next.settings, quests: next.quests,
             habits: next.habits, calories: next.calories, coinHistory: next.coinHistory,
@@ -707,8 +707,8 @@ export const GameProvider = ({ children }) => {
     }, [updateState]);
 
     const toggleHabitActivation = useCallback((id, isActive) => {
-        const todayKey = getTodayISO();
-        updateState((previous) => setProtocolActive(previous, id, Boolean(isActive), todayKey));
+        const event = createTransactionEvent();
+        updateState((previous) => setProtocolActive(previous, id, Boolean(isActive), event));
     }, [updateState]);
 
     const completeHabit = useCallback((id) => {
@@ -717,8 +717,8 @@ export const GameProvider = ({ children }) => {
     }, [updateState]);
 
     const skipHabitCycle = useCallback((id) => {
-        const todayKey = getTodayISO();
-        updateState((previous) => skipProtocolTransaction(previous, id, todayKey));
+        const event = createTransactionEvent();
+        updateState((previous) => skipProtocolTransaction(previous, id, event));
     }, [updateState]);
 
     const updateHabitRewards = useCallback((id, rewardConfig = {}) => {
@@ -773,12 +773,6 @@ export const GameProvider = ({ children }) => {
 
         setQuests(normalizedQuests);
     }, [quests, setQuests]);
-
-    useEffect(() => {
-        const event = { ...createTransactionEvent(), dateForDay: createLedgerTimestamp };
-        updateState((previous) => settleDaily(previous, event));
-    }, [habits, settings.protocolReward, stats.lastLoginDate, calories.passiveCheckpointDate,
-        state.budget.stipendAmount, state.budget.stipendPeriod, state.budget.stipendPaidThrough, updateState]);
 
     useEffect(() => {
         const hasExpiredDiscardedQuests = quests.some(

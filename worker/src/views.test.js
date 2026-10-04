@@ -7,6 +7,14 @@ const now = new Date(2026, 9, 2, 12);
 const todayKey = '2026-10-02';
 const makeState = () => ({
     stats: { hp: 50, maxHp: 100, level: 2, xp: 25, maxXp: 120, gold: 10 },
+    calories: {
+        target: 2000,
+        history: [
+            { dateKey: '2026-10-01', calories: 900 },
+            { dateKey: '2026-10-02', calories: 700 },
+            { dateKey: '2026-10-02', calories: -200 }
+        ]
+    },
     settings: { questRewards: { easy: 3, medium: 6, hard: 8 } },
     quests: [
         { id: 'pending', title: 'Pending', difficulty: 'easy', isFocusedToday: true, reward: { xp: 10, gold: 0.5 } },
@@ -59,6 +67,13 @@ describe('shared browser and worker summary views', () => {
         expect(dashboard.protocols).toEqual(browser.dashboard.today.protocols);
         expect(dashboard.protocols.map((protocol) => protocol.id)).toEqual(['due', 'overdue']);
         expect(protocolView(state.habits[0], '2026-10-03')).toMatchObject({ daysUntilDue: -1, isOverdue: true });
+    });
+
+    it('reports health as the remaining calorie capacity, not legacy HP', () => {
+        const state = makeState();
+        const expected = { capacityPercent: 75, caloriesRemaining: 1500, caloriesConsumed: 500, calorieTarget: 2000 };
+        expect(dashboardView(state, todayKey).health).toEqual(expected);
+        expect(buildLlmSnapshot(state, now).dashboard.health).toEqual(expected);
     });
 
     it('retains stored quest rewards when callers omit settings', () => {

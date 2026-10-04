@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useGame } from '../context/GameContext';
+import { useGame, useGameCalories } from '../context/GameContext';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useCloudSync } from '../context/CloudSyncContext.jsx';
 import { firebaseDb } from '../services/firebase.js';
@@ -123,6 +123,7 @@ const LlmInterface = () => {
         deleteHabit,
         importAppState
     } = useGame();
+    const { calories } = useGameCalories();
     const {
         user,
         dataUid,
@@ -187,8 +188,8 @@ const LlmInterface = () => {
     }, [user]);
 
     const snapshot = useMemo(
-        () => buildLlmSnapshot({ stats, settings, quests, habits }, now),
-        [stats, settings, quests, habits, now]
+        () => buildLlmSnapshot({ stats, settings, quests, habits, calories }, now),
+        [stats, settings, quests, habits, calories, now]
     );
     const jsonSnapshot = useMemo(() => JSON.stringify(snapshot, null, 2), [snapshot]);
     const timeRemaining = getDayTimeRemaining(now);
@@ -423,7 +424,7 @@ const LlmInterface = () => {
                 <section id="dashboard" aria-labelledby="dashboard-heading" className="mt-8 border-t border-slate-700 pt-6">
                     <h2 id="dashboard-heading" className="text-2xl font-bold">Dashboard</h2>
                     <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Health remaining</dt><dd className="text-xl font-bold">{snapshot.dashboard.health.current} / {snapshot.dashboard.health.maximum}</dd></div>
+                        <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Health (calorie capacity)</dt><dd className="text-xl font-bold">{snapshot.dashboard.health.capacityPercent}% · {snapshot.dashboard.health.caloriesRemaining} of {snapshot.dashboard.health.calorieTarget} kcal left</dd></div>
                         <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Credits on hand</dt><dd className="text-xl font-bold">{formatCurrencyAmount(snapshot.dashboard.coinsOnHand)}</dd></div>
                         <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Level and XP</dt><dd className="text-xl font-bold">Level {snapshot.dashboard.level}; {snapshot.dashboard.xp.current} / {snapshot.dashboard.xp.nextLevelAt} XP</dd></div>
                         <div className="rounded border border-slate-700 p-3"><dt className="text-sm text-slate-400">Time remaining today</dt><dd className="font-mono text-xl font-bold">{formatTimeRemaining(timeRemaining)}</dd></div>

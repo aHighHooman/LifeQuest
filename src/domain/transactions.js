@@ -6,7 +6,11 @@ import {
 } from '../constants/currency.js';
 import { applyXp, createQuestReward, resolveQuestReward } from './rewards.js';
 import { markQuestDiscarded } from './gameState.js';
-import { getProtocolCycleState, getPausedPassivePaidThrough } from './protocols.js';
+import {
+    getProtocolCycleState,
+    getPausedPassivePaidThrough,
+    getProtocolPassivePayoutDateKeys
+} from './protocols.js';
 
 const numberOr = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
@@ -33,6 +37,15 @@ export const changeCoins = (state, amount, event, description, earnedRewardsDelt
         }]
     };
 };
+
+// A balance typed in Settings is recorded as the difference, so the ledger
+// still adds up to the wallet.
+export const setCoinBalance = (state, balance, event) => changeCoins(
+    state,
+    normalizeCurrencyAmount(normalizeCurrencyAmount(balance) - numberOr(state.stats.gold)),
+    event,
+    'Manual adjustment'
+);
 
 const grantReward = (state, xp, gold, event, description) => {
     const safeXp = Math.max(0, numberOr(xp));
@@ -117,19 +130,49 @@ export const undoQuest = (state, id, event) => {
     };
 };
 
+// Completing, skipping, or pausing ends a protocol's passive window, so pay
+// what that window still owes first. After the browser's daily settlement this
+// is empty; for writers that never settle, such as the action worker, it is not.
+// An omitted cursor is a legacy record whose migration grants no back pay.
+const payOwedPassiveIncome = (state, id, event) => {
+    const protocol = state.habits.find((entry) => entry.id === id);
+    if (!protocol || protocol.passivePaidThrough === undefined) return state;
+    const dates = getProtocolPassivePayoutDateKeys(protocol, protocol.passivePaidThrough, event.todayKey);
+    if (!dates.length) return state;
+    const reward = normalizeCurrencyAmount(protocol.passiveReward);
+    const gold = normalizeCurrencyAmount(reward * dates.length);
+    return {
+        ...state,
+        stats: { ...state.stats, gold: normalizeCurrencyAmount(numberOr(state.stats.gold) + gold) },
+        budget: {
+            ...state.budget,
+            earnedRewards: normalizeCurrencyAmount(
+                numberOr(state.budget.earnedRewards) + creditsToUsd(gold, state.budget.goldToUsdRatio)
+            )
+        },
+        coinHistory: [...state.coinHistory, ...dates.map((dateKey) => ({
+            id: `${event.id}-${id}-${dateKey}`,
+            date: event.dateForDay ? event.dateForDay(dateKey) : `${dateKey}T12:00:00.000Z`,
+            amount: reward, type: 'earned', description: `Protocol passive income: ${protocol.title}`
+        }))],
+        habits: state.habits.map((entry) => entry.id === id
+            ? { ...entry, passivePaidThrough: dates[dates.length - 1] }
+            : entry)
+    };
+};
+
 export const completeProtocol = (state, id, event) => {
     const protocol = state.habits.find((entry) => entry.id === id);
     if (!protocol || (event.requestId && (protocol.actionReceipts || []).includes(event.requestId))) return state;
     const reward = normalizeNonNegativeCurrencyAmount(protocol.completionReward, state.settings.protocolReward);
     const { isDueToday } = getProtocolCycleState(protocol, event.todayKey);
     const { state: next } = grantReward(
-        state, 5, isDueToday ? reward : 0, event, `Protocol due bonus: ${protocol.title}`
+        payOwedPassiveIncome(state, id, event), 5, isDueToday ? reward : 0, event, `Protocol due bonus: ${protocol.title}`
     );
     return {
         ...next,
         habits: next.habits.map((entry) => entry.id === id ? {
             ...entry,
-            streak: numberOr(entry.streak) + 1,
             history: { ...entry.history, [event.todayKey]: Math.max(0, numberOr(entry.history?.[event.todayKey])) + 1 },
             isActive: true,
             passivePaidThrough: event.todayKey,
@@ -147,7 +190,7 @@ export const createProtocol = (state, input, event) => {
     const protocol = {
         id: event.id, title: `${input.title ?? ''}`.trim(), frequency,
         frequencyParam: frequency === 'interval' ? Math.max(1, Math.round(numberOr(input.frequencyParam, 1))) : 1,
-        streak: 0, history: {}, isActive: Boolean(input.active),
+        history: {}, isActive: Boolean(input.active),
         completionReward: normalizeNonNegativeCurrencyAmount(input.completionReward, state.settings.protocolReward),
         passiveReward: normalizeNonNegativeCurrencyAmount(input.passiveReward),
         passivePaidThrough: null, lastCycleResetDateKey: null,
@@ -157,18 +200,21 @@ export const createProtocol = (state, input, event) => {
     return { ...state, habits: [protocol, ...state.habits] };
 };
 
-export const setProtocolActive = (state, id, active, todayKey) => {
+export const setProtocolActive = (state, id, active, event) => {
     const protocol = state.habits.find((entry) => entry.id === id);
     if (!protocol || (protocol.isActive !== false) === active) return state;
-    return { ...state, habits: state.habits.map((entry) => entry.id === id ? {
+    const paid = active ? state : payOwedPassiveIncome(state, id, event);
+    return { ...paid, habits: paid.habits.map((entry) => entry.id === id ? {
         ...entry, isActive: active,
-        ...(!active ? { passivePaidThrough: getPausedPassivePaidThrough(entry, todayKey) } : {})
+        ...(!active ? { passivePaidThrough: getPausedPassivePaidThrough(entry, event.todayKey) } : {})
     } : entry) };
 };
 
-export const skipProtocol = (state, id, todayKey) => {
+export const skipProtocol = (state, id, event) => {
     if (!state.habits.some((entry) => entry.id === id)) return state;
-    return { ...state, habits: state.habits.map((entry) => entry.id === id ? {
+    const todayKey = event.todayKey;
+    const paid = payOwedPassiveIncome(state, id, event);
+    return { ...paid, habits: paid.habits.map((entry) => entry.id === id ? {
         ...entry, isActive: true, passivePaidThrough: todayKey, lastCycleResetDateKey: todayKey,
         completionReward: normalizeNonNegativeCurrencyAmount(entry.completionReward, state.settings.protocolReward),
         passiveReward: normalizeNonNegativeCurrencyAmount(entry.passiveReward)

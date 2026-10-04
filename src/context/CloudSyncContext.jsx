@@ -44,8 +44,10 @@ export const useCloudSync = () => {
 };
 
 export const CloudSyncProvider = ({ children }) => {
-    const { user, dataUid } = useAuth();
+    const { user, dataUid, status: authStatus } = useAuth();
     const { exportAppState, importAppState } = useGame();
+    const identity = user && dataUid ? `${user.uid}:${dataUid}` : null;
+    const [restoredIdentity, setRestoredIdentity] = useState(null);
     const [enabled, setEnabled] = useState(false);
     const [status, setStatus] = useState('paused');
     const [lastSyncedAt, setLastSyncedAt] = useState(null);
@@ -53,6 +55,7 @@ export const CloudSyncProvider = ({ children }) => {
     const revisionRef = useRef(null);
     const stateChecksumRef = useRef(null);
     const inFlightRef = useRef(false);
+    const reconcilePromiseRef = useRef(null);
     const reconciliationKeyRef = useRef(null);
 
     const readMeta = useCallback(() => {
@@ -116,7 +119,7 @@ export const CloudSyncProvider = ({ children }) => {
         return result;
     }, [dataUid, markSynced]);
 
-    const reconcile = useCallback(async () => {
+    const runReconcile = useCallback(async () => {
         if (!enabled || !firebaseDb || !user || !dataUid || inFlightRef.current) return;
         if (!navigator.onLine) {
             setStatus('offline');
@@ -168,7 +171,9 @@ export const CloudSyncProvider = ({ children }) => {
             if (!cloudMatchesBase && localMatchesBase) {
                 stateChecksumRef.current = cloudChecksum;
                 revisionRef.current = cloud.manifest.revisionId;
-                importAppState(cloudSnapshot);
+                // The replaced local state equals the last-synced base revision,
+                // which remains in the cloud, so no device backup is needed.
+                importAppState(cloudSnapshot, { backup: false });
                 if (cloudNeedsCurrencyMigration) {
                     await saveLocalSnapshot(cloudSnapshot, cloud.manifest.revisionId);
                 } else {
@@ -191,6 +196,18 @@ export const CloudSyncProvider = ({ children }) => {
         }
     }, [dataUid, enabled, exportAppState, importAppState, markSynced, readMeta, saveLocalSnapshot, user]);
 
+    // Callers that must wait for the cloud copy, such as daily settlement,
+    // share the pull already in flight instead of being skipped by it.
+    const reconcile = useCallback(() => {
+        if (reconcilePromiseRef.current) return reconcilePromiseRef.current;
+        const run = runReconcile();
+        reconcilePromiseRef.current = run;
+        run.finally(() => {
+            if (reconcilePromiseRef.current === run) reconcilePromiseRef.current = null;
+        });
+        return run;
+    }, [runReconcile]);
+
     useEffect(() => {
         reconciliationKeyRef.current = null;
 
@@ -200,6 +217,7 @@ export const CloudSyncProvider = ({ children }) => {
             setLastSyncedAt(null);
             revisionRef.current = null;
             stateChecksumRef.current = null;
+            setRestoredIdentity(null);
             return;
         }
 
@@ -213,7 +231,8 @@ export const CloudSyncProvider = ({ children }) => {
         setLastSyncedAt(validStoredMeta?.lastSyncedAt || null);
         setEnabled(restoredEnabled);
         setStatus(restoredStatus);
-    }, [dataUid, readMeta, user]);
+        setRestoredIdentity(identity);
+    }, [dataUid, identity, readMeta, user]);
 
     useEffect(() => {
         const reconciliationKey = enabled && user && dataUid
@@ -275,12 +294,18 @@ export const CloudSyncProvider = ({ children }) => {
         const handleOffline = () => {
             if (enabled) setStatus('offline');
         };
+        // A resumed app may have missed assistant or other-device changes.
+        const handleVisibilityChange = () => {
+            if (enabled && document.visibilityState === 'visible') reconcile();
+        };
 
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [enabled, reconcile]);
 
@@ -343,7 +368,14 @@ export const CloudSyncProvider = ({ children }) => {
         }
     }, [conflict.cloudRevisionId, dataUid, exportAppState, saveLocalSnapshot, user]);
 
+    // Until auth and this identity's sync setting are known, nobody can tell
+    // whether local state must first be reconciled with the cloud.
+    const ready = authStatus !== 'loading' && identity === restoredIdentity;
+    const active = ready && enabled && Boolean(firebaseDb && identity);
+
     const value = useMemo(() => ({
+        ready,
+        active,
         enabled,
         status,
         lastSyncedAt,
@@ -353,6 +385,8 @@ export const CloudSyncProvider = ({ children }) => {
         useCloudCopy,
         useDeviceCopy
     }), [
+        active,
+        ready,
         disable,
         enable,
         enabled,

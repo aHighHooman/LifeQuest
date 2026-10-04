@@ -18,8 +18,8 @@ A wrapper component that provides the bottom navigation bar. It handles tab swit
 The main HUD (Heads-Up Display) of the app.
 - **Key Features**: 
   - **HexMatrix**: A central hexagonal grid showing "Today's Focus" items (quests and habits).
-  - **HUD Arcs**: SVG-based semi-circular bars showing Health (HP) and Experience (XP).
-  - **Systems Status**: Displays "System Online" and the current date.
+  - **Health injector**: Shows health as calorie capacity (the share of today's calorie target still available) and opens the calorie tracker. Coin pile opens the budget.
+  - **Systems Status**: Displays "System Online" and the current date, or a sync conflict/error that needs resolving in Settings.
   - **Gestures**: Swipe down to open the `StatsView`.
 - **Sub-components**: `HexNode`, `HexMatrix`, `DayTimer`.
 

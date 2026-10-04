@@ -23,11 +23,15 @@ Users can create "Custom Reward" quests, where the XP and Credits are manually s
 
 ## Protocols (Habits)
 
-Protocols are recurring actions. Unlike Quests, they have a "Streak" counter.
+Protocols are recurring actions on a daily, weekly, monthly (30-day), or custom interval.
 
 ### Completion
-- **Positive Check**: Awards **5 XP** and the global **Protocol Reward** amount (default: 0.1 Credits). Increases the habit's streak.
-- **Negative Check (Failure)**: Deducts **5 HP**. Resets the habit's streak to 0.
+- **Complete**: Awards **5 XP**. Completing on the due day also awards the protocol's due-day bonus (default: the global Protocol Reward, 0.1 Credits).
+- **Skip**: Starts a new cycle from today without a reward.
+- **Passive income**: While active, a protocol pays its passive reward for each day between its last completion or skip and its due day. Completing, skipping, or pausing first pays any days still owed.
+
+### Streak
+The streak is derived from completion history, not stored: it counts consecutive completions, each made within the protocol's interval of the previous one. An active protocol whose current cycle is overdue has a streak of 0.
 
 ---
 
@@ -35,14 +39,12 @@ Protocols are recurring actions. Unlike Quests, they have a "Streak" counter.
 
 The Dashboard center-piece (Hexagonal Grid) displays a curated list of items the user should focus on **today**.
 
-### Automatic Population
-Every time the app is launched on a new day:
-1. **Quests Due**: Any quest with a `dueDate` matching today is automatically added to the "Focus" list.
-2. **Protocols Due**: Any habit that is flagged as `isActive` and has reached its frequency interval (calculated by `getDaysUntilDue`) is automatically added.
-3. **Calorie Reset**: Daily calorie intake is reset to 0.
+### What appears
+1. **Quests**: Pending quests the user has selected for today.
+2. **Protocols**: Active protocols that are due or overdue and not yet completed today. These appear automatically.
 
 ### Manual Management
-Users can manually add or remove any pending quest or protocol from the focus list via the **"Manage" (Mission Control)** button on the Dashboard.
+Users select or remove pending quests via **Mission Control** on the Dashboard. Protocols cannot be selected manually; they follow their schedule.
 
 ---
 
@@ -50,8 +52,8 @@ Users can manually add or remove any pending quest or protocol from the focus li
 
 ### Experience Points (XP)
 XP is earned by completing quests and protocols. When XP exceeds `maxXp`, the user levels up.
-- **Level Up**: Restores HP to full. Increases `maxXp` by 20% (cumulative growth).
+- **Level Up**: Increases `maxXp` by 20% (cumulative growth).
 - **Negative XP**: If XP drops below 0 due to an "Undo" action, the user may level down if they are above Level 1.
 
-### Health Points (HP)
-HP represents the user's "resilience." It is lost when habits are failed. Currently, dropping to 0 HP does not have a "Game Over" effect, but it serves as a visual indicator of low consistency.
+### Health
+Health is calorie capacity: how much of today's calorie target remains. The Dashboard injector, the Health screen, and the assistant's `health` field all report this same value. There are no hit points; older saves and exports that contain `hp`/`maxHp` still import, and those fields are dropped.

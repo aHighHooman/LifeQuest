@@ -44,6 +44,24 @@ export const getProtocolCycleState = (protocol, todayKey) => {
     };
 };
 
+// Consecutive completions counted back from the latest, where each followed
+// the previous one within the protocol's interval. An active protocol whose
+// current cycle is overdue has broken its streak.
+export const getProtocolStreak = (protocol, todayKey) => {
+    const completionDays = Object.keys(protocol?.history || {})
+        .filter((dateKey) => Number(protocol.history[dateKey] || 0) > 0)
+        .sort();
+    if (!completionDays.length) return 0;
+    if (protocol.isActive !== false && getProtocolCycleState(protocol, todayKey).isOverdue) return 0;
+    const intervalDays = Math.floor(getProtocolIntervalDays(protocol));
+    let streak = 1;
+    for (let index = completionDays.length - 1; index > 0; index -= 1) {
+        if (diffDays(completionDays[index], completionDays[index - 1]) > intervalDays) break;
+        streak += 1;
+    }
+    return streak;
+};
+
 export const getProtocolPassiveWindow = (protocol) => {
     const anchorDateKey = getProtocolCycleAnchorDateKey(protocol);
     return {

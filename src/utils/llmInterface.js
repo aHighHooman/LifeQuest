@@ -1,4 +1,4 @@
-import { questView, protocolView } from '../domain/views.js';
+import { healthView, questView, protocolView } from '../domain/views.js';
 import { toLocalDateKey } from './dateUtils';
 import { normalizeCurrencyAmount } from '../constants/currency.js';
 
@@ -46,7 +46,7 @@ export const applyCloudSnapshotToDevice = (cloud, importAppState) => {
     return { status: 'loaded', backupKey };
 };
 
-export const buildLlmSnapshot = ({ stats = {}, settings = {}, quests = [], habits = [] }, now = new Date()) => {
+export const buildLlmSnapshot = ({ stats = {}, settings = {}, quests = [], habits = [], calories = {} }, now = new Date()) => {
     const todayKey = toLocalDateKey(now);
     const normalizedQuests = quests.map((quest) => questView(quest, settings));
     const normalizedProtocols = habits.map((habit) => protocolView(habit, todayKey));
@@ -60,10 +60,7 @@ export const buildLlmSnapshot = ({ stats = {}, settings = {}, quests = [], habit
             today: todayKey
         },
         dashboard: {
-            health: {
-                current: Number(stats.hp || 0),
-                maximum: Number(stats.maxHp || 0)
-            },
+            health: healthView(calories, todayKey),
             coinsOnHand: normalizeCurrencyAmount(stats.gold),
             level: Number(stats.level || 1),
             xp: {

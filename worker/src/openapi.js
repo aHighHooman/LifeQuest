@@ -65,7 +65,7 @@ export const createOpenApiDocument = (origin = 'https://lifequest-action-api.exa
         '/v1/dashboard': {
             get: {
                 operationId: 'getLifeQuestDashboard',
-                summary: 'Get current health, coins, level, XP, and today records.',
+                summary: 'Get health (remaining calorie capacity for today), coins, level, XP, and today records.',
                 'x-openai-isConsequential': false,
                 responses: jsonResponse
             }

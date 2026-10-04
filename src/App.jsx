@@ -8,6 +8,7 @@ import { beginTrackedSpan, endTrackedSpan, onProfileRender } from './utils/perfM
 import Navigation from './components/Navigation';
 import { isLlmInterfaceLocation } from './utils/llmInterface';
 import { CloudSyncProvider } from './context/CloudSyncContext.jsx';
+import { useDailySettlement } from './hooks/useDailySettlement.js';
 import tabletopWide from './assets/tabletop/lifequest-tabletop-wide.webp';
 import { TABLETOP_TRANSITION } from './utils/tabletopLayout';
 
@@ -279,6 +280,11 @@ function AppContent({
   );
 }
 
+function DailySettlement() {
+  useDailySettlement();
+  return null;
+}
+
 function App() {
   // Run persistence migrations before the providers initialize their state.
   checkVersionAndEnsurePersistence();
@@ -321,6 +327,7 @@ function App() {
     <AppStateProvider>
       <GameProvider>
         <CloudSyncProvider>
+          <DailySettlement />
           {isLlmInterface
             ? <AppErrorBoundary><React.Suspense fallback={null}><LlmInterface /></React.Suspense></AppErrorBoundary>
             : (

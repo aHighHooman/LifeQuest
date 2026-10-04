@@ -29,17 +29,15 @@ export const applyXp = (stats, amount) => {
     let xp = numberOr(stats.xp) + numberOr(amount);
     let level = Math.max(1, numberOr(stats.level, 1));
     let maxXp = Math.max(1, numberOr(stats.maxXp, 100));
-    let hp = numberOr(stats.hp);
     while (xp >= maxXp) {
         level += 1;
         xp -= maxXp;
         maxXp = Math.floor(maxXp * 1.2);
-        hp = stats.maxHp;
     }
     while (xp < 0 && level > 1) {
         level -= 1;
         maxXp = Math.ceil(maxXp / 1.2);
         xp += maxXp;
     }
-    return { ...stats, xp, level, maxXp, hp };
+    return { ...stats, xp, level, maxXp };
 };

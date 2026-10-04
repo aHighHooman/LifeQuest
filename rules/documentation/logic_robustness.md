@@ -3,7 +3,7 @@
 This document covers potential "hidden" bugs or logic flaws that could affect the accuracy and reliability of the application's data.
 
 ## 1. Daily Reset Trigger
-The existing calorie checkpoint timer signals day changes to the daily settlement effect. `settleDaily` compares its explicit day key with `stats.lastLoginDate`, then updates payouts, cursors, balances, ledger, grocery cleanup, and calorie totals together. A repeated same-day settlement does nothing. Live rollover is covered by the isolated browser check; no extra reset timer is needed.
+The existing calorie checkpoint timer signals day changes to the daily settlement effect (`src/hooks/useDailySettlement.js`), which pulls the cloud copy first when sync is on. `settleDaily` compares its explicit day key with `stats.lastLoginDate`, then updates payouts, cursors, balances, ledger, grocery cleanup, and calorie totals together. A repeated same-day settlement does nothing. Live rollover is covered by the isolated browser check; no extra reset timer is needed.
 
 ## 2. Loose Typing in Stat Calculations
 Throughout `GameContext.jsx`, variables like Gold and XP are manually wrapped in `Number()` before addition.

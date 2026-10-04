@@ -174,26 +174,6 @@ const SettingsModal = ({ isOpen, onClose }) => {
                                     className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white focus:border-game-accent focus:outline-none font-mono"
                                 />
                             </div>
-                            <div className="space-y-1">
-                                <label className="text-xs text-game-muted uppercase font-bold">Current HP</label>
-                                <input
-                                    type="number"
-                                    name="hp"
-                                    value={localStats.hp}
-                                    onChange={handleStatChange}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white focus:border-game-accent focus:outline-none font-mono"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs text-game-muted uppercase font-bold">Max HP</label>
-                                <input
-                                    type="number"
-                                    name="maxHp"
-                                    value={localStats.maxHp}
-                                    onChange={handleStatChange}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white focus:border-game-accent focus:outline-none font-mono"
-                                />
-                            </div>
                             <div className="space-y-1 md:col-span-2">
                                 <label className="text-xs text-game-muted uppercase font-bold text-game-gold">Credits Balance</label>
                                 <input

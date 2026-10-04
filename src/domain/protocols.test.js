@@ -6,7 +6,8 @@ import {
     getProtocolDueDateKey,
     getProtocolCycleState,
     getProtocolPassivePayoutDateKeys,
-    getPausedPassivePaidThrough
+    getPausedPassivePaidThrough,
+    getProtocolStreak
 } from './protocols.js';
 
 describe('shared protocol recurrence', () => {
@@ -67,5 +68,16 @@ describe('shared protocol recurrence', () => {
         expect(getPausedPassivePaidThrough({ history: {}, passivePaidThrough: '2026-03-06' }, '2026-03-10')).toBe('2026-03-06');
         const cursor = getPausedPassivePaidThrough(protocol, '2026-03-10');
         expect(getProtocolPassivePayoutDateKeys({ ...protocol, isActive: true }, cursor, '2026-03-12')).toEqual(['2026-03-11', '2026-03-12']);
+    });
+
+    it('derives the streak from on-time completions and breaks it when the cycle is overdue or late', () => {
+        const daily = { frequency: 'daily', history: { '2026-03-05': 1, '2026-03-07': 1, '2026-03-08': 2, '2026-03-09': 1 } };
+        expect(getProtocolStreak(daily, '2026-03-09')).toBe(3);
+        expect(getProtocolStreak(daily, '2026-03-10')).toBe(3);
+        expect(getProtocolStreak(daily, '2026-03-11')).toBe(0);
+        expect(getProtocolStreak({ ...daily, isActive: false }, '2026-03-20')).toBe(3);
+        const weekly = { frequency: 'weekly', history: { '2026-03-01': 1, '2026-03-08': 1, '2026-03-16': 1 } };
+        expect(getProtocolStreak(weekly, '2026-03-16')).toBe(1);
+        expect(getProtocolStreak({ frequency: 'weekly', history: {} }, '2026-03-16')).toBe(0);
     });
 });

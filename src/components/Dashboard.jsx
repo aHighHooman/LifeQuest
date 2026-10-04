@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useGame, useGameCalories } from '../context/GameContext';
+import { useCloudSync } from '../context/CloudSyncContext.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Coins, Check, Crosshair } from 'lucide-react';
 const StatsView = React.lazy(() => import('./StatsView'));
@@ -7,7 +8,8 @@ import FocusSelectionModal from './FocusSelectionModal';
 import DayTimer from './DayTimer';
 import clsx from 'clsx';
 import { getTodayISO } from '../utils/dateUtils';
-import { isHabitDueForFocus, isQuestPendingForFocus } from '../domain/gameState';
+import { isQuestPendingForFocus } from '../domain/gameState';
+import { healthView, protocolView } from '../domain/views.js';
 import {
     DASHBOARD_COORDINATE_PLANE_TOP,
     DASHBOARD_COIN_HIT_TARGET,
@@ -372,25 +374,29 @@ const HexMatrix = ({ nodes, onToggleNode, onEmptyClick }) => {
     );
 };
 
+// Cloud saves stop in these states until the user acts in Settings.
+const HALTED_SYNC_LABELS = { conflict: 'Sync Conflict', error: 'Sync Error' };
+
 const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true }) => {
     const { stats, quests, habits, completeQuest, completeHabit } = useGame();
     const { calories } = useGameCalories();
+    const { enabled: isSyncEnabled, status: syncStatus } = useCloudSync();
+    const haltedSyncLabel = isSyncEnabled ? HALTED_SYNC_LABELS[syncStatus] : null;
     const [showStats, setShowStats] = useState(false);
     const [showFocusModal, setShowFocusModal] = useState(false);
 
-    const calorieTarget = Math.max(1, Number(calories?.target) || 1);
-    const calorieCurrent = Math.max(0, Number(calories?.current) || 0);
-    const caloriesLeftPercentage = Math.max(0, Math.min(((calorieTarget - calorieCurrent) / calorieTarget) * 100, 100));
+    // Read the day on every render: this screen stays mounted across midnight,
+    // and rollover re-renders it through settlement and the calorie timer.
+    const today = getTodayISO();
+    const { capacityPercent } = healthView(calories, today);
 
-    // Get today's date for habit completion check
-    const today = useMemo(() => getTodayISO(), []);
-
-    // Memoized pending queue for the hex matrix
+    // Memoized pending queue for the hex matrix. Protocols follow the same
+    // "due and not yet done today" rule as the assistant's dashboard.
     const matrixNodes = useMemo(() => {
         const allPendingTodayQuests = quests.filter(isQuestPendingForFocus);
-        const allPendingTodayHabits = habits.filter(h => {
-            if (!isHabitDueForFocus(h)) return false;
-            return (h.history?.[today] || 0) <= 0;
+        const allPendingTodayHabits = habits.filter((h) => {
+            const view = protocolView(h, today);
+            return view.selectedForToday && !view.completedToday;
         });
 
         const pendingQueue = [
@@ -443,7 +449,7 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
             <DayTimer className="absolute top-14 left-0 right-0 z-20" />
 
             <DashboardTabletop
-                percentage={caloriesLeftPercentage}
+                percentage={capacityPercent}
                 coins={stats.gold}
                 onCapacityClick={() => onTabChange('calories')}
                 onCoinsClick={() => onTabChange('budget')}
@@ -476,8 +482,14 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
                         }}
                         className="pointer-events-auto absolute left-1/2 top-0 z-20 flex w-40 -translate-x-1/2 translate-y-[360px] cursor-pointer flex-col items-center justify-center sm:translate-y-[300px]"
                     >
-                        <p className="text-game-muted w-full text-center font-game text-xs uppercase tracking-[0.2em] opacity-70">
-                            System Online
+                        <p
+                            className={clsx(
+                                "w-full text-center font-game text-xs uppercase tracking-[0.2em]",
+                                haltedSyncLabel ? "text-amber-300" : "text-game-muted opacity-70"
+                            )}
+                            role={haltedSyncLabel ? 'status' : undefined}
+                        >
+                            {haltedSyncLabel ? `${haltedSyncLabel} · Tap to resolve` : 'System Online'}
                         </p>
                         <p className="mt-0.5 font-mono text-[10px] text-slate-600">
                             {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}

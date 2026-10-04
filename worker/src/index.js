@@ -132,11 +132,11 @@ const handleProtocolMutation = async (action, id, snapshot, clock, body) => {
         case 'complete':
             return completeProtocol(snapshot, id, clock.todayKey, clock.now, body.requestId);
         case 'skip':
-            return skipProtocol(snapshot, id, clock.todayKey);
+            return skipProtocol(snapshot, id, clock.todayKey, clock.now);
         case 'activate':
-            return activateProtocol(snapshot, id, clock.todayKey);
+            return activateProtocol(snapshot, id, clock.todayKey, clock.now);
         case 'deactivate':
-            return deactivateProtocol(snapshot, id, clock.todayKey);
+            return deactivateProtocol(snapshot, id, clock.todayKey, clock.now);
         default:
             throw new HttpError(404, 'Unknown protocol action.', 'route_not_found');
     }

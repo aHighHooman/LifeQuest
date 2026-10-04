@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialAppState } from './initialState.js';
 import { usdToCredits, creditsToUsd } from '../constants/currency.js';
 import {
-    changeCoins, completeQuest, undoQuest, completeProtocol,
+    changeCoins, completeQuest, undoQuest, completeProtocol, setCoinBalance,
     purchaseGrocery, refundGrocery, purchaseCalories, refundCalories
 } from './transactions.js';
 
@@ -181,5 +181,18 @@ describe('LifeQuest transactions', () => {
         expect(logged.calories.history[0].coinCost).toBe(0);
         expect(logged.coinHistory).toHaveLength(0);
         expect(refundCalories(logged, entry.id, new Set([event.todayKey]), event)).toBe(logged);
+    });
+
+    it('records a typed balance as a ledger adjustment so the ledger matches the wallet', () => {
+        const raised = setCoinBalance(makeState(), 12.34567, event);
+        expect(raised.stats.gold).toBe(12.3457);
+        expect(raised.coinHistory).toEqual([expect.objectContaining({
+            amount: 2.3457, type: 'earned', description: 'Manual adjustment'
+        })]);
+        const lowered = setCoinBalance(raised, 4, { ...event, id: 'coin-2' });
+        expect(lowered.stats.gold).toBe(4);
+        expect(lowered.coinHistory[1]).toMatchObject({ amount: 8.3457, type: 'spent' });
+        expect(lowered.budget.earnedRewards).toBe(2);
+        expect(setCoinBalance(lowered, 4, event)).toBe(lowered);
     });
 });

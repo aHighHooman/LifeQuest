@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as domain from '../../src/domain/transactions.js';
 import * as worker from './stateEngine.js';
 import { HttpError } from './errors.js';
+import { protocolView } from '../../src/domain/views.js';
 
 const now = new Date('2026-10-02T01:00:00.000Z');
 const todayKey = '2026-10-01';
@@ -32,7 +33,7 @@ const relevantState = (state) => ({
 const expectParity = (browser, api) => expect(relevantState(api)).toEqual(relevantState(browser));
 const scheduledProtocol = () => ({
     id: 'protocol-1', title: 'Practice', frequency: 'interval', frequencyParam: 4,
-    history: { '2026-09-28': 1 }, streak: 1, isActive: true,
+    history: { '2026-09-28': 1 }, isActive: true,
     lastCycleResetDateKey: '2026-09-28', passivePaidThrough: '2026-09-29',
     completionReward: 0.3, passiveReward: 0.1
 });
@@ -120,21 +121,25 @@ describe('browser domain and worker adapter parity', () => {
         expect(api).toEqual(beforeReplay);
     });
 
+    // Passive income is owed from the cursor (09-29) through the day or the due day (10-02).
+    // The streak continues only when the completion is within the 4-day interval.
     it.each([
-        ['early', '2026-10-01', 0],
-        ['due', '2026-10-02', 0.3],
-        ['overdue', '2026-10-03', 0]
-    ])('completes an %s protocol using the supplied day and replays once', (_label, day, gold) => {
+        ['early', '2026-10-01', 0.2, 2],
+        ['due', '2026-10-02', 0.6, 2],
+        ['overdue', '2026-10-03', 0.3, 1]
+    ])('completes an %s protocol using the supplied day and replays once', (_label, day, gold, streak) => {
         let { browser, api } = makePair();
         browser.habits = [scheduledProtocol()];
         api.habits = [scheduledProtocol()];
         browser = domain.completeProtocol(browser, 'protocol-1', event('complete-protocol', day));
         expect(worker.completeProtocol(api, 'protocol-1', day, now, 'complete-protocol').changed).toBe(true);
         expectParity(browser, api);
-        expect(api.stats).toMatchObject({ level: 2, xp: 0, gold: 10 + gold });
+        expect(api.stats.gold).toBeCloseTo(10 + gold, 4);
+        expect(api.stats).toMatchObject({ level: 2, xp: 0 });
         expect(api.habits[0]).toMatchObject({
-            history: { [day]: 1 }, streak: 2, passivePaidThrough: day, lastCycleResetDateKey: day
+            history: { [day]: 1 }, passivePaidThrough: day, lastCycleResetDateKey: day
         });
+        expect(protocolView(api.habits[0], day).streak).toBe(streak);
         const beforeReplay = structuredClone(api);
         expect(domain.completeProtocol(browser, 'protocol-1', event('complete-protocol', '2026-10-09'))).toBe(browser);
         expect(worker.completeProtocol(api, 'protocol-1', '2026-10-09', now, 'complete-protocol').changed).toBe(false);
@@ -142,34 +147,36 @@ describe('browser domain and worker adapter parity', () => {
     });
 
     it.each([
-        ['2026-10-01', '2026-10-01'],
-        ['2026-10-07', '2026-10-02']
-    ])('pauses with the same passive cursor on %s, then activates and skips', (day, pausedCursor) => {
+        ['2026-10-01', '2026-10-01', 2],
+        ['2026-10-07', '2026-10-02', 3]
+    ])('pays owed days and pauses with the same cursor on %s, then activates and skips', (day, pausedCursor, paidDays) => {
         let { browser, api } = makePair();
         browser.habits = [scheduledProtocol()];
         api.habits = [scheduledProtocol()];
-        browser = domain.setProtocolActive(browser, 'protocol-1', false, day);
-        expect(worker.deactivateProtocol(api, 'protocol-1', day).changed).toBe(true);
+        browser = domain.setProtocolActive(browser, 'protocol-1', false, event('', day));
+        expect(worker.deactivateProtocol(api, 'protocol-1', day, now).changed).toBe(true);
         expectParity(browser, api);
         expect(api.habits[0]).toMatchObject({ isActive: false, passivePaidThrough: pausedCursor });
-        expect(domain.setProtocolActive(browser, 'protocol-1', false, day)).toBe(browser);
+        expect(api.coinHistory).toHaveLength(paidDays);
+        expect(domain.setProtocolActive(browser, 'protocol-1', false, event('', day))).toBe(browser);
         expect(worker.deactivateProtocol(api, 'protocol-1', day).changed).toBe(false);
 
-        browser = domain.setProtocolActive(browser, 'protocol-1', true, day);
+        browser = domain.setProtocolActive(browser, 'protocol-1', true, event('', day));
         expect(worker.activateProtocol(api, 'protocol-1').changed).toBe(true);
         expectParity(browser, api);
         expect(api.habits[0].passivePaidThrough).toBe(pausedCursor);
         const beforeSkipStats = structuredClone(api.stats);
-        browser = domain.skipProtocol(browser, 'protocol-1', day);
-        worker.skipProtocol(api, 'protocol-1', day);
+        const beforeSkipLedger = api.coinHistory.length;
+        browser = domain.skipProtocol(browser, 'protocol-1', event('', day));
+        worker.skipProtocol(api, 'protocol-1', day, now);
         expectParity(browser, api);
         expect(api.habits[0]).toMatchObject({
-            history: { '2026-09-28': 1 }, streak: 1, passivePaidThrough: day, lastCycleResetDateKey: day
+            history: { '2026-09-28': 1 }, passivePaidThrough: day, lastCycleResetDateKey: day
         });
         expect(api.stats).toEqual(beforeSkipStats);
-        expect(api.coinHistory).toHaveLength(0);
+        expect(api.coinHistory).toHaveLength(beforeSkipLedger);
         const afterSkip = structuredClone(api);
-        worker.skipProtocol(api, 'protocol-1', day);
+        worker.skipProtocol(api, 'protocol-1', day, now);
         expect(api).toEqual(afterSkip);
     });
 });

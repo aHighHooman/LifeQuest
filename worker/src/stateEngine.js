@@ -31,8 +31,6 @@ const ensureShape = (snapshot) => {
         level: 1,
         xp: 0,
         maxXp: 100,
-        hp: 0,
-        maxHp: 100,
         gold: 0,
         lastLoginDate: null,
         ...(snapshot.stats || {})
@@ -147,17 +145,17 @@ export const createProtocol = (snapshot, input, now = new Date(), todayKey = get
     return snapshot.habits[0];
 };
 
-export const activateProtocol = (snapshot, id, todayKey) => {
+export const activateProtocol = (snapshot, id, todayKey, now = new Date()) => {
     const protocol = findProtocol(snapshot, id);
     if (protocol.isActive !== false) return { protocol, changed: false };
-    Object.assign(snapshot, setProtocolActive(snapshot, id, true, todayKey));
+    Object.assign(snapshot, setProtocolActive(snapshot, id, true, transactionEvent(now, todayKey)));
     return { protocol: findProtocol(snapshot, id), changed: true };
 };
 
-export const deactivateProtocol = (snapshot, id, todayKey) => {
+export const deactivateProtocol = (snapshot, id, todayKey, now = new Date()) => {
     const protocol = findProtocol(snapshot, id);
     if (protocol.isActive === false) return { protocol, changed: false };
-    Object.assign(snapshot, setProtocolActive(snapshot, id, false, todayKey));
+    Object.assign(snapshot, setProtocolActive(snapshot, id, false, transactionEvent(now, todayKey)));
     return { protocol: findProtocol(snapshot, id), changed: true };
 };
 
@@ -171,9 +169,9 @@ export const completeProtocol = (snapshot, id, todayKey, now = new Date(), reque
     return { protocol: findProtocol(snapshot, id), changed: true };
 };
 
-export const skipProtocol = (snapshot, id, todayKey) => {
+export const skipProtocol = (snapshot, id, todayKey, now = new Date()) => {
     const protocol = findProtocol(snapshot, id);
-    Object.assign(snapshot, skipProtocolTransaction(snapshot, id, todayKey));
+    Object.assign(snapshot, skipProtocolTransaction(snapshot, id, transactionEvent(now, todayKey)));
     return { protocol: findProtocol(snapshot, id), changed: true, previous: protocol };
 };
 

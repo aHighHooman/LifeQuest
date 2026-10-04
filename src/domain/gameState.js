@@ -80,7 +80,8 @@ const normalizeHabitHistory = (history = {}) => {
 };
 
 export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) => {
-    const { isToday: _legacyIsToday, ...rest } = habit;
+    // Streak is derived from history; a stored counter is a legacy field.
+    const { isToday: _legacyIsToday, streak: _legacyStreak, ...rest } = habit;
     const nextHabit = {
         ...rest,
         history: normalizeHabitHistory(habit.history),

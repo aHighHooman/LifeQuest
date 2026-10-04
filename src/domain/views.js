@@ -1,5 +1,5 @@
 import { normalizeCurrencyAmount } from '../constants/currency.js';
-import { getProtocolCycleState } from './protocols.js';
+import { getProtocolCycleState, getProtocolStreak } from './protocols.js';
 import { resolveQuestReward } from './rewards.js';
 
 export const questView = (quest, settings = {}) => {
@@ -22,6 +22,20 @@ export const questView = (quest, settings = {}) => {
     };
 };
 
+// Health is calorie capacity: how much of today's calorie target is left.
+export const healthView = (calories = {}, todayKey) => {
+    const calorieTarget = Math.max(1, Math.round(Number(calories?.target) || 1));
+    const caloriesConsumed = Math.max(0, (calories?.history || []).reduce((sum, entry) => (
+        entry?.dateKey === todayKey ? sum + Math.round(Number(entry.calories) || 0) : sum
+    ), 0));
+    return {
+        capacityPercent: Math.round(Math.max(0, Math.min(100, ((calorieTarget - caloriesConsumed) / calorieTarget) * 100))),
+        caloriesRemaining: Math.max(0, calorieTarget - caloriesConsumed),
+        caloriesConsumed,
+        calorieTarget
+    };
+};
+
 export const protocolView = (protocol, todayKey) => {
     const cycle = getProtocolCycleState(protocol, todayKey);
     const completionsToday = Number(protocol.history?.[todayKey] || 0);
@@ -34,7 +48,7 @@ export const protocolView = (protocol, todayKey) => {
         completionsToday,
         frequency: protocol.frequency || 'daily',
         frequencyParam: Number(protocol.frequencyParam || 1),
-        streak: Number(protocol.streak || 0),
+        streak: getProtocolStreak(protocol, todayKey),
         completionReward: normalizeCurrencyAmount(protocol.completionReward),
         passiveReward: normalizeCurrencyAmount(protocol.passiveReward),
         dueDate: cycle.dueDateKey,
