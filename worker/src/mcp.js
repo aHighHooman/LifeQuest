@@ -1,8 +1,9 @@
 // Stateless Model Context Protocol endpoint (Streamable HTTP transport).
 // Each POST carries one JSON-RPC message and is answered with plain JSON, so
-// no session or server-sent event stream is needed.
+// no session or server-sent event stream is needed. Requests reach this
+// handler only after the OAuth provider has accepted their bearer token.
 import { HttpError } from './errors.js';
-import { authorize, json, readJsonBody } from './http.js';
+import { json, readJsonBody } from './http.js';
 import {
     PROTOCOL_ACTION_NAMES,
     QUEST_ACTION_NAMES,
@@ -294,15 +295,6 @@ export const handleMcpRequest = async (request, env) => {
     if (request.method !== 'POST') {
         // Stateless server: no server-initiated stream (GET) and no session to end (DELETE).
         return new Response(null, { status: 405, headers: { allow: 'POST' } });
-    }
-
-    try {
-        authorize(request, env);
-    } catch (error) {
-        const headers = error.status === 401
-            ? { 'www-authenticate': 'Bearer realm="LifeQuest", error="invalid_token"' }
-            : {};
-        return rpcError(null, -32001, error.message, error.status || 500, headers);
     }
 
     const version = request.headers.get('mcp-protocol-version');

@@ -23,7 +23,10 @@ until their data rules are implemented explicitly.
 
 - `GET /health`: public liveness check
 - `GET /privacy`: public privacy policy
-- `POST /mcp`: the MCP server; requires `Authorization: Bearer <LIFEQUEST_ACTION_TOKEN>`
+- `POST /mcp`: the MCP server; requires an OAuth access token or the static action token
+- `GET|POST /authorize`: the owner sign-in and consent page
+- `POST /register`, `POST /token`, `/.well-known/oauth-*`: OAuth endpoints served by
+  `@cloudflare/workers-oauth-provider`
 
 ## MCP server
 
@@ -51,13 +54,32 @@ $env:LIFEQUEST_ACTION_TOKEN = [System.Net.NetworkCredential]::new('', (Import-Cl
 claude mcp add --transport http --scope user lifequest https://<worker-url>/mcp --header "Authorization: Bearer $env:LIFEQUEST_ACTION_TOKEN"
 ```
 
-Clients that only accept OAuth for remote servers, such as claude.ai custom
-connectors and ChatGPT connectors, cannot use the bearer token yet.
+## OAuth for chat clients
+
+claude.ai (web, desktop, and mobile) and ChatGPT connectors cannot send a fixed
+header, so `/mcp` also accepts OAuth 2.1 access tokens. The Worker is its own
+authorization server:
+
+1. The client calls `/mcp`, receives a `401` pointing at
+   `/.well-known/oauth-protected-resource/mcp`, and discovers the OAuth endpoints.
+2. It registers itself at `/register` (dynamic client registration).
+3. The owner is sent to `/authorize`, which shows the app's name and where access
+   will be sent, and asks for the owner passphrase (`LIFEQUEST_OWNER_PASSPHRASE`,
+   at least 16 characters).
+4. After approval the client exchanges the code (PKCE) for a one-hour access
+   token and a refresh token. A grant stays valid while it is used at least once
+   every 30 days.
+
+Ten wrong passphrases within 15 minutes lock sign-in for the rest of that window.
+OAuth state (clients, grants, hashed tokens) lives in the `OAUTH_KV` namespace.
+
+To connect claude.ai: Settings → Connectors → Add custom connector, with the URL
+`https://<worker-url>/mcp`, then sign in on the page that opens.
 
 ## Local setup
 
 1. Copy `worker/.dev.vars.example` to `worker/.dev.vars`.
-2. Fill in the six local values. Do not commit this file.
+2. Fill in the seven local values. Do not commit this file.
 3. Run `npm run action:dev`.
 4. Test `http://localhost:8787/health`; the MCP endpoint is
    `http://localhost:8787/mcp`.
@@ -79,6 +101,7 @@ npx wrangler secret put FIREBASE_LLM_EMAIL --config worker/wrangler.jsonc
 npx wrangler secret put FIREBASE_LLM_PASSWORD --config worker/wrangler.jsonc
 npx wrangler secret put FIREBASE_PROJECT_ID --config worker/wrangler.jsonc
 npx wrangler secret put LIFEQUEST_OWNER_UID --config worker/wrangler.jsonc
+npx wrangler secret put LIFEQUEST_OWNER_PASSPHRASE --config worker/wrangler.jsonc
 ```
 
 Do not put secret values directly on a command line or in committed files.
@@ -103,7 +126,8 @@ npm run action:deploy
 
 ## Security model
 
-- The bearer token protects the public `/mcp` endpoint.
+- `/mcp` accepts only OAuth access tokens issued for it, or the static action token.
+- OAuth tokens, codes, and secrets are stored in KV only as hashes.
 - The Worker authenticates internally as the allowlisted Firebase LLM UID.
 - The owner UID is fixed by a Worker secret; callers cannot choose another UID.
 - Firestore writes use the current manifest update time as a precondition.

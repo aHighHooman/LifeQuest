@@ -1,6 +1,7 @@
+import { AUTHORIZE_PATH, handleAuthorize } from './authorize.js';
 import { HttpError } from './errors.js';
 import { json } from './http.js';
-import { handleMcpRequest, MCP_PATH } from './mcp.js';
+import { getOAuthProvider } from './oauth.js';
 
 const PRIVACY_POLICY = `<!doctype html>
 <html lang="en">
@@ -18,7 +19,7 @@ const PRIVACY_POLICY = `<!doctype html>
   <p>Effective October 3, 2026.</p>
   <p>LifeQuest Companion is a private assistant connector for its account owner, available as a Model Context Protocol (MCP) server. It handles only the requests needed to read or update that owner's LifeQuest data.</p>
   <h2>Data processing</h2>
-  <p>The connector receives request parameters from the owner's AI assistant, authenticates the request with a private bearer token, and uses a dedicated Firebase account to read or update the owner's LifeQuest snapshot. The connector does not sell data, serve advertising, or intentionally retain request content outside Firebase.</p>
+  <p>The connector receives request parameters from the owner's AI assistant, authenticates the request with an access token issued after the owner signs in with a private passphrase (or with the owner's private bearer token), and uses a dedicated Firebase account to read or update the owner's LifeQuest snapshot. The connector does not sell data, serve advertising, or intentionally retain request content outside Firebase.</p>
   <h2>Service providers</h2>
   <p>The AI assistant provider the owner connects (such as Anthropic or OpenAI), Cloudflare, and Google Firebase process requests as necessary to provide the assistant, the connector endpoint, authentication, and database storage under their respective privacy terms.</p>
   <h2>Access and deletion</h2>
@@ -26,7 +27,9 @@ const PRIVACY_POLICY = `<!doctype html>
 </body>
 </html>`;
 
-const handleRequest = async (request, env) => {
+// Public pages and the OAuth consent page. The OAuth provider answers its own
+// endpoints (discovery, registration, token) and guards /mcp before this runs.
+const handleSiteRequest = async (request, env) => {
     const url = new URL(request.url);
     const pathname = url.pathname.length > 1
         ? url.pathname.replace(/\/+$/, '')
@@ -43,33 +46,44 @@ const handleRequest = async (request, env) => {
             }
         });
     }
-    if (pathname === MCP_PATH) {
-        return handleMcpRequest(request, env);
+    if (pathname === AUTHORIZE_PATH) {
+        return handleAuthorize(request, env);
     }
     throw new HttpError(404, 'Unknown LifeQuest route.', 'route_not_found');
 };
 
-export default {
+const errorResponse = (error, env, requestId) => {
+    const status = error instanceof HttpError ? error.status : 500;
+    const code = error instanceof HttpError ? error.code : 'internal_error';
+    const message = error instanceof HttpError
+        ? error.message
+        : 'LifeQuest encountered an unexpected error.';
+    const response = {
+        ok: false,
+        error: { code, message }
+    };
+    if (env.LIFEQUEST_DEBUG === 'true' && error?.details) {
+        response.error.details = error.details;
+    }
+    return json(response, status, requestId);
+};
+
+const siteHandler = {
     async fetch(request, env) {
-        const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
         try {
-            return await handleRequest(request, env);
+            return await handleSiteRequest(request, env);
         } catch (error) {
-            const status = error instanceof HttpError ? error.status : 500;
-            const code = error instanceof HttpError ? error.code : 'internal_error';
-            const message = error instanceof HttpError
-                ? error.message
-                : 'LifeQuest encountered an unexpected error.';
-            const response = {
-                ok: false,
-                error: { code, message }
-            };
-            if (env.LIFEQUEST_DEBUG === 'true' && error?.details) {
-                response.error.details = error.details;
-            }
-            return json(response, status, requestId);
+            return errorResponse(error, env, request.headers.get('x-request-id') || crypto.randomUUID());
         }
     }
 };
 
-export { handleRequest };
+export default {
+    async fetch(request, env, ctx) {
+        try {
+            return await getOAuthProvider(new URL(request.url).origin, siteHandler).fetch(request, env, ctx);
+        } catch (error) {
+            return errorResponse(error, env, request.headers.get('x-request-id') || crypto.randomUUID());
+        }
+    }
+};

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -44,6 +45,16 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+  },
+  test: {
+    // The Worker's OAuth library imports the workerd-only `cloudflare:workers`
+    // module; tests run it in Node against a stub.
+    alias: {
+      'cloudflare:workers': fileURLToPath(new URL('./worker/test-support/cloudflare-workers.js', import.meta.url))
+    },
+    server: {
+      deps: { inline: ['@cloudflare/workers-oauth-provider'] }
+    }
   },
   build: {
     rollupOptions: {

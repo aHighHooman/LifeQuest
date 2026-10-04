@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryKv } from '../test-support/memoryKv.js';
 import worker from './index.js';
 import { SUPPORTED_PROTOCOL_VERSIONS } from './mcp.js';
 
@@ -17,7 +18,8 @@ vi.mock('./snapshotStore.js', () => ({
     }
 }));
 
-const ENV = { LIFEQUEST_ACTION_TOKEN: 'correct', LIFEQUEST_TIME_ZONE: 'UTC' };
+const ENV = { LIFEQUEST_ACTION_TOKEN: 'correct', LIFEQUEST_TIME_ZONE: 'UTC', OAUTH_KV: createMemoryKv() };
+const CTX = { waitUntil() {}, passThroughOnException() {} };
 
 const makeSnapshot = () => ({
     formatVersion: 4,
@@ -62,7 +64,7 @@ const post = (body, { token = 'correct', headers = {} } = {}) => worker.fetch(ne
         ...headers
     },
     body: typeof body === 'string' ? body : JSON.stringify(body)
-}), ENV);
+}), ENV, CTX);
 
 const rpc = async (method, params, id = 1) => (await post({ jsonrpc: '2.0', id, method, params })).json();
 
@@ -105,23 +107,28 @@ describe('LifeQuest MCP transport', () => {
         expect(response.status).toBe(400);
     });
 
-    it('requires the bearer token and tells the client how to authenticate', async () => {
+    it('requires a valid token and points the client at OAuth discovery', async () => {
         const response = await post({ jsonrpc: '2.0', id: 1, method: 'ping' }, { token: 'wrong' });
         expect(response.status).toBe(401);
-        expect(response.headers.get('www-authenticate')).toContain('Bearer');
+        expect(response.headers.get('www-authenticate')).toContain(
+            'resource_metadata="https://worker.example/.well-known/oauth-protected-resource/mcp"'
+        );
         expect(store.saves).toBe(0);
     });
 
-    it('fails closed when the token is not configured', async () => {
+    it('rejects every bearer token when the action token is not configured', async () => {
         const response = await worker.fetch(new Request('https://worker.example/mcp', {
             method: 'POST',
+            headers: { authorization: 'Bearer ', 'content-type': 'application/json' },
             body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' })
-        }), {});
-        expect(response.status).toBe(500);
+        }), { OAUTH_KV: createMemoryKv() }, CTX);
+        expect(response.status).toBe(401);
     });
 
     it('does not offer a server-sent event stream', async () => {
-        const response = await worker.fetch(new Request('https://worker.example/mcp'), ENV);
+        const response = await worker.fetch(new Request('https://worker.example/mcp', {
+            headers: { authorization: 'Bearer correct' }
+        }), ENV, CTX);
         expect(response.status).toBe(405);
         expect(response.headers.get('allow')).toBe('POST');
     });

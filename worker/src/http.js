@@ -44,10 +44,3 @@ export const readJsonBody = async (request) => {
         throw new HttpError(400, 'Request body must be valid JSON.', 'invalid_json');
     }
 };
-
-export const authorize = (request, env) => {
-    assertHttp(env.LIFEQUEST_ACTION_TOKEN, 500, 'LIFEQUEST_ACTION_TOKEN is not configured.', 'configuration_error');
-    const header = request.headers.get('authorization') || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    assertHttp(token && token === env.LIFEQUEST_ACTION_TOKEN, 401, 'A valid LifeQuest bearer token is required.', 'unauthorized');
-};

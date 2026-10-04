@@ -4,6 +4,12 @@
   "main": "src/index.js",
   "compatibility_date": "2026-07-29",
   "workers_dev": true,
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "YOUR_OAUTH_KV_NAMESPACE_ID"
+    }
+  ],
   "vars": {
     "LIFEQUEST_TIME_ZONE": "America/Vancouver",
     "LIFEQUEST_DEBUG": "false"
