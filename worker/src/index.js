@@ -1,31 +1,17 @@
 import { HttpError, assertHttp } from './errors.js';
+import { authorize, json, readJsonBody } from './http.js';
+import { handleMcpRequest, MCP_PATH } from './mcp.js';
 import { createOpenApiDocument } from './openapi.js';
-import { loadSnapshot, saveSnapshot } from './snapshotStore.js';
 import {
-    activateProtocol,
-    completeProtocol,
-    completeQuest,
-    createProtocol,
-    createQuest,
-    deactivateProtocol,
-    discardQuest,
-    getRequestClock,
-    prepareSnapshot,
-    restoreQuest,
-    setQuestToday,
-    skipProtocol,
-    touchSnapshot,
-    undoQuest
-} from './stateEngine.js';
-import {
-    dashboardView,
-    listProtocolView,
-    listQuestView,
-    protocolView,
-    questView
-} from './views.js';
+    applyProtocolAction,
+    applyQuestAction,
+    createProtocolRecord,
+    createQuestRecord,
+    getToday,
+    listProtocols,
+    listQuests
+} from './operations.js';
 
-const MAX_ACTION_BODY_BYTES = 64 * 1024;
 const PRIVACY_POLICY = `<!doctype html>
 <html lang="en">
 <head>
@@ -39,107 +25,44 @@ const PRIVACY_POLICY = `<!doctype html>
 </head>
 <body>
   <h1>LifeQuest Companion Privacy Policy</h1>
-  <p>Effective July 29, 2026.</p>
-  <p>LifeQuest Companion is a private GPT Action for its account owner. It sends only the Action requests needed to read or update that owner's LifeQuest data.</p>
+  <p>Effective October 3, 2026.</p>
+  <p>LifeQuest Companion is a private assistant connector for its account owner, available as a Custom GPT Action and as a Model Context Protocol (MCP) server. It handles only the requests needed to read or update that owner's LifeQuest data.</p>
   <h2>Data processing</h2>
-  <p>The Action receives request parameters from ChatGPT, authenticates the request with a private bearer token, and uses a dedicated Firebase account to read or update the owner's LifeQuest snapshot. The Action does not sell data, serve advertising, or intentionally retain request content outside Firebase.</p>
+  <p>The connector receives request parameters from the owner's AI assistant, authenticates the request with a private bearer token, and uses a dedicated Firebase account to read or update the owner's LifeQuest snapshot. The connector does not sell data, serve advertising, or intentionally retain request content outside Firebase.</p>
   <h2>Service providers</h2>
-  <p>OpenAI, Cloudflare, and Google Firebase process requests as necessary to provide ChatGPT, the Action endpoint, authentication, and database storage under their respective privacy terms.</p>
+  <p>The AI assistant provider the owner connects (such as OpenAI or Anthropic), Cloudflare, and Google Firebase process requests as necessary to provide the assistant, the connector endpoint, authentication, and database storage under their respective privacy terms.</p>
   <h2>Access and deletion</h2>
-  <p>The account owner controls the underlying LifeQuest and Firebase accounts and can review or delete stored LifeQuest data there. The Action does not expose permanent deletion operations.</p>
+  <p>The account owner controls the underlying LifeQuest and Firebase accounts and can review or delete stored LifeQuest data there. The connector does not expose permanent deletion operations.</p>
 </body>
 </html>`;
 
-const json = (
-    payload,
-    status = 200,
-    requestId = crypto.randomUUID(),
-    includeRequestId = true
-) => new Response(
-    JSON.stringify(includeRequestId ? { ...payload, requestId } : payload),
-    {
-        status,
-        headers: {
-            'content-type': 'application/json; charset=utf-8',
-            'cache-control': 'no-store',
-            'x-request-id': requestId
-        }
+const handleRestRoute = async (request, env, url, pathname) => {
+    if (request.method === 'GET' && (pathname === '/v1/today' || pathname === '/v1/dashboard')) {
+        return getToday(env);
     }
-);
-
-const readJsonBody = async (request) => {
-    if (!request.body) return {};
-    const contentLength = Number(request.headers.get('content-length') || 0);
-    assertHttp(
-        !contentLength || contentLength <= MAX_ACTION_BODY_BYTES,
-        413,
-        'The request body is too large.',
-        'request_too_large'
-    );
-    const text = await request.text();
-    assertHttp(
-        new TextEncoder().encode(text).byteLength <= MAX_ACTION_BODY_BYTES,
-        413,
-        'The request body is too large.',
-        'request_too_large'
-    );
-    if (!text.trim()) return {};
-    try {
-        return JSON.parse(text);
-    } catch {
-        throw new HttpError(400, 'Request body must be valid JSON.', 'invalid_json');
+    if (request.method === 'GET' && pathname === '/v1/quests') {
+        return listQuests(env, url.searchParams);
     }
-};
-
-const authorize = (request, env) => {
-    assertHttp(env.LIFEQUEST_ACTION_TOKEN, 500, 'LIFEQUEST_ACTION_TOKEN is not configured.', 'configuration_error');
-    const header = request.headers.get('authorization') || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    assertHttp(token && token === env.LIFEQUEST_ACTION_TOKEN, 401, 'A valid LifeQuest bearer token is required.', 'unauthorized');
-};
-
-const mutationResponse = (snapshot, clock, result, metadata, kind) => ({
-    ok: true,
-    changed: result.changed !== false,
-    [kind]: kind === 'quest'
-        ? questView(result.quest, snapshot.settings)
-        : protocolView(result.protocol, clock.todayKey),
-    dashboard: dashboardView(snapshot, clock.todayKey),
-    revisionId: metadata.revisionId
-});
-
-const handleQuestMutation = async (action, id, snapshot, clock) => {
-    switch (action) {
-        case 'complete':
-            return completeQuest(snapshot, id, clock.now, clock.todayKey);
-        case 'undo':
-            return undoQuest(snapshot, id, clock.now, clock.todayKey);
-        case 'discard':
-            return discardQuest(snapshot, id, clock.now, clock.todayKey);
-        case 'restore':
-            return restoreQuest(snapshot, id);
-        case 'select-for-today':
-            return setQuestToday(snapshot, id, true);
-        case 'remove-from-today':
-            return setQuestToday(snapshot, id, false);
-        default:
-            throw new HttpError(404, 'Unknown quest action.', 'route_not_found');
+    if (request.method === 'GET' && pathname === '/v1/protocols') {
+        return listProtocols(env, url.searchParams);
     }
-};
 
-const handleProtocolMutation = async (action, id, snapshot, clock, body) => {
-    switch (action) {
-        case 'complete':
-            return completeProtocol(snapshot, id, clock.todayKey, clock.now, body.requestId);
-        case 'skip':
-            return skipProtocol(snapshot, id, clock.todayKey, clock.now);
-        case 'activate':
-            return activateProtocol(snapshot, id, clock.todayKey, clock.now);
-        case 'deactivate':
-            return deactivateProtocol(snapshot, id, clock.todayKey, clock.now);
-        default:
-            throw new HttpError(404, 'Unknown protocol action.', 'route_not_found');
+    const body = await readJsonBody(request);
+    if (request.method === 'POST' && pathname === '/v1/quests') {
+        return createQuestRecord(env, body);
     }
+    if (request.method === 'POST' && pathname === '/v1/protocols') {
+        return createProtocolRecord(env, body);
+    }
+    const questMatch = pathname.match(/^\/v1\/quests\/([^/]+)\/([^/]+)$/);
+    if (request.method === 'POST' && questMatch) {
+        return applyQuestAction(env, decodeURIComponent(questMatch[1]), decodeURIComponent(questMatch[2]));
+    }
+    const protocolMatch = pathname.match(/^\/v1\/protocols\/([^/]+)\/([^/]+)$/);
+    if (request.method === 'POST' && protocolMatch) {
+        return applyProtocolAction(env, decodeURIComponent(protocolMatch[1]), decodeURIComponent(protocolMatch[2]), body);
+    }
+    throw new HttpError(404, 'Unknown LifeQuest API route.', 'route_not_found');
 };
 
 const handleRequest = async (request, env) => {
@@ -162,62 +85,13 @@ const handleRequest = async (request, env) => {
             }
         });
     }
+    if (pathname === MCP_PATH) {
+        return handleMcpRequest(request, env);
+    }
 
     authorize(request, env);
     assertHttp(['GET', 'POST'].includes(request.method), 405, 'Method not allowed.', 'method_not_allowed');
-
-    const clock = getRequestClock(env);
-    const loaded = await loadSnapshot(env);
-    const snapshot = prepareSnapshot(loaded.snapshot);
-
-    if (request.method === 'GET' && (pathname === '/v1/today' || pathname === '/v1/dashboard')) {
-        return json({ dashboard: dashboardView(snapshot, clock.todayKey) });
-    }
-    if (request.method === 'GET' && pathname === '/v1/quests') {
-        return json(listQuestView(snapshot, clock.todayKey, url.searchParams));
-    }
-    if (request.method === 'GET' && pathname === '/v1/protocols') {
-        return json(listProtocolView(snapshot, clock.todayKey, url.searchParams));
-    }
-
-    const body = await readJsonBody(request);
-    let result;
-    let kind;
-
-    if (request.method === 'POST' && pathname === '/v1/quests') {
-        result = { quest: createQuest(snapshot, body, clock.now, clock.todayKey), changed: true };
-        kind = 'quest';
-    } else if (request.method === 'POST' && pathname === '/v1/protocols') {
-        result = { protocol: createProtocol(snapshot, body, clock.now, clock.todayKey), changed: true };
-        kind = 'protocol';
-    } else {
-        const questMatch = pathname.match(/^\/v1\/quests\/([^/]+)\/([^/]+)$/);
-        const protocolMatch = pathname.match(/^\/v1\/protocols\/([^/]+)\/([^/]+)$/);
-        if (request.method === 'POST' && questMatch) {
-            result = await handleQuestMutation(
-                decodeURIComponent(questMatch[2]),
-                decodeURIComponent(questMatch[1]),
-                snapshot,
-                clock
-            );
-            kind = 'quest';
-        } else if (request.method === 'POST' && protocolMatch) {
-            result = await handleProtocolMutation(
-                decodeURIComponent(protocolMatch[2]),
-                decodeURIComponent(protocolMatch[1]),
-                snapshot,
-                clock,
-                body
-            );
-            kind = 'protocol';
-        } else {
-            throw new HttpError(404, 'Unknown LifeQuest API route.', 'route_not_found');
-        }
-    }
-
-    touchSnapshot(snapshot, clock.now);
-    const metadata = await saveSnapshot(env, loaded, snapshot);
-    return json(mutationResponse(snapshot, clock, result, metadata, kind));
+    return json(await handleRestRoute(request, env, url, pathname));
 };
 
 export default {

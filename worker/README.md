@@ -1,12 +1,14 @@
 # LifeQuest Action API
 
 This Cloudflare Worker exposes the existing Firebase-backed LifeQuest account to
-a private Custom GPT through compact authenticated REST operations.
+AI assistants in two ways: an MCP server at `/mcp`, and the compact REST
+operations used by the private Custom GPT. Both call the same operations in
+`src/operations.js`. The Custom GPT is being retired in favor of MCP.
 
 It is deliberately a bridge, not a second database:
 
 ```text
-Custom GPT -> Cloudflare Worker -> Firebase Auth REST -> Firestore REST
+MCP client / Custom GPT -> Cloudflare Worker -> Firebase Auth REST -> Firestore REST
 ```
 
 The Worker uses the existing dedicated LLM Firebase account. Its credentials are
@@ -49,7 +51,7 @@ The deployed Worker serves its Custom GPT schema at `/openapi.json`.
 ## Local setup without a Cloudflare account
 
 1. Copy `worker/.dev.vars.example` to `worker/.dev.vars`.
-2. Fill in the four local values. Do not commit this file.
+2. Fill in the six local values. Do not commit this file.
 3. Run `npm run action:dev`.
 4. Test `http://localhost:8787/health`.
 
@@ -81,9 +83,16 @@ npx wrangler secret put LIFEQUEST_ACTION_TOKEN --config worker/wrangler.jsonc
 npx wrangler secret put FIREBASE_API_KEY --config worker/wrangler.jsonc
 npx wrangler secret put FIREBASE_LLM_EMAIL --config worker/wrangler.jsonc
 npx wrangler secret put FIREBASE_LLM_PASSWORD --config worker/wrangler.jsonc
+npx wrangler secret put FIREBASE_PROJECT_ID --config worker/wrangler.jsonc
+npx wrangler secret put LIFEQUEST_OWNER_UID --config worker/wrangler.jsonc
 ```
 
 Do not put secret values directly on a command line or in committed files.
+
+`FIREBASE_PROJECT_ID` and `LIFEQUEST_OWNER_UID` are identifiers rather than
+credentials, but they are kept out of `wrangler.jsonc` so the repository holds
+no account metadata. A Worker that previously had them as plain-text `vars`
+must be deployed without them before `wrangler secret put` accepts those names.
 
 Deploy:
 
@@ -98,6 +107,40 @@ its `workers.dev` URL. Verify:
 https://<worker-url>/health
 https://<worker-url>/openapi.json
 ```
+
+## MCP server
+
+`POST /mcp` is a stateless MCP endpoint (Streamable HTTP transport, JSON
+responses, protocol versions 2025-03-26 through 2025-11-25). It requires the
+same `Authorization: Bearer <LIFEQUEST_ACTION_TOKEN>` header as the REST routes.
+
+Tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `get_today` | Dashboard and what remains today |
+| `list_quests` | List or search quests by status and title |
+| `list_protocols` | List or search protocols |
+| `create_quest` | Create a quest (idempotent with `requestId`) |
+| `update_quest_status` | `complete`, `undo`, `discard`, `restore`, `select-for-today`, `remove-from-today` |
+| `create_protocol` | Create a protocol (idempotent with `requestId`) |
+| `update_protocol_status` | `complete`, `skip`, `activate`, `deactivate` |
+
+The server sends its usage rules as MCP `instructions` during initialization,
+so clients do not need a separate instructions file.
+
+Connect Claude Code, keeping the token in an environment variable rather than
+typing it into the command:
+
+```powershell
+claude mcp add --transport http lifequest https://<worker-url>/mcp --header "Authorization: Bearer $env:LIFEQUEST_ACTION_TOKEN"
+```
+
+Locally, `npm run action:dev` serves the same endpoint at
+`http://localhost:8787/mcp`.
+
+Clients that only accept OAuth for remote servers, such as claude.ai custom
+connectors and ChatGPT connectors, cannot use the bearer token yet.
 
 ## Custom GPT configuration
 
@@ -115,7 +158,7 @@ No Firebase password is entered into ChatGPT.
 
 - The Action token protects the public Worker endpoint.
 - The Worker authenticates internally as the allowlisted Firebase LLM UID.
-- The owner UID is fixed in `wrangler.jsonc`; callers cannot choose another UID.
+- The owner UID is fixed by a Worker secret; callers cannot choose another UID.
 - Firestore writes use the current manifest update time as a precondition.
 - Snapshot checksums and chunk ordering are verified before state is used.
 - Permanent deletion is intentionally not exposed.
