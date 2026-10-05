@@ -44,6 +44,13 @@ protocol versions 2025-03-26 through 2025-11-25).
 | `create_protocol` | Create a protocol (idempotent with `requestId`) |
 | `update_protocol_status` | `complete`, `skip`, `activate`, `deactivate` |
 | `update_protocol` | Edit title, schedule, or rewards |
+| `get_calories` | One day's calorie target, totals, and entries |
+| `list_saved_foods` | List or search saved foods |
+| `log_calories` | Log food or exercise, spending any coin cost (idempotent with `requestId`) |
+| `remove_calorie_entry` | Remove an entry from today or yesterday and refund its cost |
+| `set_calorie_target` | Set the daily calorie target |
+| `list_ledger` | Coin transactions with earned and spent totals |
+| `record_coins` | Record outside spending or earnings (idempotent with `requestId`) |
 
 The server sends its usage rules as MCP `instructions` during initialization,
 so clients do not need a separate instructions file.

@@ -10,8 +10,18 @@ import {
     setProtocolActive,
     skipProtocol as skipProtocolTransaction,
     updateProtocolDetails,
-    updateQuestDetails
+    updateQuestDetails,
+    changeCoins,
+    purchaseCalories,
+    refundCalories
 } from '../../src/domain/transactions.js';
+import {
+    createCalorieEntry,
+    createSavedFood,
+    getEditableCalorieDateKeys,
+    normalizeCalorieNumber,
+    normalizeSignedCalorieNumber
+} from '../../src/domain/calories.js';
 import { DEFAULT_QUEST_GOLD, DEFAULT_PROTOCOL_REWARD } from '../../src/domain/rewards.js';
 import { getDateKey } from './date.js';
 import { HttpError, assertHttp } from './errors.js';
@@ -49,6 +59,10 @@ const ensureShape = (snapshot) => {
     snapshot.quests = Array.isArray(snapshot.quests) ? snapshot.quests : [];
     snapshot.habits = Array.isArray(snapshot.habits) ? snapshot.habits : [];
     snapshot.coinHistory = Array.isArray(snapshot.coinHistory) ? snapshot.coinHistory : [];
+    snapshot.calories = { target: 2000, ...(snapshot.calories || {}) };
+    ['history', 'savedFoods', 'recentFoodIds'].forEach((key) => {
+        if (!Array.isArray(snapshot.calories[key])) snapshot.calories[key] = [];
+    });
     snapshot.budget = {
         earnedRewards: 0,
         goldToUsdRatio: 1,
@@ -226,6 +240,76 @@ export const updateProtocol = (snapshot, id, input, todayKey, now = new Date()) 
     if (next === snapshot) return { protocol, changed: false };
     Object.assign(snapshot, next);
     return { protocol: findProtocol(snapshot, id), changed: true };
+};
+
+// A requestId becomes part of the record ID, so a retried call finds the
+// record it already made instead of logging or charging twice.
+const requestRecordId = (prefix, requestId) => (
+    requestId ? `${prefix}-req-${requestId}` : makeId(prefix)
+);
+
+export const logCalories = (snapshot, input, now = new Date(), todayKey = getDateKey(now)) => {
+    const requestId = cleanText(input.requestId);
+    const id = requestRecordId('cal', requestId);
+    const existing = snapshot.calories.history.find((entry) => entry.id === id);
+    if (existing) return { entry: existing, changed: false };
+
+    const foodId = cleanText(input.foodId);
+    const food = foodId ? snapshot.calories.savedFoods.find((entry) => entry.id === foodId) : null;
+    if (foodId && !food) throw new HttpError(404, `Saved food "${foodId}" was not found.`, 'food_not_found');
+    const calories = normalizeSignedCalorieNumber(input.calories ?? food?.calories);
+    assertHttp(calories !== 0, 400, 'Calories must be a non-zero whole number; use a negative number for exercise.', 'invalid_calories');
+    const label = cleanText(input.label) || food?.name || '';
+    const coinCost = calories > 0 ? (input.coinCost ?? food?.coinCost ?? 0) : 0;
+    const timestamp = now.toISOString();
+    const savedFood = !food && input.saveAsFood && calories > 0
+        ? createSavedFood({ id: makeId('food'), name: label, calories, coinCost, createdAt: timestamp })
+        : null;
+    const entry = createCalorieEntry({
+        id,
+        timestamp,
+        dateKey: todayKey,
+        calories,
+        label,
+        source: food || savedFood ? 'saved-food' : 'manual',
+        foodId: food?.id || savedFood?.id || null,
+        coinCost
+    });
+    Object.assign(snapshot, purchaseCalories(snapshot, entry, transactionEvent(now, todayKey), savedFood));
+    return { entry: snapshot.calories.history.find((current) => current.id === id), changed: true };
+};
+
+export const removeCalorieEntry = (snapshot, id, now = new Date(), todayKey = getDateKey(now)) => {
+    const entry = snapshot.calories.history.find((current) => current.id === id);
+    if (!entry) throw new HttpError(404, `Calorie entry "${id}" was not found.`, 'calorie_entry_not_found');
+    const editable = getEditableCalorieDateKeys(todayKey);
+    assertHttp(editable.has(entry.dateKey), 409, 'Only entries from today or yesterday can be removed.', 'calorie_entry_locked');
+    Object.assign(snapshot, refundCalories(snapshot, id, editable, transactionEvent(now, todayKey)));
+    return { entry, changed: true };
+};
+
+export const setCalorieTarget = (snapshot, target) => {
+    const safeTarget = normalizeCalorieNumber(target);
+    assertHttp(safeTarget >= 1, 400, 'The calorie target must be at least 1.', 'invalid_calories');
+    const changed = Number(snapshot.calories.target) !== safeTarget;
+    snapshot.calories = { ...snapshot.calories, target: safeTarget };
+    return { changed };
+};
+
+export const recordCoins = (snapshot, input, now = new Date(), todayKey = getDateKey(now)) => {
+    const requestId = cleanText(input.requestId);
+    const id = requestRecordId('coin', requestId);
+    const existing = snapshot.coinHistory.find((entry) => entry.id === id);
+    if (existing) return { transaction: existing, changed: false };
+    const description = cleanText(input.description);
+    assertHttp(description, 400, 'A description is required.', 'invalid_transaction');
+    const amount = Number(input.amount);
+    assertHttp(Number.isFinite(amount) && amount > 0, 400, 'The amount must be greater than zero.', 'invalid_transaction');
+    const signed = input.type === 'earn' ? amount : -amount;
+    Object.assign(snapshot, changeCoins(snapshot, signed, { id, date: now.toISOString(), todayKey }, description));
+    const transaction = snapshot.coinHistory.find((entry) => entry.id === id);
+    assertHttp(transaction, 400, 'The amount is too small to record.', 'invalid_transaction');
+    return { transaction, changed: true };
 };
 
 export const touchSnapshot = (snapshot, now = new Date()) => {

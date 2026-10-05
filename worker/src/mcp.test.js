@@ -50,8 +50,15 @@ const makeSnapshot = () => ({
         completionReward: 0.2,
         passiveReward: 0
     }],
-    calories: { target: 2000, history: [] },
-    coinHistory: [],
+    calories: {
+        target: 2000,
+        history: [],
+        savedFoods: [{ id: 'food-1', name: 'Burrito', calories: 800, coinCost: 2 }],
+        recentFoodIds: []
+    },
+    coinHistory: [
+        { id: 'coin-old', date: '2026-09-20T18:00:00.000Z', amount: 1.5, type: 'earned', description: 'Earned from Quest' }
+    ],
     budget: { earnedRewards: 0, goldToUsdRatio: 1 }
 });
 
@@ -159,7 +166,14 @@ describe('LifeQuest MCP tools', () => {
             'update_quest',
             'create_protocol',
             'update_protocol_status',
-            'update_protocol'
+            'update_protocol',
+            'get_calories',
+            'list_saved_foods',
+            'log_calories',
+            'remove_calorie_entry',
+            'set_calorie_target',
+            'list_ledger',
+            'record_coins'
         ]);
         result.tools.forEach((tool) => {
             expect(tool.run).toBeUndefined();
@@ -270,6 +284,80 @@ describe('LifeQuest MCP tools', () => {
 
         const stray = await callTool('update_protocol', { id: 'habit-1', frequency: 'daily', frequencyParam: 4 });
         expect(stray.structuredContent.error.code).toBe('invalid_protocol');
+    });
+
+    it('logs a saved food once per requestId and spends its coin cost', async () => {
+        store.snapshot.stats.gold = 5;
+        const args = { requestId: 'meal-1', foodId: 'food-1' };
+        const logged = await callTool('log_calories', args);
+        expect(logged.structuredContent).toMatchObject({
+            ok: true,
+            entry: { label: 'Burrito', calories: 800, coinCost: 2, source: 'saved-food', foodId: 'food-1' },
+            today: { caloriesConsumed: 800, caloriesRemaining: 1200 }
+        });
+        const retried = await callTool('log_calories', args);
+        expect(retried.structuredContent.changed).toBe(false);
+        expect(store.snapshot.stats.gold).toBe(3);
+        expect(store.snapshot.calories.history).toHaveLength(1);
+        expect(store.snapshot.calories.recentFoodIds).toEqual(['food-1']);
+    });
+
+    it('logs exercise without cost, saves new foods, and removes entries with a refund', async () => {
+        const burn = await callTool('log_calories', { calories: -300, coinCost: 4 });
+        expect(burn.structuredContent.entry).toMatchObject({ label: 'Exercise Burn', calories: -300, coinCost: 0 });
+
+        const snack = await callTool('log_calories', { calories: 250, label: 'Bagel', coinCost: 1, saveAsFood: true });
+        expect(snack.structuredContent.entry.source).toBe('saved-food');
+        expect(store.snapshot.calories.savedFoods.map((food) => food.name)).toContain('Bagel');
+        expect(store.snapshot.stats.gold).toBe(-1);
+
+        const removed = await callTool('remove_calorie_entry', { id: snack.structuredContent.entry.id });
+        expect(removed.structuredContent.today.entries.map((entry) => entry.calories)).toEqual([-300]);
+        expect(store.snapshot.stats.gold).toBe(0);
+
+        const missing = await callTool('log_calories', { label: 'Nothing' });
+        expect(missing.structuredContent.error.code).toBe('invalid_calories');
+    });
+
+    it('will not remove calorie entries older than yesterday', async () => {
+        store.snapshot.calories.history = [{
+            id: 'cal-old', timestamp: '2026-09-01T12:00:00.000Z', dateKey: '2026-09-01', calories: 500, label: 'Old', source: 'manual', coinCost: 0
+        }];
+        const result = await callTool('remove_calorie_entry', { id: 'cal-old' });
+        expect(result.structuredContent.error.code).toBe('calorie_entry_locked');
+
+        const day = await callTool('get_calories', { date: '2026-09-01' });
+        expect(day.structuredContent).toMatchObject({ editable: false, caloriesConsumed: 500, entries: [{ id: 'cal-old' }] });
+    });
+
+    it('sets the calorie target and searches saved foods', async () => {
+        const target = await callTool('set_calorie_target', { target: 2200 });
+        expect(target.structuredContent.today.calorieTarget).toBe(2200);
+        const foods = await callTool('list_saved_foods', { query: 'burr' });
+        expect(foods.structuredContent.foods).toEqual([{ id: 'food-1', name: 'Burrito', calories: 800, coinCost: 2 }]);
+    });
+
+    it('records spending and earnings once per requestId and lists the ledger', async () => {
+        const spend = { requestId: 'tx-1', type: 'spend', amount: 12.5, description: 'Movie ticket' };
+        const spent = await callTool('record_coins', spend);
+        expect(spent.structuredContent).toMatchObject({
+            ok: true, coinsOnHand: -12.5, transaction: { type: 'spent', amount: 12.5, description: 'Movie ticket' }
+        });
+        expect((await callTool('record_coins', spend)).structuredContent.changed).toBe(false);
+        await callTool('record_coins', { type: 'earn', amount: 20, description: 'Sold old desk' });
+        expect(store.snapshot.stats.gold).toBe(7.5);
+
+        const ledger = await callTool('list_ledger', { since: '2026-09-21' });
+        expect(ledger.structuredContent).toMatchObject({
+            coinsOnHand: 7.5, matched: 2, totals: { earned: 20, spent: 12.5 }
+        });
+        expect(ledger.structuredContent.transactions[0].description).toBe('Sold old desk');
+
+        const all = await callTool('list_ledger', { type: 'earned' });
+        expect(all.structuredContent.totals).toEqual({ earned: 21.5, spent: 0 });
+
+        const blank = await callTool('record_coins', { type: 'spend', amount: 1, description: '   ' });
+        expect(blank.isError).toBe(true);
     });
 
     it('returns domain failures as tool errors', async () => {

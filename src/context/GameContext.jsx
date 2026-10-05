@@ -18,6 +18,15 @@ import {
     purchaseGrocery, refundGrocery, purchaseCalories, refundCalories
 } from '../domain/transactions.js';
 import { addDays } from '../domain/calendar.js';
+import {
+    PASSIVE_CALORIE_SOURCE,
+    createCalorieEntry,
+    createSavedFood,
+    getEditableCalorieDateKeys,
+    normalizeCalorieLabel,
+    normalizeCalorieNumber,
+    normalizeSignedCalorieNumber
+} from '../domain/calories.js';
 import { getTodayISO, isWithinDays, toLocalDateKey } from '../utils/dateUtils';
 import {
     createPortableSnapshot,
@@ -50,24 +59,11 @@ export const useGame = () => useContext(GameContext);
 export const useGameCalories = () => useContext(CalorieContext);
 
 const INITIAL_CALORIES = createInitialAppState().calories;
-const PASSIVE_CALORIE_SOURCE = 'passive';
 const PASSIVE_CALORIE_LOOKBACK_DAYS = 7;
 const PASSIVE_CALORIE_CHECKPOINTS = [
     { id: '18:00', hour: 18, minute: 0, label: 'Passive Fill 6PM' },
     { id: '23:59', hour: 23, minute: 59, label: 'Passive Fill 11:59PM' }
 ];
-
-const normalizeCalorieNumber = (value) => {
-    const parsed = Math.round(Number(value) || 0);
-    return Math.max(0, parsed);
-};
-
-const normalizeSignedCalorieNumber = (value) => Math.round(Number(value) || 0);
-
-const normalizeCalorieLabel = (label, fallback = 'Manual Entry') => {
-    const trimmed = `${label ?? ''}`.trim();
-    return trimmed || fallback;
-};
 
 const getPassiveCheckpointDate = (dateKey, checkpoint) => {
     const [year, month, day] = `${dateKey}`.split('-').map(Number);
@@ -105,53 +101,16 @@ const normalizePassiveCheckpointLedger = (ledger) => {
     );
 };
 
-const createCalorieHistoryEntry = ({
-    id = createId('cal'),
-    timestamp = new Date().toISOString(),
-    dateKey,
-    calories,
-    label,
-    source = 'manual',
-    foodId = null,
-    coinCost = 0
-}) => {
+const createCalorieHistoryEntry = ({ id = createId('cal'), timestamp, dateKey, ...entry }) => {
     const safeTimestamp = timestamp || new Date().toISOString();
-    const safeCalories = normalizeSignedCalorieNumber(calories);
-    const safeSource = source || 'manual';
-    return {
-        id,
-        timestamp: safeTimestamp,
-        dateKey: dateKey || toLocalDateKey(safeTimestamp),
-        calories: safeCalories,
-        label: normalizeCalorieLabel(
-            label,
-            safeSource === 'preset'
-                ? `Quick Add ${Math.abs(safeCalories)}`
-                : safeCalories < 0
-                    ? 'Exercise Burn'
-                    : 'Manual Entry'
-        ),
-        source: safeSource,
-        foodId: foodId || null,
-        coinCost: normalizeNonNegativeCurrencyAmount(coinCost)
-    };
+    return createCalorieEntry({
+        ...entry, id, timestamp: safeTimestamp, dateKey: dateKey || toLocalDateKey(safeTimestamp)
+    });
 };
 
-const createSavedFoodRecord = ({
-    id = createId('food'),
-    name,
-    calories,
-    coinCost = 0,
-    createdAt = new Date().toISOString(),
-    updatedAt = createdAt
-}) => ({
-    id,
-    name: normalizeCalorieLabel(name, 'Untitled Food'),
-    calories: Math.max(1, normalizeCalorieNumber(calories)),
-    coinCost: normalizeNonNegativeCurrencyAmount(coinCost),
-    createdAt,
-    updatedAt
-});
+const createSavedFoodRecord = ({ id = createId('food'), createdAt = new Date().toISOString(), ...food }) => (
+    createSavedFood({ updatedAt: createdAt, ...food, id, createdAt })
+);
 
 const normalizeCalorieHistoryEntry = (entry, index) => {
     const timestamp = entry?.timestamp || entry?.date || new Date().toISOString();
@@ -191,10 +150,6 @@ const recomputeCalorieCurrent = (history, todayKey = getTodayISO()) => {
         if (entry.dateKey !== todayKey) return sum;
         return sum + normalizeSignedCalorieNumber(entry.calories);
     }, 0);
-};
-
-const getEditableCalorieDateKeys = (todayKey) => {
-    return new Set([todayKey, addDays(todayKey, -1)]);
 };
 
 const normalizeCaloriesForImport = (calories = {}) => {
