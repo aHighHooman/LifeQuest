@@ -2,14 +2,12 @@
 // (a Worker secret) and approves the connecting app. The library keeps the
 // authorization request server-side; the form carries only a one-time handle.
 import { AuthorizationError, CimdFetchError } from '@cloudflare/workers-oauth-provider';
-import { LIFEQUEST_SCOPE, SUPPORTED_SCOPES, secretsMatch } from './oauth.js';
+import { LIFEQUEST_SCOPE, SUPPORTED_SCOPES } from './oauth.js';
+import { getOwnerPassphrase } from './ownerSignInLimiter.js';
 
 export const AUTHORIZE_PATH = '/authorize';
-export const MIN_PASSPHRASE_LENGTH = 16;
+export { MIN_PASSPHRASE_LENGTH } from './ownerSignInLimiter.js';
 
-const FAILURE_KEY = 'lifequest:authorize-failures';
-const MAX_FAILURES = 10;
-const FAILURE_WINDOW_SECONDS = 15 * 60;
 const FAILURE_DELAY_MS = 1000;
 
 const escape = (value) => `${value ?? ''}`.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
@@ -44,11 +42,11 @@ const page = (title, body, status = 200, headers = new Headers()) => {
 </html>`, { status, headers });
 };
 
-const errorPage = (message, status = 400) => page('LifeQuest sign-in', `
+const errorPage = (message, status = 400, headers) => page('LifeQuest sign-in', `
   <h1>Could not connect</h1>
-  <p>${escape(message)}</p>`, status);
+  <p>${escape(message)}</p>`, status, headers);
 
-const consentPage = (details, handle, headers) => {
+const consentPage = (details, handle, headers, message = '', status = 200) => {
     const origin = details.clientDomain
         ? `Published by <strong>${escape(details.clientDomain)}</strong>.`
         : 'This app registered itself, so its name is not verified.';
@@ -61,6 +59,7 @@ const consentPage = (details, handle, headers) => {
   <p>It will be able to read and change your quests, protocols, and rewards.</p>
   <p>${origin} Access will be sent to <strong>${escape(details.redirectHost)}</strong>.</p>
   ${details.redirectIsLoopback ? '<p class="warning">This sends access to an app on this computer. Continue only if you just started connecting from it.</p>' : ''}
+  ${message ? `<p class="warning" role="alert">${escape(message)}</p>` : ''}
   <form method="post">
     <input type="hidden" name="handle" value="${escape(handle)}">
     ${scopes}
@@ -71,20 +70,7 @@ const consentPage = (details, handle, headers) => {
       <button name="decision" value="deny" formnovalidate>Deny</button>
       <button name="decision" value="approve">Allow</button>
     </div>
-  </form>`, 200, headers);
-};
-
-const ownerPassphrase = (env) => {
-    const passphrase = env.LIFEQUEST_OWNER_PASSPHRASE;
-    return typeof passphrase === 'string' && passphrase.length >= MIN_PASSPHRASE_LENGTH ? passphrase : null;
-};
-
-const recentFailures = async (env) => Number(await env.OAUTH_KV.get(FAILURE_KEY)) || 0;
-
-const recordFailure = async (env) => {
-    await env.OAUTH_KV.put(FAILURE_KEY, `${(await recentFailures(env)) + 1}`, {
-        expirationTtl: FAILURE_WINDOW_SECONDS
-    });
+  </form>`, status, headers);
 };
 
 const redirect = (location, headers = new Headers()) => {
@@ -100,7 +86,20 @@ const showConsent = async (request, env) => {
     return consentPage(details, consent.handle, consent.headers);
 };
 
+const clientLimiterId = async (request, namespace) => {
+    // Cloudflare sets these at the edge. Do not use caller-controlled forwarding
+    // headers, and keep the address out of durable object names and storage.
+    const address = request.headers.get('cf-connecting-ipv6') || request.headers.get('cf-connecting-ip') || 'local';
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(address));
+    const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    return namespace.idFromName(`client-${hash}`);
+};
+
 const decideConsent = async (request, env) => {
+    const origin = request.headers.get('origin');
+    if ((origin && origin !== new URL(request.url).origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
+        return errorPage('Start connecting from the app and use its LifeQuest sign-in page.');
+    }
     const oauth = env.OAUTH_PROVIDER;
     const form = await request.formData();
     const handle = `${form.get('handle') ?? ''}`;
@@ -110,20 +109,30 @@ const decideConsent = async (request, env) => {
         return new Response(null, { status: 302, headers: denied.headers });
     }
 
-    const expected = ownerPassphrase(env);
-    if (!expected) return errorPage('LifeQuest sign-in is not configured yet.', 500);
-    if (await recentFailures(env) >= MAX_FAILURES) {
-        return errorPage('Too many incorrect passphrases. Wait 15 minutes, then start connecting again.', 429);
-    }
-    if (!await secretsMatch(`${form.get('passphrase') ?? ''}`, expected)) {
-        await recordFailure(env);
-        await new Promise((resolve) => setTimeout(resolve, FAILURE_DELAY_MS));
-        return errorPage('That passphrase is incorrect. Go back and try again.', 401);
-    }
-
+    const namespace = env.OWNER_SIGN_IN_LIMITER;
+    if (!getOwnerPassphrase(env) || !namespace) return errorPage('LifeQuest sign-in is not configured yet.', 500);
     const scope = [...new Set([LIFEQUEST_SCOPE, ...form.getAll('scope').map(String)])]
         .filter((entry) => SUPPORTED_SCOPES.includes(entry));
+    // Validate and consume the cookie-bound handle before checking a secret or
+    // spending the failure budget. This creates no grant until authorization below.
     const approved = await oauth.approveConsent(request, handle, { scope });
+    const limiter = namespace.get(await clientLimiterId(request, namespace));
+    const result = await limiter.verifyPassphrase(`${form.get('passphrase') ?? ''}`);
+    if (result.status === 'locked') {
+        approved.headers.set('retry-after', `${result.retryAfterSeconds}`);
+        return errorPage('Too many incorrect passphrases. Wait 15 minutes, then start connecting again.', 429,
+            approved.headers);
+    }
+    if (result.status === 'incorrect') {
+        // Delay the response outside the object so it can promptly lock the
+        // remaining requests in a burst instead of queueing a second per guess.
+        await new Promise((resolve) => setTimeout(resolve, FAILURE_DELAY_MS));
+        const details = await oauth.describeConsent(approved.request);
+        const retry = await oauth.beginConsent(approved.request);
+        retry.headers.forEach((value, key) => approved.headers.append(key, value));
+        return consentPage(details, retry.handle, approved.headers, 'That passphrase is incorrect. Try again.', 401);
+    }
+    if (result.status !== 'allowed') return errorPage('LifeQuest sign-in is not configured yet.', 500, approved.headers);
     const { redirectTo } = await oauth.completeAuthorization({
         request: approved.request,
         userId: 'owner',

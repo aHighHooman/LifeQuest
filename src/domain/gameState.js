@@ -1,4 +1,4 @@
-import { getProtocolCycleState, getProtocolCycleAnchorDateKey, getProtocolDueDateKey } from './protocols.js';
+import { applyPendingProtocolSchedule, getProtocolCycleState, getProtocolCycleAnchorDateKey, getProtocolDueDateKey } from './protocols.js';
 import { toLocalDateKey } from '../utils/dateUtils.js';
 import { normalizeCurrencyAmount } from '../constants/currency.js';
 
@@ -80,6 +80,7 @@ const normalizeHabitHistory = (history = {}) => {
 };
 
 export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) => {
+    habit = applyPendingProtocolSchedule(habit, todayKey);
     // Streak is derived from history; a stored counter is a legacy field.
     const { isToday: _legacyIsToday, streak: _legacyStreak, ...rest } = habit;
     const nextHabit = {
@@ -94,7 +95,7 @@ export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) =
 
     if (habit.passivePaidThrough === undefined && todayKey) {
         const anchor = getProtocolCycleAnchorDateKey(nextHabit);
-        const due = getProtocolDueDateKey(nextHabit);
+        const due = getProtocolDueDateKey(nextHabit, todayKey);
         nextHabit.passivePaidThrough = anchor ? (due ? (todayKey < due ? todayKey : due) : anchor) : null;
     } else if (nextHabit.passivePaidThrough === null && todayKey && getProtocolCycleState(nextHabit, todayKey).daysUntilDue > 0) {
         nextHabit.passivePaidThrough = todayKey;

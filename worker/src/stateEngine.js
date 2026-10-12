@@ -22,7 +22,8 @@ import {
     normalizeCalorieNumber,
     normalizeSignedCalorieNumber
 } from '../../src/domain/calories.js';
-import { DEFAULT_QUEST_GOLD, DEFAULT_PROTOCOL_REWARD } from '../../src/domain/rewards.js';
+import { DEFAULT_QUEST_GOLD, DEFAULT_PROTOCOL_REWARD, hasQuestRewardOverride } from '../../src/domain/rewards.js';
+import { applyPendingProtocolSchedule } from '../../src/domain/protocols.js';
 import { getDateKey } from './date.js';
 import { HttpError, assertHttp } from './errors.js';
 import {
@@ -89,7 +90,11 @@ const findProtocol = (snapshot, id) => {
     return protocol;
 };
 
-export const prepareSnapshot = (snapshot) => ensureShape(cloneSnapshot(snapshot));
+export const prepareSnapshot = (snapshot, todayKey) => {
+    const prepared = ensureShape(cloneSnapshot(snapshot));
+    prepared.habits = prepared.habits.map((protocol) => applyPendingProtocolSchedule(protocol, todayKey));
+    return prepared;
+};
 
 export const createQuest = (snapshot, input, now = new Date(), todayKey = getDateKey(now)) => {
     const requestId = cleanText(input.requestId);
@@ -155,6 +160,7 @@ const pickChanges = (input, fields) => Object.fromEntries(
 export const updateQuest = (snapshot, id, input) => {
     const quest = findQuest(snapshot, id);
     const changes = pickChanges(input, QUEST_DETAIL_FIELDS);
+    if (!hasQuestRewardOverride(changes.reward)) delete changes.reward;
     assertHttp(Object.keys(changes).length, 400, 'Provide at least one quest detail to change.', 'invalid_quest');
     if (changes.title !== undefined) assertHttp(cleanText(changes.title), 400, 'Quest title cannot be empty.', 'invalid_quest');
     if (changes.difficulty !== undefined) {
@@ -231,7 +237,7 @@ export const updateProtocol = (snapshot, id, input, todayKey, now = new Date()) 
         assertHttp(FREQUENCIES.has(changes.frequency), 400, 'Protocol frequency must be daily, weekly, monthly, or interval.', 'invalid_protocol');
     }
     assertHttp(
-        changes.frequencyParam === undefined || (changes.frequency ?? protocol.frequency) === 'interval',
+        changes.frequencyParam === undefined || (changes.frequency ?? protocol.pendingSchedule?.frequency ?? protocol.frequency) === 'interval',
         400,
         'frequencyParam only applies to interval protocols; set frequency to interval as well.',
         'invalid_protocol'

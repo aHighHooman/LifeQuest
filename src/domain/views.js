@@ -1,5 +1,5 @@
 import { normalizeCurrencyAmount } from '../constants/currency.js';
-import { getProtocolCycleState, getProtocolStreak } from './protocols.js';
+import { getProtocolCycleState, getProtocolSchedule, getProtocolStreak } from './protocols.js';
 import { resolveQuestReward } from './rewards.js';
 
 export const questView = (quest, settings = {}) => {
@@ -46,8 +46,8 @@ export const protocolView = (protocol, todayKey) => {
         selectedForToday: protocol.isActive !== false && cycle.daysUntilDue <= 0,
         completedToday: completionsToday > 0,
         completionsToday,
-        frequency: protocol.frequency || 'daily',
-        frequencyParam: Number(protocol.frequencyParam || 1),
+        ...getProtocolSchedule(protocol, todayKey),
+        ...(protocol.pendingSchedule?.effectiveDateKey > todayKey ? { pendingSchedule: { ...protocol.pendingSchedule } } : {}),
         streak: getProtocolStreak(protocol, todayKey),
         completionReward: normalizeCurrencyAmount(protocol.completionReward),
         passiveReward: normalizeCurrencyAmount(protocol.passiveReward),

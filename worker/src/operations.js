@@ -60,7 +60,7 @@ export const PROTOCOL_ACTION_NAMES = Object.keys(PROTOCOL_ACTIONS);
 const loadState = async (env) => {
     const clock = getRequestClock(env);
     const loaded = await loadSnapshot(env);
-    return { clock, loaded, snapshot: prepareSnapshot(loaded.snapshot) };
+    return { clock, loaded, snapshot: prepareSnapshot(loaded.snapshot, clock.todayKey) };
 };
 
 const timeZone = (env) => env.LIFEQUEST_TIME_ZONE || 'America/Vancouver';

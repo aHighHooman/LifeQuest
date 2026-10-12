@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -188,6 +188,20 @@ const legacySnapshot = {
 };
 
 describe('portableState', () => {
+    it('preserves tomorrow schedules through text export and import', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 0, 15, 12));
+        try {
+            const snapshot = structuredClone(populatedSnapshot);
+            snapshot.habits[0].pendingSchedule = { frequency: 'weekly', frequencyParam: 1, effectiveDateKey: '2026-01-16' };
+            const imported = parsePortableSnapshot(formatPortableSnapshot(snapshot));
+            expect(imported.habits[0].pendingSchedule).toEqual(snapshot.habits[0].pendingSchedule);
+            expect(prepareSnapshot(imported, '2026-01-16').habits[0]).toMatchObject({ frequency: 'weekly', frequencyParam: 1 });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('keeps receipts through text export, import, and an assistant snapshot reload', () => {
         const event = { id: 'coin-reward', date: '2026-01-15T12:00:00.000Z', todayKey: '2026-01-15' };
         const completed = completeQuest(structuredClone(populatedSnapshot), 'quest-1', event);

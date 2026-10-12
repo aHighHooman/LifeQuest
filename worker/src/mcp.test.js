@@ -272,18 +272,39 @@ describe('LifeQuest MCP tools', () => {
 
         const empty = await callTool('update_quest', { id: 'quest-1' });
         expect(empty.structuredContent.error.code).toBe('invalid_quest');
+        const emptyReward = await callTool('update_quest', { id: 'quest-1', reward: {} });
+        expect(emptyReward.structuredContent.error.code).toBe('invalid_quest');
+        const notes = await callTool('update_quest', { id: 'quest-1', missionBrief: 'Done', reward: {} });
+        expect(notes.structuredContent.quest.missionBrief).toBe('Done');
     });
 
-    it('edits protocol schedule and rewards', async () => {
-        const result = await callTool('update_protocol', {
-            id: 'habit-1', frequency: 'interval', frequencyParam: 2, completionReward: 1, passiveReward: 0.25
-        });
-        expect(result.structuredContent.protocol).toMatchObject({
-            frequency: 'interval', frequencyParam: 2, completionReward: 1, passiveReward: 0.25
-        });
+    it('preserves a due bonus today and activates a saved schedule tomorrow', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-10-03T12:00:00Z'));
+        try {
+            store.snapshot.habits[0].history = { '2026-10-02': 1 };
+            const result = await callTool('update_protocol', {
+                id: 'habit-1', frequency: 'interval', frequencyParam: 2, completionReward: 1, passiveReward: 0.25
+            });
+            expect(result.structuredContent.protocol).toMatchObject({
+                frequency: 'daily', frequencyParam: 1, completionReward: 1, passiveReward: 0.25,
+                selectedForToday: true, dueDate: '2026-10-03',
+                pendingSchedule: { frequency: 'interval', frequencyParam: 2, effectiveDateKey: '2026-10-04' }
+            });
 
-        const stray = await callTool('update_protocol', { id: 'habit-1', frequency: 'daily', frequencyParam: 4 });
-        expect(stray.structuredContent.error.code).toBe('invalid_protocol');
+            const stray = await callTool('update_protocol', { id: 'habit-1', frequency: 'daily', frequencyParam: 4 });
+            expect(stray.structuredContent.error.code).toBe('invalid_protocol');
+            const completed = await callTool('update_protocol_status', { id: 'habit-1', action: 'complete' });
+            expect(completed.structuredContent.dashboard.coinsOnHand).toBe(1);
+            vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
+            const protocols = await callTool('list_protocols', { status: 'all' });
+            expect(protocols.structuredContent.protocols[0]).toMatchObject({
+                frequency: 'interval', frequencyParam: 2, dueDate: '2026-10-05', selectedForToday: false
+            });
+            expect(protocols.structuredContent.protocols[0]).not.toHaveProperty('pendingSchedule');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('logs a saved food once per requestId and spends its coin cost', async () => {

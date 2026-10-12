@@ -55,6 +55,11 @@ protocol versions 2025-03-26 through 2025-11-25).
 The server sends its usage rules as MCP `instructions` during initialization,
 so clients do not need a separate instructions file.
 
+Schedule edits start on the next calendar day in `LIFEQUEST_TIME_ZONE`, preserving
+today's due status and completion bonus. Until then, protocol results include
+`pendingSchedule` with the new frequency and `effectiveDateKey`; the current
+frequency remains active. Further edits can replace or cancel that pending change.
+
 Connect Claude Code, loading the locally encrypted token into the session
 rather than typing it:
 
@@ -79,8 +84,17 @@ authorization server:
    token and a refresh token. A grant stays valid while it is used at least once
    every 30 days.
 
-Ten wrong passphrases within 15 minutes lock sign-in for the rest of that window.
+Ten wrong passphrases from one client address within 15 minutes lock that address
+for the rest of the window, measured from its first failure. Invalid consent
+handles, missing consent cookies, and cross-site submissions do not spend this
+budget. A wrong passphrase returns a fresh consent form for another attempt.
 OAuth state (clients, grants, hashed tokens) lives in the `OAUTH_KV` namespace.
+Sign-in checks use an `OwnerSignInLimiter` Durable Object per client address, so the
+failure count survives restarts and concurrent requests cannot bypass the limit.
+Object names use a hash of Cloudflare's client address header; each stores only
+a failure count and expiry time. The `OWNER_SIGN_IN_LIMITER`
+binding and SQLite class migration are included in `wrangler.jsonc`; deploy with
+that configuration to install the limiter. Sign-in fails closed if it is absent.
 
 To connect claude.ai: Settings → Connectors → Add custom connector, with the URL
 `https://<worker-url>/mcp`, then sign in on the page that opens.

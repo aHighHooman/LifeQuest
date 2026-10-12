@@ -7,6 +7,9 @@ export const DEFAULT_QUEST_XP = Object.freeze({ easy: 10, medium: 25, hard: 60, 
 const numberOr = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const nonNegativeNumber = (value) => Math.max(0, numberOr(value));
 
+// Empty optional reward objects mean no override, including nulls sent by an assistant.
+export const hasQuestRewardOverride = (reward) => reward?.xp != null || reward?.gold != null;
+
 export const createQuestReward = (settings, difficulty, customReward = null) => customReward
     ? { xp: nonNegativeNumber(customReward.xp), gold: normalizeNonNegativeCurrencyAmount(customReward.gold) }
     : {

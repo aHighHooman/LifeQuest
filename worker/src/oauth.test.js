@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryKv } from '../test-support/memoryKv.js';
-import worker from './index.js';
+import { createMemoryDurableObjectNamespace } from '../test-support/memoryDurableObject.js';
+import worker, { OwnerSignInLimiter } from './index.js';
 
 const store = vi.hoisted(() => ({ snapshot: null }));
 
@@ -19,7 +20,9 @@ const CTX = { waitUntil() {}, passThroughOnException() {} };
 
 let env;
 
-const call = (path, init = {}) => worker.fetch(new Request(`${ORIGIN}${path}`, init), env, CTX);
+const call = (path, init = {}) => worker.fetch(new Request(`${ORIGIN}${path}`, {
+    ...init, headers: { 'cf-connecting-ip': '192.0.2.10', ...init.headers }
+}), env, CTX);
 
 const base64Url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
@@ -45,6 +48,14 @@ const register = async (clientName = 'Test Assistant') => {
     return (await response.json()).client_id;
 };
 
+const readConsent = async (response, query) => {
+    const html = await response.text();
+    const cookie = response.headers.getSetCookie().map((entry) => entry.split(';')[0]).join('; ');
+    const handle = html.match(/name="handle" value="([^"]+)"/)?.[1];
+    const scopes = [...html.matchAll(/name="scope" value="([^"]+)"/g)].map((match) => match[1]);
+    return { response, html, cookie, handle, scopes, query };
+};
+
 // Opens the consent page and returns what a browser would keep from it.
 const openConsent = async (clientId, challenge) => {
     const query = new URLSearchParams({
@@ -57,20 +68,15 @@ const openConsent = async (clientId, challenge) => {
         code_challenge_method: 'S256',
         resource: `${ORIGIN}/mcp`
     });
-    const response = await call(`/authorize?${query}`);
-    const html = await response.text();
-    const cookie = response.headers.getSetCookie().map((entry) => entry.split(';')[0]).join('; ');
-    const handle = html.match(/name="handle" value="([^"]+)"/)?.[1];
-    const scopes = [...html.matchAll(/name="scope" value="([^"]+)"/g)].map((match) => match[1]);
-    return { response, html, cookie, handle, scopes, query };
+    return readConsent(await call(`/authorize?${query}`), query);
 };
 
-const submitConsent = (consent, fields) => {
+const submitConsent = (consent, fields, headers = {}) => {
     const form = new URLSearchParams({ handle: consent.handle, ...fields });
     consent.scopes.forEach((scope) => form.append('scope', scope));
     return call(`/authorize?${consent.query}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: consent.cookie },
+        headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: consent.cookie, ...headers },
         body: form
     });
 };
@@ -115,6 +121,7 @@ beforeEach(() => {
         LIFEQUEST_ACTION_TOKEN: 'static-action-token',
         LIFEQUEST_TIME_ZONE: 'UTC'
     };
+    env.OWNER_SIGN_IN_LIMITER = createMemoryDurableObjectNamespace(OwnerSignInLimiter, env);
     store.snapshot = {
         formatVersion: 4,
         currencyUnitVersion: 2,
@@ -213,24 +220,93 @@ describe('OAuth sign-in', () => {
         expect(wrong.status).toBe(401);
         expect(wrong.headers.get('location')).toBeNull();
 
-        const retry = await submitConsent(consent, { decision: 'approve', passphrase: PASSPHRASE });
+        const retryPage = await readConsent(wrong, consent.query);
+        expect(retryPage.handle).toBeTruthy();
+        expect(retryPage.handle).not.toBe(consent.handle);
+        expect((await submitConsent(consent, { decision: 'approve', passphrase: PASSPHRASE })).status).toBe(400);
+        const retry = await submitConsent(retryPage, { decision: 'approve', passphrase: PASSPHRASE });
         expect(retry.status).toBe(302);
         expect(new URL(retry.headers.get('location')).searchParams.get('code')).toBeTruthy();
     });
 
-    it('locks sign-in after repeated wrong passphrases', async () => {
+    it('locks repeated wrong passphrases from one address without locking the owner elsewhere', async () => {
         vi.spyOn(globalThis, 'setTimeout').mockImplementation((resolve) => {
             resolve();
             return 0;
         });
         const clientId = await register();
         const { challenge } = await pkce();
-        const consent = await openConsent(clientId, challenge);
+        let consent = await openConsent(clientId, challenge);
         for (let attempt = 0; attempt < 10; attempt += 1) {
-            expect((await submitConsent(consent, { decision: 'approve', passphrase: `guess-${attempt}` })).status).toBe(401);
+            const response = await submitConsent(consent, { decision: 'approve', passphrase: `guess-${attempt}` });
+            expect(response.status).toBe(401);
+            consent = await readConsent(response, consent.query);
         }
         const locked = await submitConsent(consent, { decision: 'approve', passphrase: PASSPHRASE });
         expect(locked.status).toBe(429);
+        const elsewhere = await openConsent(clientId, challenge);
+        expect((await submitConsent(elsewhere, { decision: 'approve', passphrase: PASSPHRASE }, {
+            'cf-connecting-ip': '192.0.2.20'
+        })).status).toBe(302);
+    });
+
+    it('checks at most ten incorrect passphrases in a concurrent burst', async () => {
+        vi.spyOn(globalThis, 'setTimeout').mockImplementation((resolve) => {
+            resolve();
+            return 0;
+        });
+        const clientId = await register();
+        const { challenge } = await pkce();
+        const consents = await Promise.all(Array.from({ length: 50 }, () => openConsent(clientId, challenge)));
+        const responses = await Promise.all(consents.map((consent, attempt) => (
+            submitConsent(consent, { decision: 'approve', passphrase: `guess-${attempt}` })
+        )));
+        expect(responses.filter((response) => response.status === 401)).toHaveLength(10);
+        expect(responses.filter((response) => response.status === 429)).toHaveLength(40);
+        expect(responses.every((response) => response.headers.get('location') === null)).toBe(true);
+        expect(responses.filter((response) => response.status === 429).every((response) => (
+            Number(response.headers.get('retry-after')) > 0
+        ))).toBe(true);
+        const nextConsent = await openConsent(clientId, challenge);
+        expect((await submitConsent(nextConsent, { decision: 'approve', passphrase: PASSPHRASE })).status).toBe(429);
+    });
+
+    it('rejects missing cookies and forged handles without spending the sign-in budget', async () => {
+        vi.spyOn(globalThis, 'setTimeout').mockImplementation((resolve) => { resolve(); return 0; });
+        const clientId = await register();
+        const { challenge } = await pkce();
+        const consent = await openConsent(clientId, challenge);
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+            const response = attempt % 2 === 0
+                ? await submitConsent(consent, { decision: 'approve', passphrase: 'guess' }, { cookie: '' })
+                : await submitConsent(consent, { decision: 'approve', passphrase: 'guess', handle: 'forged' });
+            expect(response.status).toBe(400);
+            expect(response.headers.get('location')).toBeNull();
+        }
+        expect((await submitConsent(consent, { decision: 'approve', passphrase: PASSPHRASE })).status).toBe(302);
+    });
+
+    it('rejects cross-site approval without consuming the legitimate consent or sign-in budget', async () => {
+        vi.spyOn(globalThis, 'setTimeout').mockImplementation((resolve) => { resolve(); return 0; });
+        const clientId = await register();
+        const { challenge } = await pkce();
+        const consent = await openConsent(clientId, challenge);
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+            const response = await submitConsent(consent, { decision: 'approve', passphrase: 'guess' },
+                attempt % 2 ? { 'sec-fetch-site': 'cross-site' } : { origin: 'https://attacker.example' });
+            expect(response.status).toBe(400);
+        }
+        expect((await submitConsent(consent, { decision: 'approve', passphrase: PASSPHRASE }, { origin: ORIGIN })).status).toBe(302);
+    });
+
+    it('fails closed if the atomic limiter binding is missing', async () => {
+        const clientId = await register();
+        const { challenge } = await pkce();
+        const consent = await openConsent(clientId, challenge);
+        delete env.OWNER_SIGN_IN_LIMITER;
+        const response = await submitConsent(consent, { decision: 'approve', passphrase: PASSPHRASE });
+        expect(response.status).toBe(500);
+        expect(response.headers.get('location')).toBeNull();
     });
 
     it('returns access_denied to the client when the owner denies', async () => {
@@ -269,7 +345,7 @@ describe('OAuth sign-in', () => {
         const { challenge } = await pkce();
         const consent = await openConsent(clientId, challenge);
         expect(consent.html).not.toContain('<script>alert(1)</script>');
-        expect(consent.html).toContain('&#60;script&#62;');
+        expect(consent.html).not.toMatch(/<script\b/i);
         expect(consent.response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
     });
 

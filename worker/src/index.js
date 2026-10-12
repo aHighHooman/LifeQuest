@@ -3,6 +3,8 @@ import { HttpError } from './errors.js';
 import { json } from './http.js';
 import { getOAuthProvider } from './oauth.js';
 
+export { OwnerSignInLimiter } from './ownerSignInLimiter.js';
+
 const PRIVACY_POLICY = `<!doctype html>
 <html lang="en">
 <head>

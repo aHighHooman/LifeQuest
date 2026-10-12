@@ -5,3 +5,5 @@ export class WorkerEntrypoint {
         this.env = env;
     }
 }
+
+export class DurableObject extends WorkerEntrypoint {}

@@ -4,10 +4,12 @@ import {
     creditsToUsd,
     usdToCredits
 } from '../constants/currency.js';
-import { applyXp, createQuestReward, resolveQuestReward } from './rewards.js';
+import { applyXp, createQuestReward, hasQuestRewardOverride, resolveQuestReward } from './rewards.js';
 import { markQuestDiscarded } from './gameState.js';
+import { addDays } from './calendar.js';
 import {
     getProtocolCycleState,
+    applyPendingProtocolSchedule,
     getPausedPassivePaidThrough,
     getProtocolPassivePayoutDateKeys
 } from './protocols.js';
@@ -65,8 +67,7 @@ const grantReward = (state, xp, gold, event, description) => {
 export const createQuest = (state, input, event) => {
     if (event.requestId && state.quests.some((quest) => quest.actionRequestId === event.requestId)) return state;
     const difficulty = input.difficulty || 'easy';
-    const customReward = input.reward && (input.reward.xp !== undefined || input.reward.gold !== undefined)
-        ? input.reward : null;
+    const customReward = hasQuestRewardOverride(input.reward) ? input.reward : null;
     const quest = {
         id: event.id, title: `${input.title ?? ''}`.trim(), difficulty,
         dueDate: input.dueDate || null, missionBrief: input.missionBrief || '',
@@ -108,7 +109,7 @@ const changedFields = (record, fields) => Object.fromEntries(
 // receipt, so it must be undone before it can be re-priced.
 export const updateQuestDetails = (state, id, changes) => {
     const quest = state.quests.find((entry) => entry.id === id);
-    const repricing = changes.difficulty !== undefined || changes.reward !== undefined;
+    const repricing = changes.difficulty !== undefined || hasQuestRewardOverride(changes.reward);
     if (!quest || (quest.completed && repricing)) return state;
     const difficulty = changes.difficulty ?? quest.difficulty ?? 'easy';
     const fields = {
@@ -117,7 +118,7 @@ export const updateQuestDetails = (state, id, changes) => {
         ...(changes.dueDate !== undefined ? { dueDate: changes.dueDate || null } : {}),
         ...(changes.difficulty !== undefined ? { difficulty } : {})
     };
-    if (changes.reward) {
+    if (hasQuestRewardOverride(changes.reward)) {
         const current = resolveQuestReward(state.settings, quest);
         fields.reward = createQuestReward(state.settings, difficulty, {
             xp: changes.reward.xp ?? current.xp, gold: changes.reward.gold ?? current.gold
@@ -204,7 +205,7 @@ export const completeProtocol = (state, id, event) => {
     return {
         ...next,
         habits: next.habits.map((entry) => entry.id === id ? {
-            ...entry,
+            ...applyPendingProtocolSchedule(entry, event.todayKey),
             history: { ...entry.history, [event.todayKey]: Math.max(0, numberOr(entry.history?.[event.todayKey])) + 1 },
             isActive: true,
             passivePaidThrough: event.todayKey,
@@ -237,7 +238,7 @@ export const setProtocolActive = (state, id, active, event) => {
     if (!protocol || (protocol.isActive !== false) === active) return state;
     const paid = active ? state : payOwedPassiveIncome(state, id, event);
     return { ...paid, habits: paid.habits.map((entry) => entry.id === id ? {
-        ...entry, isActive: active,
+        ...applyPendingProtocolSchedule(entry, event.todayKey), isActive: active,
         ...(!active ? { passivePaidThrough: getPausedPassivePaidThrough(entry, event.todayKey) } : {})
     } : entry) };
 };
@@ -247,7 +248,7 @@ export const skipProtocol = (state, id, event) => {
     const todayKey = event.todayKey;
     const paid = payOwedPassiveIncome(state, id, event);
     return { ...paid, habits: paid.habits.map((entry) => entry.id === id ? {
-        ...entry, isActive: true, passivePaidThrough: todayKey, lastCycleResetDateKey: todayKey,
+        ...applyPendingProtocolSchedule(entry, todayKey), isActive: true, passivePaidThrough: todayKey, lastCycleResetDateKey: todayKey,
         completionReward: normalizeNonNegativeCurrencyAmount(entry.completionReward, state.settings.protocolReward),
         passiveReward: normalizeNonNegativeCurrencyAmount(entry.passiveReward)
     } : entry) };
@@ -256,9 +257,9 @@ export const skipProtocol = (state, id, event) => {
 // A new passive rate or schedule applies from tomorrow: days already owed,
 // today included, are paid at the old terms first.
 export const updateProtocolDetails = (state, id, changes, event) => {
-    const protocol = state.habits.find((entry) => entry.id === id);
-    if (!protocol) return state;
-    const frequency = changes.frequency ?? protocol.frequency ?? 'daily';
+    const record = state.habits.find((entry) => entry.id === id);
+    if (!record) return state;
+    const protocol = applyPendingProtocolSchedule(record, event.todayKey);
     const fields = {
         ...(changes.title !== undefined ? { title: `${changes.title}`.trim() } : {}),
         ...(changes.completionReward !== undefined
@@ -266,19 +267,32 @@ export const updateProtocolDetails = (state, id, changes, event) => {
             : {}),
         ...(changes.passiveReward !== undefined
             ? { passiveReward: normalizeNonNegativeCurrencyAmount(changes.passiveReward) }
-            : {}),
-        ...(changes.frequency !== undefined || changes.frequencyParam !== undefined ? {
-            frequency,
-            frequencyParam: frequency === 'interval'
-                ? Math.max(1, Math.round(numberOr(changes.frequencyParam ?? protocol.frequencyParam, 1)))
-                : 1
-        } : {})
+            : {})
     };
+    if (changes.frequency !== undefined || changes.frequencyParam !== undefined) {
+        const planned = protocol.pendingSchedule || protocol;
+        const frequency = changes.frequency ?? planned.frequency ?? 'daily';
+        const frequencyParam = frequency === 'interval'
+            ? Math.max(1, Math.round(numberOr(changes.frequencyParam ?? planned.frequencyParam, 1)))
+            : 1;
+        fields.pendingSchedule = frequency === (protocol.frequency || 'daily')
+            && frequencyParam === Number(protocol.frequencyParam || 1)
+            ? null
+            : { frequency, frequencyParam, effectiveDateKey: addDays(event.todayKey, 1) };
+        if (!fields.pendingSchedule && !protocol.pendingSchedule) delete fields.pendingSchedule;
+    }
     const edits = changedFields(protocol, fields);
     if (!Object.keys(edits).length) return state;
-    const reschedules = ['passiveReward', 'frequency', 'frequencyParam'].some((key) => key in edits);
+    const reschedules = ['passiveReward', 'pendingSchedule'].some((key) => key in edits);
     const settled = reschedules ? payOwedPassiveIncome(state, id, event) : state;
-    return { ...settled, habits: settled.habits.map((entry) => entry.id === id ? { ...entry, ...edits } : entry) };
+    return { ...settled, habits: settled.habits.map((entry) => entry.id === id ? {
+        ...applyPendingProtocolSchedule(entry, event.todayKey), ...edits,
+        // Close past days even when the old terms owed nothing (a zero rate,
+        // expired cycle, or paused protocol). New terms must not back-pay them.
+        ...(reschedules ? {
+            passivePaidThrough: entry.passivePaidThrough > event.todayKey ? entry.passivePaidThrough : event.todayKey
+        } : {})
+    } : entry) };
 };
 
 export const purchaseGrocery = (state, id, event) => {

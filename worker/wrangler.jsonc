@@ -4,6 +4,14 @@
   "main": "src/index.js",
   "compatibility_date": "2026-07-29",
   "workers_dev": true,
+  "durable_objects": {
+    "bindings": [
+      { "name": "OWNER_SIGN_IN_LIMITER", "class_name": "OwnerSignInLimiter" }
+    ]
+  },
+  "migrations": [
+    { "tag": "owner-sign-in-limiter-v1", "new_sqlite_classes": ["OwnerSignInLimiter"] }
+  ],
   "kv_namespaces": [
     {
       "binding": "OAUTH_KV",
