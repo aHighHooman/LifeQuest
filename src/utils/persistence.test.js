@@ -94,9 +94,10 @@ describe('persistence currency migration', () => {
         expect(localStorage.getItem(VERSION_KEY)).toBe(APP_VERSION);
 
         const migratedStats = localStorage.getItem('lq_stats');
+        const backupPrefix = `lq_backup_pre_v${APP_VERSION.replaceAll('.', '_')}_`;
         const backupKeys = [...Array(localStorage.length).keys()]
             .map((index) => localStorage.key(index))
-            .filter((key) => key?.startsWith('lq_backup_pre_v1_5_0_'));
+            .filter((key) => key?.startsWith(backupPrefix));
 
         checkVersionAndEnsurePersistence();
 
@@ -104,6 +105,6 @@ describe('persistence currency migration', () => {
         expect(backupKeys).toHaveLength(1);
         expect([...Array(localStorage.length).keys()]
             .map((index) => localStorage.key(index))
-            .filter((key) => key?.startsWith('lq_backup_pre_v1_5_0_'))).toHaveLength(1);
+            .filter((key) => key?.startsWith(backupPrefix))).toHaveLength(1);
     });
 });

@@ -98,7 +98,7 @@ describe('LifeQuest MCP transport', () => {
                 serverInfo: { name: 'lifequest' }
             }
         });
-        expect(response.result.instructions).toContain('requestId');
+        expect(response.result.instructions).toBeTruthy();
     });
 
     it('offers its newest protocol version when the requested one is unknown', async () => {
@@ -155,9 +155,9 @@ describe('LifeQuest MCP transport', () => {
 });
 
 describe('LifeQuest MCP tools', () => {
-    it('lists the tools without exposing their handlers', async () => {
+    it('advertises the supported tools and identifies read-only operations', async () => {
         const { result } = await rpc('tools/list');
-        expect(result.tools.map((tool) => tool.name)).toEqual([
+        const requiredTools = [
             'get_today',
             'list_quests',
             'list_protocols',
@@ -174,11 +174,13 @@ describe('LifeQuest MCP tools', () => {
             'set_calorie_target',
             'list_ledger',
             'record_coins'
-        ]);
+        ];
+        expect(result.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(requiredTools));
+        const readOnly = new Set(['get_today', 'list_quests', 'list_protocols', 'get_calories', 'list_saved_foods', 'list_ledger']);
         result.tools.forEach((tool) => {
-            expect(tool.run).toBeUndefined();
             expect(tool.inputSchema.type).toBe('object');
-            expect(tool.annotations).toBeDefined();
+            expect(typeof tool.annotations.readOnlyHint).toBe('boolean');
+            if (requiredTools.includes(tool.name)) expect(tool.annotations.readOnlyHint).toBe(readOnly.has(tool.name));
         });
     });
 

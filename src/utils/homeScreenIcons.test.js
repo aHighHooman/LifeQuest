@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
 import {
     DEFAULT_HOME_SCREEN_ICON_ID,
     HOME_SCREEN_ICON_IDS,
@@ -48,7 +49,8 @@ describe('homeScreenIcons', () => {
 
             expect(icon.id).toBe(iconId);
             expect(icon.label).toBeTruthy();
-            expect(icon.src).toMatch(/^\/?\.?\/?icon-concepts\/corrected\/lifequest-.+\.png$/);
+            const assetPath = icon.src.slice(import.meta.env.BASE_URL.length);
+            expect(existsSync(new URL(`../../public/${assetPath}`, import.meta.url))).toBe(true);
             expect(icon.sizes).toBe('180x180');
         });
     });
@@ -68,12 +70,16 @@ describe('homeScreenIcons', () => {
         expect(firstLink.getAttribute('rel')).toBe('apple-touch-icon');
         expect(firstLink.getAttribute('href')).toBe(firstIcon.src);
         expect(firstLink.getAttribute('sizes')).toBe('180x180');
-        expect(doc.links).toHaveLength(2);
+        expect(doc.links.filter((link) => link.getAttribute('rel') === 'apple-touch-icon')).toHaveLength(1);
 
         const secondLink = applyHomeScreenIconMetadata(secondIcon.id, doc);
 
         expect(secondLink).toBe(firstLink);
         expect(secondLink.getAttribute('href')).toBe(secondIcon.src);
-        expect(doc.links).toHaveLength(2);
+        for (const rel of ['apple-touch-icon', 'icon']) {
+            const links = doc.links.filter((link) => link.getAttribute('rel') === rel);
+            expect(links).toHaveLength(1);
+            expect(links[0].getAttribute('href')).toBe(secondIcon.src);
+        }
     });
 });

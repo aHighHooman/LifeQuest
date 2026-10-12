@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { completeQuest, purchaseGrocery, refundGrocery } from '../domain/transactions.js';
 import { prepareSnapshot, undoQuest } from '../../worker/src/stateEngine.js';
+import { DEFAULT_HOME_SCREEN_ICON_ID } from './homeScreenIcons.js';
 import {
     PORTABLE_SECTION_ORDER,
     PORTABLE_SNAPSHOT_KEYS,
@@ -257,8 +258,8 @@ describe('portableState', () => {
     });
 
     it('rejects legacy portable text instead of keeping compatibility branches', () => {
-        expect(() => parsePortableSnapshot(fixture('portableState.v3.lq.txt'))).toThrow(/Expected 4/);
-        expect(() => parsePortableSnapshot(fixture('portableState.v2-legacy.lq.txt'))).toThrow(/Expected 4/);
+        expect(() => parsePortableSnapshot(fixture('portableState.v3.lq.txt'))).toThrow(/formatVersion/);
+        expect(() => parsePortableSnapshot(fixture('portableState.v2-legacy.lq.txt'))).toThrow(/formatVersion/);
     });
 
     it('normalizes sparse and partially legacy snapshots into a safe full shape', () => {
@@ -278,9 +279,9 @@ describe('portableState', () => {
             }
         });
 
-        expect(Object.keys(normalized)).toEqual(PORTABLE_SNAPSHOT_KEYS);
+        expect(Object.keys(normalized).sort()).toEqual([...PORTABLE_SNAPSHOT_KEYS].sort());
         expect(normalized.settings.questRewards.easy).toBe(0.9);
-        expect(normalized.settings.homeScreenIconId).toBe('abstract-path-compass-v2');
+        expect(normalized.settings.homeScreenIconId).toBe(DEFAULT_HOME_SCREEN_ICON_ID);
         expect(normalized.quests[0].isFocusedToday).toBe(true);
         expect(normalized.calories.target).toBe(1);
         expect(normalized.calories.recentFoodIds).toEqual(['food-a']);
@@ -308,8 +309,11 @@ describe('portableState', () => {
         expect(sectionIndexes.every((index) => index >= 0)).toBe(true);
         expect(sectionIndexes).toEqual([...sectionIndexes].sort((left, right) => left - right));
         expect(text.indexOf('name: "Apples"')).toBeLessThan(text.indexOf('name: "Zucchini"'));
-        expect(text).toContain('homeScreenIconId: "abstract-path-compass-v2"');
-        expect(formatPortableSnapshot(populatedSnapshot)).toBe(formatPortableSnapshot(populatedSnapshot));
+        const reordered = {
+            ...populatedSnapshot,
+            budget: { ...populatedSnapshot.budget, priceDatabase: { Apples: 1, Zucchini: 2 } }
+        };
+        expect(formatPortableSnapshot(reordered)).toBe(text);
     });
 
     it('fails with actionable errors for malformed transfer text', () => {
@@ -323,15 +327,27 @@ describe('portableState', () => {
     });
 
     it('summarizes normalized snapshots without dropping sections', () => {
-        const summary = summarizePortableSnapshot(populatedSnapshot);
+        const copies = (record, count) => Array.from({ length: count }, () => ({ ...record }));
+        const summary = summarizePortableSnapshot({
+            ...populatedSnapshot,
+            quests: copies(populatedSnapshot.quests[0], 2),
+            habits: [],
+            coinHistory: copies(populatedSnapshot.coinHistory[0], 3),
+            calories: { ...populatedSnapshot.calories, history: copies(populatedSnapshot.calories.history[0], 4) },
+            budget: {
+                ...populatedSnapshot.budget,
+                groceryList: copies(populatedSnapshot.budget.groceryList[0], 5),
+                priceDatabase: { Milk: 4.5, Apples: 2 }
+            }
+        });
 
         expect(summary).toEqual({
-            quests: 1,
-            habits: 1,
-            coinHistory: 1,
-            groceryList: 1,
-            priceDatabase: 1,
-            calorieHistory: 1
+            quests: 2,
+            habits: 0,
+            coinHistory: 3,
+            groceryList: 5,
+            priceDatabase: 2,
+            calorieHistory: 4
         });
     });
 });

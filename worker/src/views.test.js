@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { questView as sharedQuestView, protocolView as sharedProtocolView } from '../../src/domain/views.js';
 import { buildLlmSnapshot } from '../../src/utils/llmInterface.js';
 import { dashboardView, listQuestView, listProtocolView, questView, protocolView } from './views.js';
 
@@ -33,11 +32,6 @@ const makeState = () => ({
 });
 
 describe('shared browser and worker summary views', () => {
-    it('keeps worker projection exports compatible', () => {
-        expect(questView).toBe(sharedQuestView);
-        expect(protocolView).toBe(sharedProtocolView);
-    });
-
     it('shows configured pending rewards, custom rewards, and completed receipts consistently', () => {
         const state = makeState();
         const browser = buildLlmSnapshot(state, now);

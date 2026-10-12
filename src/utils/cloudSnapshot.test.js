@@ -20,6 +20,7 @@ describe('cloud snapshot encoding', () => {
         const restored = JSON.parse(new TextDecoder().decode(joinSnapshotChunks(chunks)));
 
         expect(chunks.length).toBeGreaterThan(1);
+        expect(chunks.every((chunk) => chunk.byteLength <= 31)).toBe(true);
         expect(restored).toEqual(snapshot);
     });
 
@@ -45,5 +46,11 @@ describe('cloud snapshot encoding', () => {
         });
 
         expect(first).toBe(second);
+        expect(await hashPortableSnapshotState({
+            formatVersion: 4,
+            currencyUnitVersion: 2,
+            generatedAt: '2026-07-28T00:00:00.000Z',
+            stats: { gold: 11 }
+        })).not.toBe(first);
     });
 });
