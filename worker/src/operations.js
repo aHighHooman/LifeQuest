@@ -68,7 +68,7 @@ const timeZone = (env) => env.LIFEQUEST_TIME_ZONE || 'America/Vancouver';
 // How each kind of change describes the record it touched.
 const RESULT_VIEWS = {
     quest: (result, snapshot) => ({ quest: questView(result.quest, snapshot.settings) }),
-    protocol: (result, snapshot, clock) => ({ protocol: protocolView(result.protocol, clock.todayKey) }),
+    protocol: (result, snapshot, clock) => ({ protocol: protocolView(result.protocol, clock.todayKey, clock.now) }),
     calories: (result, snapshot, clock) => ({
         ...(result.entry ? { entry: calorieEntryView(result.entry) } : {}),
         today: calorieDayView(snapshot, clock.todayKey, clock.todayKey)
@@ -88,14 +88,14 @@ const mutate = async (env, kind, apply) => {
         ok: true,
         changed: result.changed !== false,
         ...RESULT_VIEWS[kind](result, snapshot, clock, env),
-        dashboard: dashboardView(snapshot, clock.todayKey),
+        dashboard: dashboardView(snapshot, clock.todayKey, clock.now),
         revisionId: metadata.revisionId
     };
 };
 
 export const getToday = async (env) => {
     const { clock, snapshot } = await loadState(env);
-    return { dashboard: dashboardView(snapshot, clock.todayKey) };
+    return { dashboard: dashboardView(snapshot, clock.todayKey, clock.now) };
 };
 
 // `searchParams` only needs `get(name)`.
@@ -106,7 +106,7 @@ export const listQuests = async (env, searchParams) => {
 
 export const listProtocols = async (env, searchParams) => {
     const { clock, snapshot } = await loadState(env);
-    return listProtocolView(snapshot, clock.todayKey, searchParams);
+    return listProtocolView(snapshot, clock.todayKey, searchParams, clock.now);
 };
 
 export const createQuestRecord = (env, input) => mutate(env, 'quest', (snapshot, clock) => ({

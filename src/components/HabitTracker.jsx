@@ -1,7 +1,10 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useGame } from '../context/GameContext';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { CheckCircle, Trash2, Plus, Zap, X, RotateCcw, Power, Coins } from 'lucide-react';
+import { motion, AnimatePresence, useMotionValue, useTransform, useDragControls } from 'framer-motion';
+import { CheckCircle, Trash2, Plus, Zap, X, RotateCcw, Power, Coins, Settings } from 'lucide-react';
+import { ProtocolTimeWindowFields } from './ProtocolTimeWindowFields.jsx';
+import { getDeviceTimeZone, normalizeProtocolTimeWindow } from '../domain/protocolTimeWindow.js';
 import clsx from 'clsx';
 import { usePersistentState } from '../utils/persistence';
 import { PROTOCOL_LOOKAHEAD_STORAGE_KEY } from '../constants/persistenceKeys.js';
@@ -431,14 +434,91 @@ const ProtocolDeck = ({ habits, onComplete, onSkip, onCycleNext, onCyclePrev, on
     );
 };
 
-const ProtocolListModal = ({ title, items, onClose, type, onAction, actionLabel, onSecondaryAction, secondaryActionLabel }) => {
+const ProtocolListRow = ({ habit, type, onAction, actionLabel, onSecondaryAction, secondaryActionLabel, onUpdateTimeWindow }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [start, setStart] = useState('');
+    const [end, setEnd] = useState('');
+    const [timeZone, setTimeZone] = useState(getDeviceTimeZone);
+    const { completionReward, passiveReward } = getRewardSummary(habit);
+    const isDue = getDaysUntilDue(habit) <= 0;
+    const editorId = `protocol-window-${habit.id}`;
+    const toggleEditor = () => {
+        if (!isEditing) {
+            setStart(habit.todayWindow?.start || '');
+            setEnd(habit.todayWindow?.end || '');
+            setTimeZone(habit.todayWindow?.timeZone || getDeviceTimeZone());
+        }
+        setIsEditing(!isEditing);
+    };
+    const saveWindow = (e) => {
+        e.preventDefault();
+        if (start && start === end) return;
+        onUpdateTimeWindow(habit.id, normalizeProtocolTimeWindow({ start, end, timeZone }));
+        setIsEditing(false);
+    };
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
+        <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3" data-no-swipe="true">
+            <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-slate-200">{habit.title}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+                        <span className="uppercase">{habit.frequency}</span>
+                        {type === 'active' && <span className={clsx('font-mono', isDue ? 'text-purple-400' : 'text-slate-500')}>{getDueStatusLabel(habit)}</span>}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-mono">
+                        <span className="rounded-full border border-amber-400/15 bg-amber-500/10 px-2 py-1 text-amber-200">Bonus {formatCurrencyAmount(completionReward)}</span>
+                        <span className="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-2 py-1 text-emerald-200">Passive {formatCurrencyAmount(passiveReward)}/day</span>
+                    </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                    {type === 'inactive' && onUpdateTimeWindow && (
+                        <button type="button" onClick={toggleEditor} aria-label={`Time settings for ${habit.title}`} title="Time settings" aria-expanded={isEditing} aria-controls={editorId}
+                            className={clsx('rounded-lg border p-2 transition-colors', isEditing ? 'border-purple-500/40 bg-purple-500/10 text-purple-300' : 'border-slate-600/50 bg-slate-700/40 text-slate-400 hover:bg-slate-700 hover:text-slate-200')}>
+                            <Settings size={14} />
+                        </button>
+                    )}
+                    {onAction && (
+                        <button type="button" onClick={() => onAction(habit.id)} title={actionLabel} aria-label={`${actionLabel}: ${habit.title}`} disabled={isEditing}
+                            className={clsx('rounded-lg p-2 transition-colors disabled:opacity-40', type === 'inactive' ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-slate-700 hover:bg-slate-600 text-gray-300')}>
+                            <Power size={14} className={type === 'active' ? 'opacity-50' : ''} />
+                        </button>
+                    )}
+                    {onSecondaryAction && (
+                        <button type="button" onClick={() => onSecondaryAction(habit.id)} title={secondaryActionLabel} aria-label={`${secondaryActionLabel}: ${habit.title}`}
+                            className="rounded-lg border border-rose-900/30 bg-rose-900/20 p-2 text-rose-500 transition-colors hover:bg-rose-900/50">
+                            <Trash2 size={14} />
+                        </button>
+                    )}
+                </div>
+            </div>
+            {type === 'inactive' && (
+                <div id={editorId} inert={!isEditing} aria-hidden={!isEditing} className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none" style={{ gridTemplateRows: isEditing ? '1fr' : '0fr' }}>
+                    <div className="min-h-0 overflow-hidden">
+                        <form onSubmit={saveWindow} className="mt-3 space-y-3 border-t border-slate-700/70 pt-3">
+                            <ProtocolTimeWindowFields start={start} end={end} onStartChange={setStart} onEndChange={setEnd} />
+                            <div className="flex items-center justify-between gap-2">
+                                <button type="button" onClick={() => { setStart(''); setEnd(''); }} className="text-[11px] text-slate-500 hover:text-slate-300">All day</button>
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setIsEditing(false)} className="rounded-lg px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-700/50">Cancel</button>
+                                    <button type="submit" disabled={Boolean(start && start === end)} className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-200 hover:bg-purple-500/20 disabled:opacity-40">Save</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ProtocolListModal = ({ title, items, onClose, type, onAction, actionLabel, onSecondaryAction, secondaryActionLabel, onUpdateTimeWindow }) => {
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose} data-no-swipe="true">
             <MotionDiv
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-slate-900 border border-purple-500/30 rounded-2xl w-full max-w-sm max-h-[70vh] flex flex-col shadow-2xl overflow-hidden"
+                className="bg-slate-900 border border-purple-500/30 rounded-2xl w-full max-w-sm max-h-[80dvh] flex flex-col shadow-2xl overflow-hidden"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
@@ -451,68 +531,15 @@ const ProtocolListModal = ({ title, items, onClose, type, onAction, actionLabel,
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                     {items.length === 0 && <div className="text-center text-gray-500 italic py-4">No protocols found.</div>}
 
-                    {items.map(habit => {
-                        const daysUntil = getDaysUntilDue(habit);
-                        const isDue = daysUntil <= 0;
-                        const { completionReward, passiveReward } = getRewardSummary(habit);
-
-                        return (
-                            <div key={habit.id} className="bg-slate-800/50 p-3 rounded-lg flex items-center justify-between border border-slate-700">
-                                <div className="flex-1 min-w-0 pr-2">
-                                    <div className="font-bold text-slate-200 text-sm truncate">{habit.title}</div>
-                                    <div className="mt-1 text-[10px] text-gray-500 flex flex-wrap items-center gap-2">
-                                        <span className="uppercase">{habit.frequency}</span>
-                                        {type === 'active' && (
-                                            <span className={clsx("font-mono", isDue ? "text-purple-400" : "text-slate-500")}>
-                                                {getDueStatusLabel(habit)}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-mono">
-                                        <span className="rounded-full border border-amber-400/15 bg-amber-500/10 px-2 py-1 text-amber-200">
-                                            Bonus {formatCurrencyAmount(completionReward)}
-                                        </span>
-                                        <span className="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-2 py-1 text-emerald-200">
-                                            Passive {formatCurrencyAmount(passiveReward)}/day
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2">
-                                    {/* Primary Action (Activate / Deactivate) */}
-                                    {onAction && (
-                                        <button
-                                            onClick={() => onAction(habit.id)}
-                                            className={clsx(
-                                                "p-2 rounded-lg transition-colors",
-                                                type === 'inactive'
-                                                    ? "bg-purple-600 hover:bg-purple-500 text-white" // Activate
-                                                    : "bg-slate-700 hover:bg-slate-600 text-gray-300" // Deactivate
-                                            )}
-                                            title={actionLabel}
-                                        >
-                                            {/* Icon based on type */}
-                                            {type === 'inactive' ? <Power size={14} /> : <Power size={14} className="opacity-50" />}
-                                        </button>
-                                    )}
-
-                                    {/* Secondary Action (Delete) */}
-                                    {onSecondaryAction && (
-                                        <button
-                                            onClick={() => onSecondaryAction(habit.id)}
-                                            className="p-2 bg-rose-900/20 hover:bg-rose-900/50 text-rose-500 rounded-lg transition-colors border border-rose-900/30"
-                                            title={secondaryActionLabel}
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
+                    {items.map(habit => (
+                        <ProtocolListRow key={habit.id} habit={habit} type={type}
+                            onAction={onAction} actionLabel={actionLabel}
+                            onSecondaryAction={onSecondaryAction} secondaryActionLabel={secondaryActionLabel}
+                            onUpdateTimeWindow={onUpdateTimeWindow} />
+                    ))}
                 </div>
             </MotionDiv>
-        </div>
+        </div>, document.body
     );
 };
 
@@ -523,17 +550,21 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
     const [completionReward, setCompletionReward] = useState(defaultCompletionReward);
     const [passiveReward, setPassiveReward] = useState(0);
+    const [startTime, setStartTime] = useState('');
+    const [endTime, setEndTime] = useState('');
+    const dragControls = useDragControls();
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!title.trim()) return;
+        if (!title.trim() || (startTime && startTime === endTime)) return;
 
         let param = 1;
         if (frequency === 'interval') param = intervalParam;
 
         onAdd(title, frequency, param, {
             completionReward,
-            passiveReward
+            passiveReward,
+            todayWindow: normalizeProtocolTimeWindow({ start: startTime, end: endTime, timeZone: getDeviceTimeZone() })
         });
 
         // Reset
@@ -542,10 +573,12 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
         setIntervalParam(2);
         setCompletionReward(Number(defaultCompletionReward || 0));
         setPassiveReward(0);
+        setStartTime('');
+        setEndTime('');
         onClose();
     };
 
-    return (
+    return createPortal(
         <AnimatePresence>
             {isOpen && (
                 <>
@@ -561,8 +594,11 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                         animate={{ y: 0 }}
                         exit={{ y: "-100%" }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="fixed top-0 left-0 right-0 z-50 bg-slate-900 border-b-2 border-purple-500 shadow-2xl px-6 pb-6 pt-[calc(1.5rem+env(safe-area-inset-top))] rounded-b-3xl"
+                        className="fixed top-0 left-0 right-0 z-50 mx-auto max-w-4xl max-h-[90dvh] overflow-y-auto overscroll-contain bg-slate-900 border-b-2 border-purple-500 shadow-2xl px-6 pb-6 pt-[calc(1.5rem+env(safe-area-inset-top))] rounded-b-3xl"
+                        data-no-swipe="true"
                         drag="y"
+                        dragListener={false}
+                        dragControls={dragControls}
                         dragConstraints={{ top: 0, bottom: 0 }}
                         onDragEnd={(e, { offset, velocity }) => {
                             if (offset.y < -50 || velocity.y < -500) {
@@ -570,7 +606,7 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                             }
                         }}
                     >
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex justify-between items-center mb-6 touch-none cursor-grab" onPointerDown={(e) => { if (!e.target.closest('button')) dragControls.start(e); }}>
                             <h2 className="text-xl font-game font-bold text-white flex items-center gap-2">
                                 <Plus size={20} className="text-purple-400" />
                                 New Protocol
@@ -603,9 +639,9 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
 
                                 {isAdvancedOpen && (
                                     <MotionDiv
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        className="space-y-4 pt-2"
+                                        initial={{ height: 0 }}
+                                        animate={{ height: 'auto' }}
+                                        className="space-y-4 pt-2 overflow-hidden"
                                     >
                                         {/* Frequency Selection */}
                                         <div className="space-y-2">
@@ -678,6 +714,10 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
                                             </div>
                                         </div>
 
+                                        <div className="pt-4 border-t border-white/5">
+                                            <ProtocolTimeWindowFields start={startTime} end={endTime} onStartChange={setStartTime} onEndChange={setEndTime} />
+                                        </div>
+
                                         {/* Horizon Control - Moved here */}
                                         <div className="pt-4 border-t border-white/5 space-y-2">
                                             <div className="flex justify-between items-center">
@@ -702,24 +742,25 @@ const ProtocolCreationPanel = ({ isOpen, onClose, onAdd, lookaheadDays, setLooka
 
                             <button
                                 type="submit"
-                                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-purple-900/20 flex items-center justify-center gap-2 mt-2"
+                                disabled={Boolean(startTime && startTime === endTime)}
+                                className="disabled:opacity-40 w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-purple-900/20 flex items-center justify-center gap-2 mt-2"
                             >
                                 <Plus size={20} /> Initialize Protocol
                             </button>
 
                             <div className="flex justify-center mt-2">
-                                <span className="text-[10px] text-slate-500 uppercase tracking-widest">Swipe Up to Cancel</span>
+                                <span className="text-[10px] text-slate-500 uppercase tracking-widest">Swipe header up to cancel</span>
                             </div>
                         </form>
                     </MotionDiv>
                 </>
             )}
-        </AnimatePresence>
+        </AnimatePresence>, document.body
     );
 };
 
 const HabitTracker = () => {
-    const { habits, addHabit, completeHabit, skipHabitCycle, deleteHabit, toggleHabitActivation, updateHabitRewards, settings } = useGame();
+    const { habits, addHabit, completeHabit, skipHabitCycle, deleteHabit, toggleHabitActivation, updateHabitRewards, updateHabitTimeWindow, settings } = useGame();
 
     // Modal States
     const [showActiveList, setShowActiveList] = useState(false);
@@ -945,6 +986,7 @@ const HabitTracker = () => {
                         onClose={() => setShowInactiveList(false)}
                         onAction={handleActivate}
                         actionLabel="Activate"
+                        onUpdateTimeWindow={updateHabitTimeWindow}
                         onSecondaryAction={deleteHabit}
                         secondaryActionLabel="Delete Permanently"
                     />

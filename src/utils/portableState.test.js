@@ -189,13 +189,15 @@ const legacySnapshot = {
 };
 
 describe('portableState', () => {
-    it('preserves tomorrow schedules through text export and import', () => {
+    it('preserves optional Today windows and tomorrow schedules through text export and import', () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(2026, 0, 15, 12));
         try {
             const snapshot = structuredClone(populatedSnapshot);
+            snapshot.habits[0].todayWindow = { start: '18:00', end: '20:00', timeZone: 'America/Los_Angeles' };
             snapshot.habits[0].pendingSchedule = { frequency: 'weekly', frequencyParam: 1, effectiveDateKey: '2026-01-16' };
             const imported = parsePortableSnapshot(formatPortableSnapshot(snapshot));
+            expect(imported.habits[0].todayWindow).toEqual(snapshot.habits[0].todayWindow);
             expect(imported.habits[0].pendingSchedule).toEqual(snapshot.habits[0].pendingSchedule);
             expect(prepareSnapshot(imported, '2026-01-16').habits[0]).toMatchObject({ frequency: 'weekly', frequencyParam: 1 });
         } finally {

@@ -83,6 +83,22 @@ beforeEach(() => {
 });
 
 describe('LifeQuest MCP transport', () => {
+    it('rechecks the window on each get_today call without changing the saved protocol', async () => {
+        store.snapshot.habits[0].todayWindow = { start: '12:00', end: '13:00', timeZone: 'UTC' };
+        vi.useFakeTimers();
+        try {
+            for (const [time, count] of [['11:59', 0], ['12:00', 1], ['13:00', 0]]) {
+                vi.setSystemTime(new Date(`2026-10-03T${time}:00Z`));
+                const result = await callTool('get_today', {});
+                expect(result.structuredContent.dashboard.protocols).toHaveLength(count);
+            }
+            expect(store.saves).toBe(0);
+            expect(store.snapshot.habits[0].isActive).toBe(true);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('negotiates a supported protocol version and advertises tools with instructions', async () => {
         const response = await rpc('initialize', {
             protocolVersion: '2025-06-18',

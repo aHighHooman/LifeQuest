@@ -7,6 +7,7 @@ import {
 import { applyXp, createQuestReward, hasQuestRewardOverride, resolveQuestReward } from './rewards.js';
 import { markQuestDiscarded } from './gameState.js';
 import { addDays } from './calendar.js';
+import { normalizeProtocolTimeWindow } from './protocolTimeWindow.js';
 import {
     getProtocolCycleState,
     applyPendingProtocolSchedule,
@@ -224,6 +225,7 @@ export const createProtocol = (state, input, event) => {
         id: event.id, title: `${input.title ?? ''}`.trim(), frequency,
         frequencyParam: frequency === 'interval' ? Math.max(1, Math.round(numberOr(input.frequencyParam, 1))) : 1,
         history: {}, isActive: Boolean(input.active),
+        ...(input.todayWindow ? { todayWindow: normalizeProtocolTimeWindow(input.todayWindow) } : {}),
         completionReward: normalizeNonNegativeCurrencyAmount(input.completionReward, state.settings.protocolReward),
         passiveReward: normalizeNonNegativeCurrencyAmount(input.passiveReward),
         passivePaidThrough: null, lastCycleResetDateKey: null,
@@ -261,6 +263,7 @@ export const updateProtocolDetails = (state, id, changes, event) => {
     if (!record) return state;
     const protocol = applyPendingProtocolSchedule(record, event.todayKey);
     const fields = {
+        ...(changes.todayWindow !== undefined ? { todayWindow: normalizeProtocolTimeWindow(changes.todayWindow) } : {}),
         ...(changes.title !== undefined ? { title: `${changes.title}`.trim() } : {}),
         ...(changes.completionReward !== undefined
             ? { completionReward: normalizeNonNegativeCurrencyAmount(changes.completionReward) }

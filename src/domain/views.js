@@ -1,6 +1,7 @@
 import { normalizeCurrencyAmount } from '../constants/currency.js';
 import { getProtocolCycleState, getProtocolSchedule, getProtocolStreak } from './protocols.js';
 import { resolveQuestReward } from './rewards.js';
+import { isProtocolInTimeWindow, normalizeProtocolTimeWindow } from './protocolTimeWindow.js';
 
 export const questView = (quest, settings = {}) => {
     const reward = resolveQuestReward(settings, quest);
@@ -36,14 +37,15 @@ export const healthView = (calories = {}, todayKey) => {
     };
 };
 
-export const protocolView = (protocol, todayKey) => {
+export const protocolView = (protocol, todayKey, now = new Date()) => {
     const cycle = getProtocolCycleState(protocol, todayKey);
     const completionsToday = Number(protocol.history?.[todayKey] || 0);
     return {
         id: protocol.id,
         title: protocol.title,
         status: protocol.isActive === false ? 'inactive' : 'active',
-        selectedForToday: protocol.isActive !== false && cycle.daysUntilDue <= 0,
+        selectedForToday: protocol.isActive !== false && cycle.daysUntilDue <= 0 && isProtocolInTimeWindow(protocol, now),
+        ...(protocol.todayWindow ? { todayWindow: normalizeProtocolTimeWindow(protocol.todayWindow) } : {}),
         completedToday: completionsToday > 0,
         completionsToday,
         ...getProtocolSchedule(protocol, todayKey),

@@ -1,6 +1,7 @@
 import { applyPendingProtocolSchedule, getProtocolCycleState, getProtocolCycleAnchorDateKey, getProtocolDueDateKey } from './protocols.js';
 import { toLocalDateKey } from '../utils/dateUtils.js';
 import { normalizeCurrencyAmount } from '../constants/currency.js';
+import { isProtocolInTimeWindow, normalizeProtocolTimeWindow } from './protocolTimeWindow.js';
 
 export const QUICK_SLOT_IDS = ['preset100', 'preset250', 'preset400', 'preset550'];
 
@@ -86,6 +87,7 @@ export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) =
     const nextHabit = {
         ...rest,
         history: normalizeHabitHistory(habit.history),
+        ...(habit.todayWindow !== undefined ? { todayWindow: normalizeProtocolTimeWindow(habit.todayWindow) } : {}),
         isActive: habit.isActive ?? true,
         completionReward: normalizeCurrencyAmount(habit.completionReward ?? protocolReward),
         passiveReward: normalizeCurrencyAmount(habit.passiveReward ?? 0),
@@ -106,5 +108,6 @@ export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) =
 
 export const isHabitDueForFocus = (habit, referenceDate = new Date()) => {
     if (habit?.isActive === false) return false;
-    return getProtocolCycleState(habit, toLocalDateKey(referenceDate)).daysUntilDue <= 0;
+    return getProtocolCycleState(habit, toLocalDateKey(referenceDate)).daysUntilDue <= 0
+        && isProtocolInTimeWindow(habit, referenceDate);
 };

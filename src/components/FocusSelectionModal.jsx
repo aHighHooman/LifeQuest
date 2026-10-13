@@ -4,11 +4,13 @@ import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X, CheckCircle, Circle, Shield, Swords, Crosshair } from 'lucide-react';
 import { useGame } from '../context/GameContext';
 import { isHabitDueForFocus, isQuestAvailableForFocus } from '../domain/gameState';
+import { useLocalMinute } from '../hooks/useLocalMinute.js';
 
 const FocusSelectionModal = ({ isOpen, onClose }) => {
     const { quests, habits, toggleToday } = useGame();
     const [activeTab, setActiveTab] = useState('quests'); // 'quests' | 'protocols'
     const dragControls = useDragControls();
+    const now = useLocalMinute();
 
     if (!isOpen) return null;
 
@@ -117,7 +119,7 @@ const FocusSelectionModal = ({ isOpen, onClose }) => {
                                     </div>
                                 ) : (
                                     availableHabits.map(habit => {
-                                        const isDue = isHabitDueForFocus(habit);
+                                        const isDue = isHabitDueForFocus(habit, now);
                                         return (
                                         <div
                                             key={habit.id}

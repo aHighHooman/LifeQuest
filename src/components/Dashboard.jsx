@@ -7,7 +7,8 @@ const StatsView = React.lazy(() => import('./StatsView'));
 import FocusSelectionModal from './FocusSelectionModal';
 import DayTimer from './DayTimer';
 import clsx from 'clsx';
-import { getTodayISO } from '../utils/dateUtils';
+import { toLocalDateKey } from '../utils/dateUtils';
+import { useLocalMinute } from '../hooks/useLocalMinute.js';
 import { isQuestPendingForFocus } from '../domain/gameState';
 import { healthView, protocolView } from '../domain/views.js';
 import {
@@ -387,7 +388,8 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
 
     // Read the day on every render: this screen stays mounted across midnight,
     // and rollover re-renders it through settlement and the calorie timer.
-    const today = getTodayISO();
+    const now = useLocalMinute();
+    const today = toLocalDateKey(now);
     const { capacityPercent } = healthView(calories, today);
 
     // Memoized pending queue for the hex matrix. Protocols follow the same
@@ -395,7 +397,7 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
     const matrixNodes = useMemo(() => {
         const allPendingTodayQuests = quests.filter(isQuestPendingForFocus);
         const allPendingTodayHabits = habits.filter((h) => {
-            const view = protocolView(h, today);
+            const view = protocolView(h, today, now);
             return view.selectedForToday && !view.completedToday;
         });
 
@@ -405,7 +407,7 @@ const Dashboard = ({ onTabChange, onOpenSettings, showTabletopBackdrop = true })
         ].sort((a, b) => a.title.localeCompare(b.title));
 
         return pendingQueue.slice(0, 7);
-    }, [quests, habits, today]);
+    }, [quests, habits, today, now]);
 
     const handleNodeClick = (node) => {
         if (node.type === 'quest') {

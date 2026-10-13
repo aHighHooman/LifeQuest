@@ -4,9 +4,9 @@ import { normalizeCurrencyAmount } from '../../src/constants/currency.js';
 
 export { questView, protocolView } from '../../src/domain/views.js';
 
-export const dashboardView = (snapshot, todayKey) => {
+export const dashboardView = (snapshot, todayKey, now = new Date()) => {
     const quests = snapshot.quests.map((quest) => questView(quest, snapshot.settings));
-    const protocols = snapshot.habits.map((protocol) => protocolView(protocol, todayKey));
+    const protocols = snapshot.habits.map((protocol) => protocolView(protocol, todayKey, now));
     return {
         today: todayKey,
         health: healthView(snapshot.calories, todayKey),
@@ -36,11 +36,11 @@ export const listQuestView = (snapshot, todayKey, searchParams) => {
     return { today: todayKey, status, count: items.length, quests: items };
 };
 
-export const listProtocolView = (snapshot, todayKey, searchParams) => {
+export const listProtocolView = (snapshot, todayKey, searchParams, now = new Date()) => {
     const status = searchParams.get('status') || 'active';
     const query = `${searchParams.get('query') || ''}`.trim().toLowerCase();
     const items = snapshot.habits
-        .map((protocol) => protocolView(protocol, todayKey))
+        .map((protocol) => protocolView(protocol, todayKey, now))
         .filter((protocol) => status === 'all' || protocol.status === status)
         .filter((protocol) => !query || protocol.title.toLowerCase().includes(query))
         .slice(0, boundedLimit(searchParams.get('limit')));

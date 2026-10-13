@@ -15,6 +15,7 @@ import {
     createProtocol as createProtocolTransaction,
     setProtocolActive,
     skipProtocol as skipProtocolTransaction,
+    updateProtocolDetails,
     purchaseGrocery, refundGrocery, purchaseCalories, refundCalories
 } from '../domain/transactions.js';
 import { addDays } from '../domain/calendar.js';
@@ -676,6 +677,14 @@ export const GameProvider = ({ children }) => {
         updateState((previous) => skipProtocolTransaction(previous, id, event));
     }, [updateState]);
 
+    const updateHabitTimeWindow = useCallback((id, todayWindow) => {
+        const event = createTransactionEvent();
+        updateState((previous) => {
+            if (!previous.habits.some((habit) => habit.id === id && habit.isActive === false)) return previous;
+            return updateProtocolDetails(previous, id, { todayWindow }, event);
+        });
+    }, [updateState]);
+
     const updateHabitRewards = useCallback((id, rewardConfig = {}) => {
         const hasCompletionReward = Object.prototype.hasOwnProperty.call(rewardConfig, 'completionReward');
         const hasPassiveReward = Object.prototype.hasOwnProperty.call(rewardConfig, 'passiveReward');
@@ -767,14 +776,14 @@ export const GameProvider = ({ children }) => {
         stats, quests, habits, settings, coinHistory,
         addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, undoCompleteQuest,
         addHabit, completeHabit, skipHabitCycle,
-        deleteHabit, toggleHabitActivation, updateHabitRewards,
+        deleteHabit, toggleHabitActivation, updateHabitRewards, updateHabitTimeWindow,
         updateStats, updateSettings, spendCoins, purchaseGroceryItem, refundGroceryItem,
         toggleToday, exportAppState, importAppState
     }), [
         stats, quests, habits, settings, coinHistory,
         addQuest, completeQuest, deleteQuest, restoreQuest, updateQuest, undoCompleteQuest,
         addHabit, completeHabit, skipHabitCycle,
-        deleteHabit, toggleHabitActivation, updateHabitRewards,
+        deleteHabit, toggleHabitActivation, updateHabitRewards, updateHabitTimeWindow,
         updateStats, updateSettings, spendCoins, purchaseGroceryItem, refundGroceryItem,
         toggleToday, exportAppState, importAppState
     ]);
