@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+    assertSnapshotTotals,
     completeQuest,
+    createProtocol,
+    createQuest,
+    logCalories,
     prepareSnapshot,
-    undoQuest
+    recordCoins,
+    setCalorieTarget,
+    undoQuest,
+    updateProtocol,
+    updateQuest
 } from './stateEngine.js';
 
 const makeSnapshot = () => prepareSnapshot({
@@ -47,5 +55,42 @@ describe('LifeQuest Action state engine', () => {
         reloaded.budget.goldToUsdRatio = 2;
         undoQuest(reloaded, 'quest-1');
         expect(prepareSnapshot(reloaded).budget.earnedRewards).toBeCloseTo(1.234567, 12);
+    });
+
+    // MCP schemas already cap these; the engine must hold even without them.
+    it('rejects coin and reward amounts too large to store', () => {
+        const snapshot = makeSnapshot();
+        const before = JSON.stringify(snapshot);
+        [
+            () => recordCoins(snapshot, { type: 'earn', amount: 1e308, description: 'Typo' }),
+            () => logCalories(snapshot, { calories: 500, label: 'Typo meal', coinCost: 1e308 }),
+            () => createQuest(snapshot, { title: 'Typo quest', reward: { gold: 1e304 } }),
+            () => updateQuest(snapshot, 'quest-1', { reward: { xp: 1e304 } }),
+            () => createProtocol(snapshot, { title: 'Typo protocol', completionReward: 1e304 })
+        ].forEach((attempt) => expect(attempt).toThrow(/cannot exceed/));
+        createProtocol(snapshot, { title: 'Walk' });
+        expect(() => updateProtocol(snapshot, snapshot.habits[0].id, { passiveReward: Infinity }, '2026-07-29')).toThrow(/cannot exceed/);
+        expect(JSON.stringify({ ...snapshot, habits: [] })).toBe(JSON.stringify({ ...JSON.parse(before), habits: [] }));
+    });
+
+    it('rejects intervals and calorie values too large to store', () => {
+        const snapshot = makeSnapshot();
+        expect(() => createProtocol(snapshot, { title: 'Rare', frequency: 'interval', frequencyParam: 1e308 })).toThrow(/interval cannot exceed/);
+        createProtocol(snapshot, { title: 'Rare', frequency: 'interval', frequencyParam: 3 });
+        expect(() => updateProtocol(snapshot, snapshot.habits[0].id, { frequencyParam: 1e308 }, '2026-07-29')).toThrow(/interval cannot exceed/);
+        expect(() => logCalories(snapshot, { calories: 1e308, label: 'Typo' })).toThrow(/Calories cannot exceed/);
+        expect(() => logCalories(snapshot, { calories: -Infinity, label: 'Typo' })).toThrow(/Calories cannot exceed/);
+        expect(() => setCalorieTarget(snapshot, 1e308)).toThrow(/between 1 and/);
+        expect(snapshot.calories.history).toHaveLength(0);
+    });
+
+    it('refuses to save totals that overflowed through default rewards', () => {
+        const snapshot = makeSnapshot();
+        snapshot.settings.questRewards.easy = 1e304;
+        [createQuest(snapshot, { title: 'One' }), createQuest(snapshot, { title: 'Two' })]
+            .forEach((quest) => completeQuest(snapshot, quest.id));
+        expect(snapshot.stats.gold).toBe(Infinity);
+        expect(() => assertSnapshotTotals(snapshot)).toThrow(/overflow/);
+        expect(() => assertSnapshotTotals(makeSnapshot())).not.toThrow();
     });
 });

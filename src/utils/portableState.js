@@ -106,6 +106,7 @@ const ALLOWED_SCALAR_KEYS = {
         'passiveCheckpointDate',
         'passiveCheckpoints',
         'passiveCheckpointLedger',
+        'removedEntryIds',
         'quickSlots',
         'preset100FoodId',
         'preset250FoodId',
@@ -642,7 +643,8 @@ export const formatPortableSnapshot = (snapshot) => {
             current: normalized.calories.current,
             target: normalized.calories.target,
             passiveCheckpointDate: normalized.calories.passiveCheckpointDate,
-            passiveCheckpoints: normalized.calories.passiveCheckpoints
+            passiveCheckpoints: normalized.calories.passiveCheckpoints,
+            ...(normalized.calories.removedEntryIds?.length ? { removedEntryIds: normalized.calories.removedEntryIds } : {})
         })
     ];
 
@@ -702,6 +704,9 @@ const sectionsToSnapshot = (header, sections) => {
             target: sections.calories.target,
             passiveCheckpointDate: sections.calories.passiveCheckpointDate ?? null,
             passiveCheckpoints: sections.calories.passiveCheckpoints || [],
+            ...(Array.isArray(sections.calories.removedEntryIds)
+                ? { removedEntryIds: sections.calories.removedEntryIds.filter((id) => typeof id === 'string') }
+                : {}),
             passiveCheckpointLedger: caloriePassiveLedger || sections.calories.passiveCheckpointLedger || {},
             quickSlots: calorieQuickSlots || sections.calories.quickSlots || null,
             preset100FoodId: sections.calories.preset100FoodId ?? null,

@@ -130,8 +130,8 @@ const TOOLS = [
                 reward: {
                     type: 'object',
                     properties: {
-                        xp: { type: 'number', minimum: 0 },
-                        gold: { type: 'number', minimum: 0 }
+                        xp: { type: 'number', minimum: 0, maximum: 1000000 },
+                        gold: { type: 'number', minimum: 0, maximum: 1000000 }
                     },
                     additionalProperties: false
                 }
@@ -173,8 +173,8 @@ const TOOLS = [
                 reward: {
                     type: 'object',
                     properties: {
-                        xp: { type: 'number', minimum: 0 },
-                        gold: { type: 'number', minimum: 0 }
+                        xp: { type: 'number', minimum: 0, maximum: 1000000 },
+                        gold: { type: 'number', minimum: 0, maximum: 1000000 }
                     },
                     additionalProperties: false
                 }
@@ -195,9 +195,9 @@ const TOOLS = [
                 requestId: { type: 'string', description: 'A unique value reused if this exact creation is retried.' },
                 title: { type: 'string', minLength: 1 },
                 frequency: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'interval'], default: 'daily' },
-                frequencyParam: { type: 'integer', minimum: 1, default: 1, description: 'Days between cycles when frequency is interval.' },
-                completionReward: { type: 'number', minimum: 0 },
-                passiveReward: { type: 'number', minimum: 0 },
+                frequencyParam: { type: 'integer', minimum: 1, maximum: 3650, default: 1, description: 'Days between cycles when frequency is interval.' },
+                completionReward: { type: 'number', minimum: 0, maximum: 1000000 },
+                passiveReward: { type: 'number', minimum: 0, maximum: 1000000 },
                 active: { type: 'boolean', default: false }
             },
             additionalProperties: false
@@ -233,9 +233,9 @@ const TOOLS = [
                 id: { type: 'string', minLength: 1, description: 'Exact protocol ID returned by another tool.' },
                 title: { type: 'string', minLength: 1 },
                 frequency: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'interval'] },
-                frequencyParam: { type: 'integer', minimum: 1, description: 'Days between cycles; only for interval protocols.' },
-                completionReward: { type: 'number', minimum: 0, description: 'Coins paid when completed on its due day.' },
-                passiveReward: { type: 'number', minimum: 0, description: 'Coins paid per day while the current cycle is kept.' }
+                frequencyParam: { type: 'integer', minimum: 1, maximum: 3650, description: 'Days between cycles; only for interval protocols.' },
+                completionReward: { type: 'number', minimum: 0, maximum: 1000000, description: 'Coins paid when completed on its due day.' },
+                passiveReward: { type: 'number', minimum: 0, maximum: 1000000, description: 'Coins paid per day while the current cycle is kept.' }
             },
             additionalProperties: false
         },
@@ -280,9 +280,9 @@ const TOOLS = [
             properties: {
                 requestId: { type: 'string', description: 'A unique value reused if this exact entry is retried.' },
                 foodId: { type: 'string', description: 'Exact saved food ID from list_saved_foods.' },
-                calories: { type: 'integer', description: 'Required unless foodId is given. Negative for exercise.' },
+                calories: { type: 'integer', minimum: -100000, maximum: 100000, description: 'Required unless foodId is given. Negative for exercise.' },
                 label: { type: 'string', description: 'What was eaten or done.' },
-                coinCost: { type: 'number', minimum: 0, description: 'Coins to spend on this food.' },
+                coinCost: { type: 'number', minimum: 0, maximum: 1000000, description: 'Coins to spend on this food.' },
                 saveAsFood: { type: 'boolean', default: false, description: 'Also save it as a reusable food.' }
             },
             additionalProperties: false
@@ -313,7 +313,7 @@ const TOOLS = [
             type: 'object',
             required: ['target'],
             properties: {
-                target: { type: 'integer', minimum: 1 }
+                target: { type: 'integer', minimum: 1, maximum: 100000 }
             },
             additionalProperties: false
         },
@@ -347,7 +347,7 @@ const TOOLS = [
             properties: {
                 requestId: { type: 'string', description: 'A unique value reused if this exact transaction is retried.' },
                 type: { type: 'string', enum: ['spend', 'earn'] },
-                amount: { type: 'number', minimum: 0.0001 },
+                amount: { type: 'number', minimum: 0.0001, maximum: 1000000 },
                 description: { type: 'string', minLength: 1 }
             },
             additionalProperties: false

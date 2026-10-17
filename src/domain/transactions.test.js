@@ -6,6 +6,9 @@ import { getProtocolCycleState } from './protocols.js';
 import { normalizeHabitRecord } from './gameState.js';
 import { protocolView } from './views.js';
 import {
+    createPortableSnapshot, formatPortableSnapshot, normalizePortableSnapshot, parsePortableSnapshot
+} from '../utils/portableState.js';
+import {
     changeCoins, completeQuest, undoQuest, completeProtocol, setCoinBalance,
     purchaseGrocery, refundGrocery, purchaseCalories, refundCalories,
     updateQuestDetails, updateProtocolDetails
@@ -176,6 +179,11 @@ describe('LifeQuest transactions', () => {
         expect(refunded.calories).toMatchObject({ current: 0, history: [] });
         expect(refunded.coinHistory).toHaveLength(2);
         expect(refundCalories(refunded, 'cal-1', editable, event)).toBe(refunded);
+        expect(purchaseCalories(refunded, entry, event, food)).toBe(refunded);
+        const reloaded = normalizePortableSnapshot(JSON.parse(JSON.stringify(createPortableSnapshot(refunded))));
+        expect(reloaded.calories.removedEntryIds).toEqual(['cal-1']);
+        const imported = parsePortableSnapshot(formatPortableSnapshot(createPortableSnapshot(refunded)));
+        expect(imported.calories.removedEntryIds).toEqual(['cal-1']);
     });
 
     it('keeps free entries and exercise free, and refuses refunds outside the editing window', () => {

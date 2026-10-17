@@ -36,6 +36,29 @@ const DIFFICULTIES = new Set(Object.keys(DEFAULT_QUEST_GOLD));
 const FREQUENCIES = new Set(['daily', 'weekly', 'monthly', 'interval']);
 const cleanText = (value) => `${value ?? ''}`.trim();
 const makeId = (prefix) => `${prefix}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+// Coins are worth a dollar each; larger values are mistakes and would overflow
+// currency rounding, corrupting the wallet and ledger.
+export const MAX_COIN_AMOUNT = 1_000_000;
+// Larger intervals overflow date arithmetic; larger calorie values are typos.
+export const MAX_INTERVAL_DAYS = 3650;
+export const MAX_CALORIES = 100_000;
+
+// Only oversized values are rejected; the shared domain still normalizes
+// negative or non-numeric input the same way the app does.
+const assertAmount = (value, label, code) => {
+    assertHttp(!(Math.abs(Number(value)) > MAX_COIN_AMOUNT), 400, `${label} cannot exceed ${MAX_COIN_AMOUNT}.`, code);
+};
+
+const assertQuestReward = (reward) => {
+    assertAmount(reward?.xp, 'The XP reward', 'invalid_quest');
+    assertAmount(reward?.gold, 'The coin reward', 'invalid_quest');
+};
+
+const assertProtocolInput = (input) => {
+    assertAmount(input.completionReward, 'The completion reward', 'invalid_protocol');
+    assertAmount(input.passiveReward, 'The passive reward', 'invalid_protocol');
+    assertHttp(!(Number(input.frequencyParam) > MAX_INTERVAL_DAYS), 400, `The interval cannot exceed ${MAX_INTERVAL_DAYS} days.`, 'invalid_protocol');
+};
 
 const cloneSnapshot = (snapshot) => normalizeLifeQuestSnapshot(snapshot);
 
@@ -106,6 +129,7 @@ export const createQuest = (snapshot, input, now = new Date(), todayKey = getDat
     assertHttp(title, 400, 'Quest title is required.', 'invalid_quest');
     const difficulty = cleanText(input.difficulty || 'easy').toLowerCase();
     assertHttp(DIFFICULTIES.has(difficulty), 400, 'Quest difficulty must be easy, medium, hard, or legendary.', 'invalid_quest');
+    assertQuestReward(input.reward);
     Object.assign(snapshot, createQuestTransaction(snapshot, {
         ...input, title, difficulty, dueDate: cleanText(input.dueDate) || null,
         missionBrief: cleanText(input.missionBrief)
@@ -161,6 +185,7 @@ export const updateQuest = (snapshot, id, input) => {
     const quest = findQuest(snapshot, id);
     const changes = pickChanges(input, QUEST_DETAIL_FIELDS);
     if (!hasQuestRewardOverride(changes.reward)) delete changes.reward;
+    assertQuestReward(changes.reward);
     assertHttp(Object.keys(changes).length, 400, 'Provide at least one quest detail to change.', 'invalid_quest');
     if (changes.title !== undefined) assertHttp(cleanText(changes.title), 400, 'Quest title cannot be empty.', 'invalid_quest');
     if (changes.difficulty !== undefined) {
@@ -191,6 +216,7 @@ export const createProtocol = (snapshot, input, now = new Date(), todayKey = get
     assertHttp(title, 400, 'Protocol title is required.', 'invalid_protocol');
     const frequency = cleanText(input.frequency || 'daily').toLowerCase();
     assertHttp(FREQUENCIES.has(frequency), 400, 'Protocol frequency must be daily, weekly, monthly, or interval.', 'invalid_protocol');
+    assertProtocolInput(input);
     Object.assign(snapshot, createProtocolTransaction(snapshot, { ...input, title, frequency }, {
         ...transactionEvent(now, todayKey, 'habit'), requestId
     }));
@@ -231,6 +257,7 @@ export const updateProtocol = (snapshot, id, input, todayKey, now = new Date()) 
     const protocol = findProtocol(snapshot, id);
     const changes = pickChanges(input, PROTOCOL_DETAIL_FIELDS);
     assertHttp(Object.keys(changes).length, 400, 'Provide at least one protocol detail to change.', 'invalid_protocol');
+    assertProtocolInput(changes);
     if (changes.title !== undefined) assertHttp(cleanText(changes.title), 400, 'Protocol title cannot be empty.', 'invalid_protocol');
     if (changes.frequency !== undefined) {
         changes.frequency = cleanText(changes.frequency).toLowerCase();
@@ -259,14 +286,17 @@ export const logCalories = (snapshot, input, now = new Date(), todayKey = getDat
     const id = requestRecordId('cal', requestId);
     const existing = snapshot.calories.history.find((entry) => entry.id === id);
     if (existing) return { entry: existing, changed: false };
+    if (snapshot.calories.removedEntryIds?.includes(id)) return { entry: null, changed: false };
 
     const foodId = cleanText(input.foodId);
     const food = foodId ? snapshot.calories.savedFoods.find((entry) => entry.id === foodId) : null;
     if (foodId && !food) throw new HttpError(404, `Saved food "${foodId}" was not found.`, 'food_not_found');
     const calories = normalizeSignedCalorieNumber(input.calories ?? food?.calories);
     assertHttp(calories !== 0, 400, 'Calories must be a non-zero whole number; use a negative number for exercise.', 'invalid_calories');
+    assertHttp(Math.abs(calories) <= MAX_CALORIES, 400, `Calories cannot exceed ${MAX_CALORIES} in one entry.`, 'invalid_calories');
     const label = cleanText(input.label) || food?.name || '';
     const coinCost = calories > 0 ? (input.coinCost ?? food?.coinCost ?? 0) : 0;
+    assertAmount(coinCost, 'The coin cost', 'invalid_transaction');
     const timestamp = now.toISOString();
     const savedFood = !food && input.saveAsFood && calories > 0
         ? createSavedFood({ id: makeId('food'), name: label, calories, coinCost, createdAt: timestamp })
@@ -296,7 +326,7 @@ export const removeCalorieEntry = (snapshot, id, now = new Date(), todayKey = ge
 
 export const setCalorieTarget = (snapshot, target) => {
     const safeTarget = normalizeCalorieNumber(target);
-    assertHttp(safeTarget >= 1, 400, 'The calorie target must be at least 1.', 'invalid_calories');
+    assertHttp(safeTarget >= 1 && safeTarget <= MAX_CALORIES, 400, `The calorie target must be between 1 and ${MAX_CALORIES}.`, 'invalid_calories');
     const changed = Number(snapshot.calories.target) !== safeTarget;
     snapshot.calories = { ...snapshot.calories, target: safeTarget };
     return { changed };
@@ -311,11 +341,24 @@ export const recordCoins = (snapshot, input, now = new Date(), todayKey = getDat
     assertHttp(description, 400, 'A description is required.', 'invalid_transaction');
     const amount = Number(input.amount);
     assertHttp(Number.isFinite(amount) && amount > 0, 400, 'The amount must be greater than zero.', 'invalid_transaction');
+    assertHttp(amount <= MAX_COIN_AMOUNT, 400, `The amount cannot exceed ${MAX_COIN_AMOUNT}.`, 'invalid_transaction');
     const signed = input.type === 'earn' ? amount : -amount;
     Object.assign(snapshot, changeCoins(snapshot, signed, { id, date: now.toISOString(), todayKey }, description));
     const transaction = snapshot.coinHistory.find((entry) => entry.id === id);
     assertHttp(transaction, 400, 'The amount is too small to record.', 'invalid_transaction');
     return { transaction, changed: true };
+};
+
+// A last check before saving: no change may leave a balance or total that
+// JSON would store as null, whatever path produced it.
+export const assertSnapshotTotals = (snapshot) => {
+    const totals = [snapshot.stats.gold, snapshot.stats.xp, snapshot.budget.earnedRewards, snapshot.calories.current];
+    assertHttp(
+        totals.every((value) => value === undefined || Number.isFinite(Number(value))),
+        400,
+        'This change would overflow a balance or total, so it was not saved.',
+        'invalid_amount'
+    );
 };
 
 export const touchSnapshot = (snapshot, now = new Date()) => {

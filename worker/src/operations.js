@@ -21,6 +21,7 @@ import {
     setQuestToday,
     skipProtocol,
     touchSnapshot,
+    assertSnapshotTotals,
     undoQuest,
     updateProtocol,
     updateQuest
@@ -82,6 +83,7 @@ const RESULT_VIEWS = {
 const mutate = async (env, kind, apply) => {
     const { clock, loaded, snapshot } = await loadState(env);
     const result = apply(snapshot, clock);
+    assertSnapshotTotals(snapshot);
     touchSnapshot(snapshot, clock.now);
     const metadata = await saveSnapshot(env, loaded, snapshot);
     return {

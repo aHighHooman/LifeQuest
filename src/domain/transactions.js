@@ -340,6 +340,7 @@ const calorieTotal = (history, todayKey) => history.reduce(
 
 export const purchaseCalories = (state, entry, event, savedFood = null) => {
     if (state.calories.history.some((current) => current.id === entry.id)) return state;
+    if (state.calories.removedEntryIds?.includes(entry.id)) return state;
     const coinCost = entry.calories > 0 ? normalizeNonNegativeCurrencyAmount(entry.coinCost) : 0;
     const next = changeCoins(state, -coinCost, event, `${entry.foodId ? 'Food' : 'Manual'} inject: ${entry.label}`);
     const history = [...state.calories.history, { ...entry, coinCost }];
@@ -358,6 +359,11 @@ export const purchaseCalories = (state, entry, event, savedFood = null) => {
     };
 };
 
+// Removed entry IDs are remembered so a retried request that created one is
+// recognized instead of logging and charging again. Only recent entries can be
+// removed, so a bounded list covers any realistic retry.
+const REMOVED_CALORIE_ENTRY_LIMIT = 200;
+
 export const refundCalories = (state, id, editableDateKeys, event) => {
     const entry = state.calories.history.find((current) => current.id === id);
     if (!entry || !editableDateKeys.has(entry.dateKey)) return state;
@@ -365,8 +371,12 @@ export const refundCalories = (state, id, editableDateKeys, event) => {
     const coinCost = normalizeNonNegativeCurrencyAmount(entry.coinCost ?? savedFood?.coinCost);
     const next = changeCoins(state, coinCost, event, `Refunded food removal: ${entry.label || 'Calorie entry'}`);
     const history = state.calories.history.filter((current) => current.id !== id);
+    const removedEntryIds = [
+        ...(Array.isArray(state.calories.removedEntryIds) ? state.calories.removedEntryIds : []).filter((current) => current !== id),
+        id
+    ].slice(-REMOVED_CALORIE_ENTRY_LIMIT);
     return {
         ...next,
-        calories: { ...state.calories, history, current: calorieTotal(history, event.todayKey) }
+        calories: { ...state.calories, history, removedEntryIds, current: calorieTotal(history, event.todayKey) }
     };
 };

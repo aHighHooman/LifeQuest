@@ -341,6 +341,20 @@ describe('LifeQuest MCP tools', () => {
         expect(store.snapshot.calories.recentFoodIds).toEqual(['food-1']);
     });
 
+    it('does not log or charge again when a removed entry is retried', async () => {
+        store.snapshot.stats.gold = 5;
+        const args = { requestId: 'meal-2', foodId: 'food-1' };
+        const logged = await callTool('log_calories', args);
+        await callTool('remove_calorie_entry', { id: logged.structuredContent.entry.id });
+        expect(store.snapshot.stats.gold).toBe(5);
+
+        const retried = await callTool('log_calories', args);
+        expect(retried.structuredContent).toMatchObject({ ok: true, changed: false });
+        expect(retried.structuredContent.entry).toBeUndefined();
+        expect(store.snapshot.stats.gold).toBe(5);
+        expect(store.snapshot.calories.history).toHaveLength(0);
+    });
+
     it('logs exercise without cost, saves new foods, and removes entries with a refund', async () => {
         const burn = await callTool('log_calories', { calories: -300, coinCost: 4 });
         expect(burn.structuredContent.entry).toMatchObject({ label: 'Exercise Burn', calories: -300, coinCost: 0 });
@@ -397,6 +411,44 @@ describe('LifeQuest MCP tools', () => {
 
         const blank = await callTool('record_coins', { type: 'spend', amount: 1, description: '   ' });
         expect(blank.isError).toBe(true);
+    });
+
+    it('rejects coin amounts too large to store', async () => {
+        store.snapshot.stats.gold = 5;
+        const ledgerSize = store.snapshot.coinHistory.length;
+        const huge = await callTool('record_coins', { type: 'earn', amount: 1e308, description: 'Typo' });
+        expect(huge.isError).toBe(true);
+        const meal = await callTool('log_calories', { calories: 500, label: 'Typo meal', coinCost: 1e308 });
+        expect(meal.isError).toBe(true);
+        expect(store.snapshot.stats.gold).toBe(5);
+        expect(store.snapshot.coinHistory).toHaveLength(ledgerSize);
+        expect(store.snapshot.calories.history).toHaveLength(0);
+    });
+
+    it('does not save a change that would overflow the wallet', async () => {
+        store.snapshot.settings.questRewards.easy = 1e304;
+        const quests = [];
+        for (const title of ['One', 'Two']) {
+            quests.push((await callTool('create_quest', { title, difficulty: 'easy' })).structuredContent.quest.id);
+        }
+        expect((await callTool('update_quest_status', { id: quests[0], action: 'complete' })).isError).toBeFalsy();
+        const overflow = await callTool('update_quest_status', { id: quests[1], action: 'complete' });
+        expect(overflow.structuredContent.error.code).toBe('invalid_amount');
+        expect(Number.isFinite(store.snapshot.stats.gold)).toBe(true);
+    });
+
+    it('rejects quest and protocol rewards too large to pay out', async () => {
+        const rejected = await Promise.all([
+            callTool('create_quest', { title: 'Typo quest', reward: { gold: 1e304 } }),
+            callTool('update_quest', { id: 'quest-1', reward: { xp: 1e304 } }),
+            callTool('create_protocol', { title: 'Typo protocol', completionReward: 1e304 }),
+            callTool('update_protocol', { id: 'habit-1', passiveReward: 1e304 })
+        ]);
+        expect(rejected.map((result) => result.structuredContent.error.code))
+            .toEqual(Array(4).fill('invalid_arguments'));
+        expect(store.snapshot.quests.map((quest) => quest.title)).toEqual(['Ship it']);
+        expect(store.snapshot.quests[0].reward).toEqual({ xp: 25, gold: 1.5 });
+        expect(store.snapshot.habits.map((habit) => habit.passiveReward)).toEqual([0]);
     });
 
     it('returns domain failures as tool errors', async () => {
