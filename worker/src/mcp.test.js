@@ -349,8 +349,11 @@ describe('LifeQuest MCP tools', () => {
         expect(store.snapshot.stats.gold).toBe(5);
 
         const retried = await callTool('log_calories', args);
-        expect(retried.structuredContent).toMatchObject({ ok: true, changed: false });
+        expect(retried.structuredContent).toMatchObject({ ok: true, changed: false, alreadyRemoved: true });
         expect(retried.structuredContent.entry).toBeUndefined();
+
+        const removedAgain = await callTool('remove_calorie_entry', { id: logged.structuredContent.entry.id });
+        expect(removedAgain.structuredContent).toMatchObject({ ok: true, changed: false, alreadyRemoved: true });
         expect(store.snapshot.stats.gold).toBe(5);
         expect(store.snapshot.calories.history).toHaveLength(0);
     });

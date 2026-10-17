@@ -72,6 +72,8 @@ const RESULT_VIEWS = {
     protocol: (result, snapshot, clock) => ({ protocol: protocolView(result.protocol, clock.todayKey, clock.now) }),
     calories: (result, snapshot, clock) => ({
         ...(result.entry ? { entry: calorieEntryView(result.entry) } : {}),
+        // A retried log or removal whose entry is already gone.
+        ...(result.alreadyRemoved ? { alreadyRemoved: true } : {}),
         today: calorieDayView(snapshot, clock.todayKey, clock.todayKey)
     }),
     transaction: (result, snapshot, clock, env) => ({

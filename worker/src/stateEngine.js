@@ -286,7 +286,7 @@ export const logCalories = (snapshot, input, now = new Date(), todayKey = getDat
     const id = requestRecordId('cal', requestId);
     const existing = snapshot.calories.history.find((entry) => entry.id === id);
     if (existing) return { entry: existing, changed: false };
-    if (snapshot.calories.removedEntryIds?.includes(id)) return { entry: null, changed: false };
+    if (snapshot.calories.removedEntryIds?.includes(id)) return { entry: null, changed: false, alreadyRemoved: true };
 
     const foodId = cleanText(input.foodId);
     const food = foodId ? snapshot.calories.savedFoods.find((entry) => entry.id === foodId) : null;
@@ -317,6 +317,8 @@ export const logCalories = (snapshot, input, now = new Date(), todayKey = getDat
 
 export const removeCalorieEntry = (snapshot, id, now = new Date(), todayKey = getDateKey(now)) => {
     const entry = snapshot.calories.history.find((current) => current.id === id);
+    // A retried removal finds the receipt and reports success without refunding twice.
+    if (!entry && snapshot.calories.removedEntryIds?.includes(id)) return { entry: null, changed: false, alreadyRemoved: true };
     if (!entry) throw new HttpError(404, `Calorie entry "${id}" was not found.`, 'calorie_entry_not_found');
     const editable = getEditableCalorieDateKeys(todayKey);
     assertHttp(editable.has(entry.dateKey), 409, 'Only entries from today or yesterday can be removed.', 'calorie_entry_locked');
@@ -354,8 +356,9 @@ export const recordCoins = (snapshot, input, now = new Date(), todayKey = getDat
 export const assertSnapshotTotals = (snapshot) => {
     const totals = [snapshot.stats.gold, snapshot.stats.xp, snapshot.budget.earnedRewards, snapshot.calories.current];
     assertHttp(
-        // Overflow always yields a number; legacy non-numeric values are left
-        // to normalization rather than blocking every later change.
+        // Rounding turns a finite sum that overflows into Infinity, which is
+        // caught here. Legacy non-numeric values are left to normalization
+        // rather than blocking every later change.
         totals.every((value) => typeof value !== 'number' || Number.isFinite(value)),
         400,
         'This change would overflow a balance or total, so it was not saved.',
