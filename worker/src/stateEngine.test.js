@@ -92,5 +92,9 @@ describe('LifeQuest Action state engine', () => {
         expect(snapshot.stats.gold).toBe(Infinity);
         expect(() => assertSnapshotTotals(snapshot)).toThrow(/overflow/);
         expect(() => assertSnapshotTotals(makeSnapshot())).not.toThrow();
+        const legacy = makeSnapshot();
+        legacy.stats.gold = 'not a number';
+        legacy.budget.earnedRewards = null;
+        expect(() => assertSnapshotTotals(legacy)).not.toThrow();
     });
 });

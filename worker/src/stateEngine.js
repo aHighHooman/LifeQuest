@@ -354,7 +354,9 @@ export const recordCoins = (snapshot, input, now = new Date(), todayKey = getDat
 export const assertSnapshotTotals = (snapshot) => {
     const totals = [snapshot.stats.gold, snapshot.stats.xp, snapshot.budget.earnedRewards, snapshot.calories.current];
     assertHttp(
-        totals.every((value) => value === undefined || Number.isFinite(Number(value))),
+        // Overflow always yields a number; legacy non-numeric values are left
+        // to normalization rather than blocking every later change.
+        totals.every((value) => typeof value !== 'number' || Number.isFinite(value)),
         400,
         'This change would overflow a balance or total, so it was not saved.',
         'invalid_amount'
