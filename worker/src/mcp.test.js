@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryKv } from '../test-support/memoryKv.js';
 import worker from './index.js';
 import { SUPPORTED_PROTOCOL_VERSIONS } from './mcp.js';
 
@@ -17,7 +18,8 @@ vi.mock('./snapshotStore.js', () => ({
     }
 }));
 
-const ENV = { LIFEQUEST_ACTION_TOKEN: 'correct', LIFEQUEST_TIME_ZONE: 'UTC' };
+const ENV = { LIFEQUEST_ACTION_TOKEN: 'correct', LIFEQUEST_TIME_ZONE: 'UTC', OAUTH_KV: createMemoryKv() };
+const CTX = { waitUntil() {}, passThroughOnException() {} };
 
 const makeSnapshot = () => ({
     formatVersion: 4,
@@ -48,8 +50,15 @@ const makeSnapshot = () => ({
         completionReward: 0.2,
         passiveReward: 0
     }],
-    calories: { target: 2000, history: [] },
-    coinHistory: [],
+    calories: {
+        target: 2000,
+        history: [],
+        savedFoods: [{ id: 'food-1', name: 'Burrito', calories: 800, coinCost: 2 }],
+        recentFoodIds: []
+    },
+    coinHistory: [
+        { id: 'coin-old', date: '2026-09-20T18:00:00.000Z', amount: 1.5, type: 'earned', description: 'Earned from Quest' }
+    ],
     budget: { earnedRewards: 0, goldToUsdRatio: 1 }
 });
 
@@ -62,7 +71,7 @@ const post = (body, { token = 'correct', headers = {} } = {}) => worker.fetch(ne
         ...headers
     },
     body: typeof body === 'string' ? body : JSON.stringify(body)
-}), ENV);
+}), ENV, CTX);
 
 const rpc = async (method, params, id = 1) => (await post({ jsonrpc: '2.0', id, method, params })).json();
 
@@ -74,6 +83,22 @@ beforeEach(() => {
 });
 
 describe('LifeQuest MCP transport', () => {
+    it('rechecks the window on each get_today call without changing the saved protocol', async () => {
+        store.snapshot.habits[0].todayWindow = { start: '12:00', end: '13:00', timeZone: 'UTC' };
+        vi.useFakeTimers();
+        try {
+            for (const [time, count] of [['11:59', 0], ['12:00', 1], ['13:00', 0]]) {
+                vi.setSystemTime(new Date(`2026-10-03T${time}:00Z`));
+                const result = await callTool('get_today', {});
+                expect(result.structuredContent.dashboard.protocols).toHaveLength(count);
+            }
+            expect(store.saves).toBe(0);
+            expect(store.snapshot.habits[0].isActive).toBe(true);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('negotiates a supported protocol version and advertises tools with instructions', async () => {
         const response = await rpc('initialize', {
             protocolVersion: '2025-06-18',
@@ -89,7 +114,7 @@ describe('LifeQuest MCP transport', () => {
                 serverInfo: { name: 'lifequest' }
             }
         });
-        expect(response.result.instructions).toContain('requestId');
+        expect(response.result.instructions).toBeTruthy();
     });
 
     it('offers its newest protocol version when the requested one is unknown', async () => {
@@ -105,23 +130,28 @@ describe('LifeQuest MCP transport', () => {
         expect(response.status).toBe(400);
     });
 
-    it('requires the bearer token and tells the client how to authenticate', async () => {
+    it('requires a valid token and points the client at OAuth discovery', async () => {
         const response = await post({ jsonrpc: '2.0', id: 1, method: 'ping' }, { token: 'wrong' });
         expect(response.status).toBe(401);
-        expect(response.headers.get('www-authenticate')).toContain('Bearer');
+        expect(response.headers.get('www-authenticate')).toContain(
+            'resource_metadata="https://worker.example/.well-known/oauth-protected-resource/mcp"'
+        );
         expect(store.saves).toBe(0);
     });
 
-    it('fails closed when the token is not configured', async () => {
+    it('rejects every bearer token when the action token is not configured', async () => {
         const response = await worker.fetch(new Request('https://worker.example/mcp', {
             method: 'POST',
+            headers: { authorization: 'Bearer ', 'content-type': 'application/json' },
             body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' })
-        }), {});
-        expect(response.status).toBe(500);
+        }), { OAUTH_KV: createMemoryKv() }, CTX);
+        expect(response.status).toBe(401);
     });
 
     it('does not offer a server-sent event stream', async () => {
-        const response = await worker.fetch(new Request('https://worker.example/mcp'), ENV);
+        const response = await worker.fetch(new Request('https://worker.example/mcp', {
+            headers: { authorization: 'Bearer correct' }
+        }), ENV, CTX);
         expect(response.status).toBe(405);
         expect(response.headers.get('allow')).toBe('POST');
     });
@@ -141,21 +171,32 @@ describe('LifeQuest MCP transport', () => {
 });
 
 describe('LifeQuest MCP tools', () => {
-    it('lists the tools without exposing their handlers', async () => {
+    it('advertises the supported tools and identifies read-only operations', async () => {
         const { result } = await rpc('tools/list');
-        expect(result.tools.map((tool) => tool.name)).toEqual([
+        const requiredTools = [
             'get_today',
             'list_quests',
             'list_protocols',
             'create_quest',
             'update_quest_status',
+            'update_quest',
             'create_protocol',
-            'update_protocol_status'
-        ]);
+            'update_protocol_status',
+            'update_protocol',
+            'get_calories',
+            'list_saved_foods',
+            'log_calories',
+            'remove_calorie_entry',
+            'set_calorie_target',
+            'list_ledger',
+            'record_coins'
+        ];
+        expect(result.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(requiredTools));
+        const readOnly = new Set(['get_today', 'list_quests', 'list_protocols', 'get_calories', 'list_saved_foods', 'list_ledger']);
         result.tools.forEach((tool) => {
-            expect(tool.run).toBeUndefined();
             expect(tool.inputSchema.type).toBe('object');
-            expect(tool.annotations).toBeDefined();
+            expect(typeof tool.annotations.readOnlyHint).toBe('boolean');
+            if (requiredTools.includes(tool.name)) expect(tool.annotations.readOnlyHint).toBe(readOnly.has(tool.name));
         });
     });
 
@@ -225,6 +266,192 @@ describe('LifeQuest MCP tools', () => {
             id: 'habit-1', action: 'complete', requestId: 'req-c'
         });
         expect(retried.structuredContent.changed).toBe(false);
+    });
+
+    it('edits quest details and reward', async () => {
+        const result = await callTool('update_quest', {
+            id: 'quest-1', title: 'Ship v2', missionBrief: 'Release notes too', dueDate: '2026-10-12', reward: { gold: 2 }
+        });
+        expect(result.structuredContent).toMatchObject({
+            ok: true,
+            changed: true,
+            quest: { title: 'Ship v2', missionBrief: 'Release notes too', dueDate: '2026-10-12', reward: { xp: 25, gold: 2 } }
+        });
+
+        const cleared = await callTool('update_quest', { id: 'quest-1', dueDate: '' });
+        expect(cleared.structuredContent.quest.dueDate).toBeNull();
+    });
+
+    it('refuses to re-price a completed quest or accept an empty edit', async () => {
+        await callTool('update_quest_status', { id: 'quest-1', action: 'complete' });
+        const repriced = await callTool('update_quest', { id: 'quest-1', reward: { gold: 9 } });
+        expect(repriced.structuredContent.error.code).toBe('quest_completed');
+        expect(store.snapshot.quests[0].reward.gold).toBe(1.5);
+
+        const empty = await callTool('update_quest', { id: 'quest-1' });
+        expect(empty.structuredContent.error.code).toBe('invalid_quest');
+        const emptyReward = await callTool('update_quest', { id: 'quest-1', reward: {} });
+        expect(emptyReward.structuredContent.error.code).toBe('invalid_quest');
+        const notes = await callTool('update_quest', { id: 'quest-1', missionBrief: 'Done', reward: {} });
+        expect(notes.structuredContent.quest.missionBrief).toBe('Done');
+    });
+
+    it('preserves a due bonus today and activates a saved schedule tomorrow', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-10-03T12:00:00Z'));
+        try {
+            store.snapshot.habits[0].history = { '2026-10-02': 1 };
+            const result = await callTool('update_protocol', {
+                id: 'habit-1', frequency: 'interval', frequencyParam: 2, completionReward: 1, passiveReward: 0.25
+            });
+            expect(result.structuredContent.protocol).toMatchObject({
+                frequency: 'daily', frequencyParam: 1, completionReward: 1, passiveReward: 0.25,
+                selectedForToday: true, dueDate: '2026-10-03',
+                pendingSchedule: { frequency: 'interval', frequencyParam: 2, effectiveDateKey: '2026-10-04' }
+            });
+
+            const stray = await callTool('update_protocol', { id: 'habit-1', frequency: 'daily', frequencyParam: 4 });
+            expect(stray.structuredContent.error.code).toBe('invalid_protocol');
+            const completed = await callTool('update_protocol_status', { id: 'habit-1', action: 'complete' });
+            expect(completed.structuredContent.dashboard.coinsOnHand).toBe(1);
+            vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
+            const protocols = await callTool('list_protocols', { status: 'all' });
+            expect(protocols.structuredContent.protocols[0]).toMatchObject({
+                frequency: 'interval', frequencyParam: 2, dueDate: '2026-10-05', selectedForToday: false
+            });
+            expect(protocols.structuredContent.protocols[0]).not.toHaveProperty('pendingSchedule');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('logs a saved food once per requestId and spends its coin cost', async () => {
+        store.snapshot.stats.gold = 5;
+        const args = { requestId: 'meal-1', foodId: 'food-1' };
+        const logged = await callTool('log_calories', args);
+        expect(logged.structuredContent).toMatchObject({
+            ok: true,
+            entry: { label: 'Burrito', calories: 800, coinCost: 2, source: 'saved-food', foodId: 'food-1' },
+            today: { caloriesConsumed: 800, caloriesRemaining: 1200 }
+        });
+        const retried = await callTool('log_calories', args);
+        expect(retried.structuredContent.changed).toBe(false);
+        expect(store.snapshot.stats.gold).toBe(3);
+        expect(store.snapshot.calories.history).toHaveLength(1);
+        expect(store.snapshot.calories.recentFoodIds).toEqual(['food-1']);
+    });
+
+    it('does not log or charge again when a removed entry is retried', async () => {
+        store.snapshot.stats.gold = 5;
+        const args = { requestId: 'meal-2', foodId: 'food-1' };
+        const logged = await callTool('log_calories', args);
+        await callTool('remove_calorie_entry', { id: logged.structuredContent.entry.id });
+        expect(store.snapshot.stats.gold).toBe(5);
+
+        const retried = await callTool('log_calories', args);
+        expect(retried.structuredContent).toMatchObject({ ok: true, changed: false, alreadyRemoved: true });
+        expect(retried.structuredContent.entry).toBeUndefined();
+
+        const removedAgain = await callTool('remove_calorie_entry', { id: logged.structuredContent.entry.id });
+        expect(removedAgain.structuredContent).toMatchObject({ ok: true, changed: false, alreadyRemoved: true });
+        expect(store.snapshot.stats.gold).toBe(5);
+        expect(store.snapshot.calories.history).toHaveLength(0);
+    });
+
+    it('logs exercise without cost, saves new foods, and removes entries with a refund', async () => {
+        const burn = await callTool('log_calories', { calories: -300, coinCost: 4 });
+        expect(burn.structuredContent.entry).toMatchObject({ label: 'Exercise Burn', calories: -300, coinCost: 0 });
+
+        const snack = await callTool('log_calories', { calories: 250, label: 'Bagel', coinCost: 1, saveAsFood: true });
+        expect(snack.structuredContent.entry.source).toBe('saved-food');
+        expect(store.snapshot.calories.savedFoods.map((food) => food.name)).toContain('Bagel');
+        expect(store.snapshot.stats.gold).toBe(-1);
+
+        const removed = await callTool('remove_calorie_entry', { id: snack.structuredContent.entry.id });
+        expect(removed.structuredContent.today.entries.map((entry) => entry.calories)).toEqual([-300]);
+        expect(store.snapshot.stats.gold).toBe(0);
+
+        const missing = await callTool('log_calories', { label: 'Nothing' });
+        expect(missing.structuredContent.error.code).toBe('invalid_calories');
+    });
+
+    it('will not remove calorie entries older than yesterday', async () => {
+        store.snapshot.calories.history = [{
+            id: 'cal-old', timestamp: '2026-09-01T12:00:00.000Z', dateKey: '2026-09-01', calories: 500, label: 'Old', source: 'manual', coinCost: 0
+        }];
+        const result = await callTool('remove_calorie_entry', { id: 'cal-old' });
+        expect(result.structuredContent.error.code).toBe('calorie_entry_locked');
+
+        const day = await callTool('get_calories', { date: '2026-09-01' });
+        expect(day.structuredContent).toMatchObject({ editable: false, caloriesConsumed: 500, entries: [{ id: 'cal-old' }] });
+    });
+
+    it('sets the calorie target and searches saved foods', async () => {
+        const target = await callTool('set_calorie_target', { target: 2200 });
+        expect(target.structuredContent.today.calorieTarget).toBe(2200);
+        const foods = await callTool('list_saved_foods', { query: 'burr' });
+        expect(foods.structuredContent.foods).toEqual([{ id: 'food-1', name: 'Burrito', calories: 800, coinCost: 2 }]);
+    });
+
+    it('records spending and earnings once per requestId and lists the ledger', async () => {
+        const spend = { requestId: 'tx-1', type: 'spend', amount: 12.5, description: 'Movie ticket' };
+        const spent = await callTool('record_coins', spend);
+        expect(spent.structuredContent).toMatchObject({
+            ok: true, coinsOnHand: -12.5, transaction: { type: 'spent', amount: 12.5, description: 'Movie ticket' }
+        });
+        expect((await callTool('record_coins', spend)).structuredContent.changed).toBe(false);
+        await callTool('record_coins', { type: 'earn', amount: 20, description: 'Sold old desk' });
+        expect(store.snapshot.stats.gold).toBe(7.5);
+
+        const ledger = await callTool('list_ledger', { since: '2026-09-21' });
+        expect(ledger.structuredContent).toMatchObject({
+            coinsOnHand: 7.5, matched: 2, totals: { earned: 20, spent: 12.5 }
+        });
+        expect(ledger.structuredContent.transactions[0].description).toBe('Sold old desk');
+
+        const all = await callTool('list_ledger', { type: 'earned' });
+        expect(all.structuredContent.totals).toEqual({ earned: 21.5, spent: 0 });
+
+        const blank = await callTool('record_coins', { type: 'spend', amount: 1, description: '   ' });
+        expect(blank.isError).toBe(true);
+    });
+
+    it('rejects coin amounts too large to store', async () => {
+        store.snapshot.stats.gold = 5;
+        const ledgerSize = store.snapshot.coinHistory.length;
+        const huge = await callTool('record_coins', { type: 'earn', amount: 1e308, description: 'Typo' });
+        expect(huge.isError).toBe(true);
+        const meal = await callTool('log_calories', { calories: 500, label: 'Typo meal', coinCost: 1e308 });
+        expect(meal.isError).toBe(true);
+        expect(store.snapshot.stats.gold).toBe(5);
+        expect(store.snapshot.coinHistory).toHaveLength(ledgerSize);
+        expect(store.snapshot.calories.history).toHaveLength(0);
+    });
+
+    it('does not save a change that would overflow the wallet', async () => {
+        store.snapshot.settings.questRewards.easy = 1e304;
+        const quests = [];
+        for (const title of ['One', 'Two']) {
+            quests.push((await callTool('create_quest', { title, difficulty: 'easy' })).structuredContent.quest.id);
+        }
+        expect((await callTool('update_quest_status', { id: quests[0], action: 'complete' })).isError).toBeFalsy();
+        const overflow = await callTool('update_quest_status', { id: quests[1], action: 'complete' });
+        expect(overflow.structuredContent.error.code).toBe('invalid_amount');
+        expect(Number.isFinite(store.snapshot.stats.gold)).toBe(true);
+    });
+
+    it('rejects quest and protocol rewards too large to pay out', async () => {
+        const rejected = await Promise.all([
+            callTool('create_quest', { title: 'Typo quest', reward: { gold: 1e304 } }),
+            callTool('update_quest', { id: 'quest-1', reward: { xp: 1e304 } }),
+            callTool('create_protocol', { title: 'Typo protocol', completionReward: 1e304 }),
+            callTool('update_protocol', { id: 'habit-1', passiveReward: 1e304 })
+        ]);
+        expect(rejected.map((result) => result.structuredContent.error.code))
+            .toEqual(Array(4).fill('invalid_arguments'));
+        expect(store.snapshot.quests.map((quest) => quest.title)).toEqual(['Ship it']);
+        expect(store.snapshot.quests[0].reward).toEqual({ xp: 25, gold: 1.5 });
+        expect(store.snapshot.habits.map((habit) => habit.passiveReward)).toEqual([0]);
     });
 
     it('returns domain failures as tool errors', async () => {

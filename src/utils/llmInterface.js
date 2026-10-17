@@ -49,7 +49,7 @@ export const applyCloudSnapshotToDevice = (cloud, importAppState) => {
 export const buildLlmSnapshot = ({ stats = {}, settings = {}, quests = [], habits = [], calories = {} }, now = new Date()) => {
     const todayKey = toLocalDateKey(now);
     const normalizedQuests = quests.map((quest) => questView(quest, settings));
-    const normalizedProtocols = habits.map((habit) => protocolView(habit, todayKey));
+    const normalizedProtocols = habits.map((habit) => protocolView(habit, todayKey, now));
     const timeRemaining = getDayTimeRemaining(now);
 
     return {

@@ -22,11 +22,11 @@ describe('production environment validation', () => {
         };
         delete environment.VITE_LLM_INTERFACE_ROUTE;
 
-        expect(findMissingProductionEnv(environment)).toEqual([
+        expect(findMissingProductionEnv(environment).sort()).toEqual([
             'VITE_FIREBASE_API_KEY',
             'VITE_FIREBASE_PROJECT_ID',
             'VITE_LLM_INTERFACE_ROUTE'
-        ]);
+        ].sort());
     });
 
     it('keeps the deployment guard ahead of the production build', () => {

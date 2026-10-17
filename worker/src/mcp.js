@@ -1,8 +1,9 @@
 // Stateless Model Context Protocol endpoint (Streamable HTTP transport).
 // Each POST carries one JSON-RPC message and is answered with plain JSON, so
-// no session or server-sent event stream is needed.
+// no session or server-sent event stream is needed. Requests reach this
+// handler only after the OAuth provider has accepted their bearer token.
 import { HttpError } from './errors.js';
-import { authorize, json, readJsonBody } from './http.js';
+import { json, readJsonBody } from './http.js';
 import {
     PROTOCOL_ACTION_NAMES,
     QUEST_ACTION_NAMES,
@@ -10,9 +11,18 @@ import {
     applyQuestAction,
     createProtocolRecord,
     createQuestRecord,
+    getCalories,
     getToday,
+    listLedger,
     listProtocols,
-    listQuests
+    listQuests,
+    listSavedFoods,
+    logCalorieEntry,
+    recordCoinTransaction,
+    removeCalorieRecord,
+    setCalorieGoal,
+    updateProtocolRecord,
+    updateQuestRecord
 } from './operations.js';
 
 export const MCP_PATH = '/mcp';
@@ -22,7 +32,7 @@ export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03
 
 const SERVER_INFO = { name: 'lifequest', title: 'LifeQuest', version: '1.0.0' };
 
-const INSTRUCTIONS = `LifeQuest is the user's private gamified tracker. Quests are one-off tasks; protocols are recurring habits whose next due date follows their last completion.
+const INSTRUCTIONS = `LifeQuest is the user's private gamified tracker. Quests are one-off tasks; protocols are recurring habits whose next due date follows their last completion. The calorie tracker logs food and exercise against a daily target (health is the calorie capacity left today). Coins are the reward currency, worth one dollar each, and every change to them is recorded in the ledger.
 
 Source of truth:
 - Use these tools for all current quests, protocols, dashboard values, and changes. Do not treat chat history or remembered IDs as current state.
@@ -36,7 +46,12 @@ Changing:
 - Only change LifeQuest when the user clearly asks to record or change something.
 - Use the exact record ID returned by a tool.
 - For create_quest, create_protocol, and completing a protocol, generate a unique requestId and reuse it if the identical call is retried.
+- To edit a quest or protocol (title, notes, schedule, or rewards), use update_quest or update_protocol and send only the fields that change. Never recreate a record to edit it.
 - Discarding a quest is reversible; use restore to recover it.
+- For logging food or exercise and for record_coins, generate a unique requestId and reuse it if the identical call is retried, so nothing is logged or charged twice.
+- When the user logs a food they have logged before, check list_saved_foods and pass its foodId so its calories and coin cost are reused. Only set coinCost or saveAsFood when the user gives a price or asks to save the food.
+- Logging food with a coin cost spends coins; removing an entry refunds them. Only entries from today and yesterday can be removed.
+- Use record_coins only for spending or earnings the user explicitly reports, never to correct a reward the app already paid.
 - Use activate and deactivate for protocols; never simulate deactivation by skipping a cycle.
 - Never claim success unless the tool result has ok: true.
 - On a snapshot_conflict, fetch current state and retry once if the intent is still unambiguous.
@@ -115,8 +130,8 @@ const TOOLS = [
                 reward: {
                     type: 'object',
                     properties: {
-                        xp: { type: 'number', minimum: 0 },
-                        gold: { type: 'number', minimum: 0 }
+                        xp: { type: 'number', minimum: 0, maximum: 1000000 },
+                        gold: { type: 'number', minimum: 0, maximum: 1000000 }
                     },
                     additionalProperties: false
                 }
@@ -143,6 +158,33 @@ const TOOLS = [
         run: (env, args) => applyQuestAction(env, args.id, args.action)
     },
     {
+        name: 'update_quest',
+        title: 'Update quest',
+        description: 'Edit a quest\'s details. Send only the fields to change. Changing difficulty re-prices a quest that uses the difficulty defaults; giving reward sets a custom reward, and an omitted xp or gold keeps its current value. A completed quest must be undone before its difficulty or reward can change.',
+        inputSchema: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+                id: { type: 'string', minLength: 1, description: 'Exact quest ID returned by another tool.' },
+                title: { type: 'string', minLength: 1 },
+                missionBrief: { type: 'string', description: 'Notes or context for the quest. An empty string clears them.' },
+                dueDate: { type: 'string', pattern: '^(\\d{4}-\\d{2}-\\d{2})?$', description: 'Local date in YYYY-MM-DD form. An empty string clears it.' },
+                difficulty: { type: 'string', enum: ['easy', 'medium', 'hard', 'legendary'] },
+                reward: {
+                    type: 'object',
+                    properties: {
+                        xp: { type: 'number', minimum: 0, maximum: 1000000 },
+                        gold: { type: 'number', minimum: 0, maximum: 1000000 }
+                    },
+                    additionalProperties: false
+                }
+            },
+            additionalProperties: false
+        },
+        annotations: { ...CHANGE, idempotentHint: true },
+        run: (env, args) => updateQuestRecord(env, args.id, args)
+    },
+    {
         name: 'create_protocol',
         title: 'Create protocol',
         description: 'Create a LifeQuest protocol (recurring habit). The next due date is counted from the last completion: daily, weekly (7 days), monthly (30 days), or every frequencyParam days for interval.',
@@ -153,9 +195,9 @@ const TOOLS = [
                 requestId: { type: 'string', description: 'A unique value reused if this exact creation is retried.' },
                 title: { type: 'string', minLength: 1 },
                 frequency: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'interval'], default: 'daily' },
-                frequencyParam: { type: 'integer', minimum: 1, default: 1, description: 'Days between cycles when frequency is interval.' },
-                completionReward: { type: 'number', minimum: 0 },
-                passiveReward: { type: 'number', minimum: 0 },
+                frequencyParam: { type: 'integer', minimum: 1, maximum: 3650, default: 1, description: 'Days between cycles when frequency is interval.' },
+                completionReward: { type: 'number', minimum: 0, maximum: 1000000 },
+                passiveReward: { type: 'number', minimum: 0, maximum: 1000000 },
                 active: { type: 'boolean', default: false }
             },
             additionalProperties: false
@@ -179,6 +221,139 @@ const TOOLS = [
         },
         annotations: CHANGE,
         run: (env, args) => applyProtocolAction(env, args.id, args.action, args)
+    },
+    {
+        name: 'update_protocol',
+        title: 'Update protocol',
+        description: 'Edit a protocol\'s details. Send only the fields to change. A new schedule or passive reward takes effect from tomorrow; passive income already owed through today is paid at the old rate first.',
+        inputSchema: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+                id: { type: 'string', minLength: 1, description: 'Exact protocol ID returned by another tool.' },
+                title: { type: 'string', minLength: 1 },
+                frequency: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'interval'] },
+                frequencyParam: { type: 'integer', minimum: 1, maximum: 3650, description: 'Days between cycles; only for interval protocols.' },
+                completionReward: { type: 'number', minimum: 0, maximum: 1000000, description: 'Coins paid when completed on its due day.' },
+                passiveReward: { type: 'number', minimum: 0, maximum: 1000000, description: 'Coins paid per day while the current cycle is kept.' }
+            },
+            additionalProperties: false
+        },
+        annotations: { ...CHANGE, idempotentHint: true },
+        run: (env, args) => updateProtocolRecord(env, args.id, args)
+    },
+    {
+        name: 'get_calories',
+        title: 'Get calories',
+        description: 'Get one day of the calorie tracker: target, calories consumed and remaining, and each entry with its ID. Defaults to today. Passive Fill entries are added automatically by the app when nothing was logged before 6 PM or midnight.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Local date in YYYY-MM-DD form.' }
+            },
+            additionalProperties: false
+        },
+        annotations: READ_ONLY,
+        run: (env, args) => getCalories(env, args.date)
+    },
+    {
+        name: 'list_saved_foods',
+        title: 'List saved foods',
+        description: 'List or search the user\'s saved foods with their calories and coin cost.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'Optional case-insensitive name search.' },
+                limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 }
+            },
+            additionalProperties: false
+        },
+        annotations: READ_ONLY,
+        run: (env, args) => listSavedFoods(env, searchParams(args))
+    },
+    {
+        name: 'log_calories',
+        title: 'Log calories',
+        description: 'Log food (positive calories) or exercise (negative calories) for today. With foodId, the saved food\'s calories, name, and coin cost are used unless overridden. A coin cost is spent from the wallet when the food is logged.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                requestId: { type: 'string', description: 'A unique value reused if this exact entry is retried.' },
+                foodId: { type: 'string', description: 'Exact saved food ID from list_saved_foods.' },
+                calories: { type: 'integer', minimum: -100000, maximum: 100000, description: 'Required unless foodId is given. Negative for exercise.' },
+                label: { type: 'string', description: 'What was eaten or done.' },
+                coinCost: { type: 'number', minimum: 0, maximum: 1000000, description: 'Coins to spend on this food.' },
+                saveAsFood: { type: 'boolean', default: false, description: 'Also save it as a reusable food.' }
+            },
+            additionalProperties: false
+        },
+        annotations: ADDITIVE,
+        run: (env, args) => logCalorieEntry(env, args)
+    },
+    {
+        name: 'remove_calorie_entry',
+        title: 'Remove calorie entry',
+        description: 'Remove a calorie entry from today or yesterday and refund any coins it cost.',
+        inputSchema: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+                id: { type: 'string', minLength: 1, description: 'Exact entry ID from get_calories.' }
+            },
+            additionalProperties: false
+        },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+        run: (env, args) => removeCalorieRecord(env, args.id)
+    },
+    {
+        name: 'set_calorie_target',
+        title: 'Set calorie target',
+        description: 'Set the daily calorie target.',
+        inputSchema: {
+            type: 'object',
+            required: ['target'],
+            properties: {
+                target: { type: 'integer', minimum: 1, maximum: 100000 }
+            },
+            additionalProperties: false
+        },
+        annotations: { ...CHANGE, idempotentHint: true },
+        run: (env, args) => setCalorieGoal(env, args.target)
+    },
+    {
+        name: 'list_ledger',
+        title: 'List ledger',
+        description: 'List coin transactions, newest first, with totals earned and spent across everything that matches.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                type: { type: 'string', enum: ['earned', 'spent', 'all'], default: 'all' },
+                since: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Only include transactions on or after this local date.' },
+                query: { type: 'string', description: 'Optional case-insensitive description search.' },
+                limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 }
+            },
+            additionalProperties: false
+        },
+        annotations: READ_ONLY,
+        run: (env, args) => listLedger(env, searchParams(args))
+    },
+    {
+        name: 'record_coins',
+        title: 'Record coins',
+        description: 'Record coins the user spent or earned outside LifeQuest\'s own rewards, such as a purchase. spend subtracts from the wallet and earn adds to it; both appear in the ledger.',
+        inputSchema: {
+            type: 'object',
+            required: ['type', 'amount', 'description'],
+            properties: {
+                requestId: { type: 'string', description: 'A unique value reused if this exact transaction is retried.' },
+                type: { type: 'string', enum: ['spend', 'earn'] },
+                amount: { type: 'number', minimum: 0.0001, maximum: 1000000 },
+                description: { type: 'string', minLength: 1 }
+            },
+            additionalProperties: false
+        },
+        annotations: CHANGE,
+        run: (env, args) => recordCoinTransaction(env, args)
     }
 ];
 
@@ -294,15 +469,6 @@ export const handleMcpRequest = async (request, env) => {
     if (request.method !== 'POST') {
         // Stateless server: no server-initiated stream (GET) and no session to end (DELETE).
         return new Response(null, { status: 405, headers: { allow: 'POST' } });
-    }
-
-    try {
-        authorize(request, env);
-    } catch (error) {
-        const headers = error.status === 401
-            ? { 'www-authenticate': 'Bearer realm="LifeQuest", error="invalid_token"' }
-            : {};
-        return rpcError(null, -32001, error.message, error.status || 500, headers);
     }
 
     const version = request.headers.get('mcp-protocol-version');

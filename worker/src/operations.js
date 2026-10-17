@@ -1,6 +1,7 @@
 // The operations an assistant can perform on LifeQuest: each loads the cloud
 // snapshot, applies shared domain rules, and saves under a revision guard.
 import { HttpError, assertHttp } from './errors.js';
+import { getDateKey } from './date.js';
 import { loadSnapshot, saveSnapshot } from './snapshotStore.js';
 import {
     activateProtocol,
@@ -11,19 +12,31 @@ import {
     deactivateProtocol,
     discardQuest,
     getRequestClock,
+    logCalories,
     prepareSnapshot,
+    recordCoins,
+    removeCalorieEntry,
+    setCalorieTarget,
     restoreQuest,
     setQuestToday,
     skipProtocol,
     touchSnapshot,
-    undoQuest
+    assertSnapshotTotals,
+    undoQuest,
+    updateProtocol,
+    updateQuest
 } from './stateEngine.js';
 import {
+    calorieDayView,
+    calorieEntryView,
     dashboardView,
+    listLedgerView,
     listProtocolView,
     listQuestView,
+    listSavedFoodView,
     protocolView,
-    questView
+    questView,
+    transactionView
 } from './views.js';
 
 const QUEST_ACTIONS = {
@@ -48,28 +61,45 @@ export const PROTOCOL_ACTION_NAMES = Object.keys(PROTOCOL_ACTIONS);
 const loadState = async (env) => {
     const clock = getRequestClock(env);
     const loaded = await loadSnapshot(env);
-    return { clock, loaded, snapshot: prepareSnapshot(loaded.snapshot) };
+    return { clock, loaded, snapshot: prepareSnapshot(loaded.snapshot, clock.todayKey) };
+};
+
+const timeZone = (env) => env.LIFEQUEST_TIME_ZONE || 'America/Vancouver';
+
+// How each kind of change describes the record it touched.
+const RESULT_VIEWS = {
+    quest: (result, snapshot) => ({ quest: questView(result.quest, snapshot.settings) }),
+    protocol: (result, snapshot, clock) => ({ protocol: protocolView(result.protocol, clock.todayKey, clock.now) }),
+    calories: (result, snapshot, clock) => ({
+        ...(result.entry ? { entry: calorieEntryView(result.entry) } : {}),
+        // A retried log or removal whose entry is already gone.
+        ...(result.alreadyRemoved ? { alreadyRemoved: true } : {}),
+        today: calorieDayView(snapshot, clock.todayKey, clock.todayKey)
+    }),
+    transaction: (result, snapshot, clock, env) => ({
+        transaction: transactionView(result.transaction, (date) => getDateKey(date, timeZone(env))),
+        coinsOnHand: Number(snapshot.stats.gold || 0)
+    })
 };
 
 const mutate = async (env, kind, apply) => {
     const { clock, loaded, snapshot } = await loadState(env);
     const result = apply(snapshot, clock);
+    assertSnapshotTotals(snapshot);
     touchSnapshot(snapshot, clock.now);
     const metadata = await saveSnapshot(env, loaded, snapshot);
     return {
         ok: true,
         changed: result.changed !== false,
-        [kind]: kind === 'quest'
-            ? questView(result.quest, snapshot.settings)
-            : protocolView(result.protocol, clock.todayKey),
-        dashboard: dashboardView(snapshot, clock.todayKey),
+        ...RESULT_VIEWS[kind](result, snapshot, clock, env),
+        dashboard: dashboardView(snapshot, clock.todayKey, clock.now),
         revisionId: metadata.revisionId
     };
 };
 
 export const getToday = async (env) => {
     const { clock, snapshot } = await loadState(env);
-    return { dashboard: dashboardView(snapshot, clock.todayKey) };
+    return { dashboard: dashboardView(snapshot, clock.todayKey, clock.now) };
 };
 
 // `searchParams` only needs `get(name)`.
@@ -80,7 +110,7 @@ export const listQuests = async (env, searchParams) => {
 
 export const listProtocols = async (env, searchParams) => {
     const { clock, snapshot } = await loadState(env);
-    return listProtocolView(snapshot, clock.todayKey, searchParams);
+    return listProtocolView(snapshot, clock.todayKey, searchParams, clock.now);
 };
 
 export const createQuestRecord = (env, input) => mutate(env, 'quest', (snapshot, clock) => ({
@@ -106,3 +136,42 @@ export const applyProtocolAction = (env, id, action, input = {}) => {
     assertHttp(id, 400, 'A protocol ID is required.', 'invalid_protocol');
     return mutate(env, 'protocol', (snapshot, clock) => run(snapshot, id, clock, input));
 };
+
+export const updateQuestRecord = (env, id, input) => {
+    assertHttp(id, 400, 'A quest ID is required.', 'invalid_quest');
+    return mutate(env, 'quest', (snapshot) => updateQuest(snapshot, id, input));
+};
+
+export const updateProtocolRecord = (env, id, input) => {
+    assertHttp(id, 400, 'A protocol ID is required.', 'invalid_protocol');
+    return mutate(env, 'protocol', (snapshot, clock) => updateProtocol(snapshot, id, input, clock.todayKey, clock.now));
+};
+
+export const getCalories = async (env, date) => {
+    const { clock, snapshot } = await loadState(env);
+    return calorieDayView(snapshot, date || clock.todayKey, clock.todayKey);
+};
+
+export const listSavedFoods = async (env, searchParams) => {
+    const { snapshot } = await loadState(env);
+    return listSavedFoodView(snapshot, searchParams);
+};
+
+export const listLedger = async (env, searchParams) => {
+    const { snapshot } = await loadState(env);
+    return listLedgerView(snapshot, searchParams, (date) => getDateKey(date, timeZone(env)));
+};
+
+export const logCalorieEntry = (env, input) => mutate(env, 'calories', (snapshot, clock) => (
+    logCalories(snapshot, input, clock.now, clock.todayKey)
+));
+
+export const removeCalorieRecord = (env, id) => mutate(env, 'calories', (snapshot, clock) => (
+    removeCalorieEntry(snapshot, id, clock.now, clock.todayKey)
+));
+
+export const setCalorieGoal = (env, target) => mutate(env, 'calories', (snapshot) => setCalorieTarget(snapshot, target));
+
+export const recordCoinTransaction = (env, input) => mutate(env, 'transaction', (snapshot, clock) => (
+    recordCoins(snapshot, input, clock.now, clock.todayKey)
+));

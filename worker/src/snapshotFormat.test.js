@@ -42,6 +42,15 @@ describe('LifeQuest Action snapshot format', () => {
         expect(api.quests[0].completedReward.earnedRewardsDelta).toBe(usdDelta);
         expect(api.budget.earnedRewards).toBe(usdDelta);
         expect(api.quests[0].reward.gold).toBe(formatVersion === 4 ? 40 : 4);
+        expect(api).toMatchObject({
+            formatVersion: CURRENT_SNAPSHOT_FORMAT_VERSION,
+            currencyUnitVersion: CURRENT_CURRENCY_UNIT_VERSION,
+            stats: { gold: formatVersion === 4 ? -12.3457 : -1.2346 },
+            habits: [{ completionReward: formatVersion === 4 ? 3 : 0.3, passiveReward: formatVersion === 4 ? 1 : 0.1 }],
+            calories: { history: [{ coinCost: formatVersion === 4 ? 2 : 0.2 }], savedFoods: [{ coinCost: formatVersion === 4 ? 2 : 0.2 }] },
+            coinHistory: [{ amount: formatVersion === 4 ? -10 : -1 }],
+            budget: { stipendAmount: formatVersion === 4 ? 20 : 2, goldToUsdRatio: formatVersion === 4 ? 8 : 0.8 }
+        });
         expect(normalizeLifeQuestSnapshot(api)).toEqual(api);
         expect(currencyFields(migrateLegacyPortableSnapshot(browser))).toEqual(currencyFields(browser));
         expect(source).toEqual(unchanged);
@@ -79,44 +88,10 @@ describe('LifeQuest Action snapshot format', () => {
         });
     });
 
-    it('migrates v3 whole-unit currency once at the API boundary', () => {
-        const snapshot = normalizeLifeQuestSnapshot({
-            formatVersion: 3,
-            appName: 'LifeQuest',
-            stats: { gold: 123 },
-            settings: {
-                protocolReward: 3,
-                questRewards: { easy: 5, medium: 15, hard: 40, legendary: 100 }
-            },
-            quests: [{ reward: { gold: 40 } }],
-            habits: [{ completionReward: 3, passiveReward: 1 }],
-            coinHistory: [{ amount: 10 }],
-            calories: { history: [{ coinCost: 2 }], savedFoods: [{ coinCost: 2 }] },
-            budget: { stipendAmount: 20, goldToUsdRatio: 8 }
-        });
-
-        expect(snapshot).toMatchObject({
-            formatVersion: CURRENT_SNAPSHOT_FORMAT_VERSION,
-            currencyUnitVersion: CURRENT_CURRENCY_UNIT_VERSION,
-            stats: { gold: 12.3 },
-            settings: {
-                protocolReward: 0.3,
-                questRewards: { easy: 0.5, medium: 1.5, hard: 4, legendary: 10 }
-            },
-            quests: [{ reward: { gold: 4 } }],
-            habits: [{ completionReward: 0.3, passiveReward: 0.1 }],
-            coinHistory: [{ amount: 1 }],
-            budget: { stipendAmount: 2, goldToUsdRatio: 0.8 }
-        });
-        expect(snapshot.currencyUnitVersion).toBe(2);
-        expect(snapshot.calories.history[0].coinCost).toBe(0.2);
-        expect(snapshot.calories.savedFoods[0].coinCost).toBe(0.2);
-    });
-
     it('rejects a future snapshot instead of guessing its schema', () => {
         expect(() => normalizeLifeQuestSnapshot({
             formatVersion: CURRENT_SNAPSHOT_FORMAT_VERSION + 1,
             currencyUnitVersion: CURRENT_CURRENCY_UNIT_VERSION
-        })).toThrow(/supports LifeQuest snapshot format version 4/);
+        })).toThrow(expect.objectContaining({ status: 409, code: 'unsupported_snapshot' }));
     });
 });

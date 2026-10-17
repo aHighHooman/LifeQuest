@@ -53,8 +53,8 @@ describe('LLM interface helpers', () => {
         }, now);
 
         expect(snapshot.dashboard.coinsOnHand).toBe(12);
-        expect(snapshot.dashboard.today.quests).toHaveLength(1);
-        expect(snapshot.dashboard.today.protocols).toHaveLength(1);
+        expect(snapshot.dashboard.today.quests.map((quest) => quest.id)).toEqual(['quest-1']);
+        expect(snapshot.dashboard.today.protocols.map((protocol) => protocol.id)).toEqual(['habit-1']);
         expect(snapshot.protocols[0].completedToday).toBe(false);
     });
 

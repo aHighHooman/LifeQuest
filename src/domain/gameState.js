@@ -1,6 +1,7 @@
-import { getProtocolCycleState, getProtocolCycleAnchorDateKey, getProtocolDueDateKey } from './protocols.js';
+import { applyPendingProtocolSchedule, getProtocolCycleState, getProtocolCycleAnchorDateKey, getProtocolDueDateKey } from './protocols.js';
 import { toLocalDateKey } from '../utils/dateUtils.js';
 import { normalizeCurrencyAmount } from '../constants/currency.js';
+import { isProtocolInTimeWindow, normalizeProtocolTimeWindow } from './protocolTimeWindow.js';
 
 export const QUICK_SLOT_IDS = ['preset100', 'preset250', 'preset400', 'preset550'];
 
@@ -80,11 +81,13 @@ const normalizeHabitHistory = (history = {}) => {
 };
 
 export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) => {
+    habit = applyPendingProtocolSchedule(habit, todayKey);
     // Streak is derived from history; a stored counter is a legacy field.
     const { isToday: _legacyIsToday, streak: _legacyStreak, ...rest } = habit;
     const nextHabit = {
         ...rest,
         history: normalizeHabitHistory(habit.history),
+        ...(habit.todayWindow !== undefined ? { todayWindow: normalizeProtocolTimeWindow(habit.todayWindow) } : {}),
         isActive: habit.isActive ?? true,
         completionReward: normalizeCurrencyAmount(habit.completionReward ?? protocolReward),
         passiveReward: normalizeCurrencyAmount(habit.passiveReward ?? 0),
@@ -94,7 +97,7 @@ export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) =
 
     if (habit.passivePaidThrough === undefined && todayKey) {
         const anchor = getProtocolCycleAnchorDateKey(nextHabit);
-        const due = getProtocolDueDateKey(nextHabit);
+        const due = getProtocolDueDateKey(nextHabit, todayKey);
         nextHabit.passivePaidThrough = anchor ? (due ? (todayKey < due ? todayKey : due) : anchor) : null;
     } else if (nextHabit.passivePaidThrough === null && todayKey && getProtocolCycleState(nextHabit, todayKey).daysUntilDue > 0) {
         nextHabit.passivePaidThrough = todayKey;
@@ -105,5 +108,6 @@ export const normalizeHabitRecord = (habit = {}, protocolReward = 0, todayKey) =
 
 export const isHabitDueForFocus = (habit, referenceDate = new Date()) => {
     if (habit?.isActive === false) return false;
-    return getProtocolCycleState(habit, toLocalDateKey(referenceDate)).daysUntilDue <= 0;
+    return getProtocolCycleState(habit, toLocalDateKey(referenceDate)).daysUntilDue <= 0
+        && isProtocolInTimeWindow(habit, referenceDate);
 };

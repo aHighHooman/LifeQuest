@@ -23,7 +23,10 @@ until their data rules are implemented explicitly.
 
 - `GET /health`: public liveness check
 - `GET /privacy`: public privacy policy
-- `POST /mcp`: the MCP server; requires `Authorization: Bearer <LIFEQUEST_ACTION_TOKEN>`
+- `POST /mcp`: the MCP server; requires an OAuth access token or the static action token
+- `GET|POST /authorize`: the owner sign-in and consent page
+- `POST /register`, `POST /token`, `/.well-known/oauth-*`: OAuth endpoints served by
+  `@cloudflare/workers-oauth-provider`
 
 ## MCP server
 
@@ -37,11 +40,25 @@ protocol versions 2025-03-26 through 2025-11-25).
 | `list_protocols` | List or search protocols |
 | `create_quest` | Create a quest (idempotent with `requestId`) |
 | `update_quest_status` | `complete`, `undo`, `discard`, `restore`, `select-for-today`, `remove-from-today` |
+| `update_quest` | Edit title, notes, due date, difficulty, or reward |
 | `create_protocol` | Create a protocol (idempotent with `requestId`) |
 | `update_protocol_status` | `complete`, `skip`, `activate`, `deactivate` |
+| `update_protocol` | Edit title, schedule, or rewards |
+| `get_calories` | One day's calorie target, totals, and entries |
+| `list_saved_foods` | List or search saved foods |
+| `log_calories` | Log food or exercise, spending any coin cost (idempotent with `requestId`) |
+| `remove_calorie_entry` | Remove an entry from today or yesterday and refund its cost |
+| `set_calorie_target` | Set the daily calorie target |
+| `list_ledger` | Coin transactions with earned and spent totals |
+| `record_coins` | Record outside spending or earnings (idempotent with `requestId`) |
 
 The server sends its usage rules as MCP `instructions` during initialization,
 so clients do not need a separate instructions file.
+
+Schedule edits start on the next calendar day in `LIFEQUEST_TIME_ZONE`, preserving
+today's due status and completion bonus. Until then, protocol results include
+`pendingSchedule` with the new frequency and `effectiveDateKey`; the current
+frequency remains active. Further edits can replace or cancel that pending change.
 
 Connect Claude Code, loading the locally encrypted token into the session
 rather than typing it:
@@ -51,13 +68,41 @@ $env:LIFEQUEST_ACTION_TOKEN = [System.Net.NetworkCredential]::new('', (Import-Cl
 claude mcp add --transport http --scope user lifequest https://<worker-url>/mcp --header "Authorization: Bearer $env:LIFEQUEST_ACTION_TOKEN"
 ```
 
-Clients that only accept OAuth for remote servers, such as claude.ai custom
-connectors and ChatGPT connectors, cannot use the bearer token yet.
+## OAuth for chat clients
+
+claude.ai (web, desktop, and mobile) and ChatGPT connectors cannot send a fixed
+header, so `/mcp` also accepts OAuth 2.1 access tokens. The Worker is its own
+authorization server:
+
+1. The client calls `/mcp`, receives a `401` pointing at
+   `/.well-known/oauth-protected-resource/mcp`, and discovers the OAuth endpoints.
+2. It registers itself at `/register` (dynamic client registration).
+3. The owner is sent to `/authorize`, which shows the app's name and where access
+   will be sent, and asks for the owner passphrase (`LIFEQUEST_OWNER_PASSPHRASE`,
+   at least 16 characters).
+4. After approval the client exchanges the code (PKCE) for a one-hour access
+   token and a refresh token. A grant stays valid while it is used at least once
+   every 30 days.
+
+Ten wrong passphrases from one client address within 15 minutes lock that address
+for the rest of the window, measured from its first failure. Invalid consent
+handles, missing consent cookies, and cross-site submissions do not spend this
+budget. A wrong passphrase returns a fresh consent form for another attempt.
+OAuth state (clients, grants, hashed tokens) lives in the `OAUTH_KV` namespace.
+Sign-in checks use an `OwnerSignInLimiter` Durable Object per client address, so the
+failure count survives restarts and concurrent requests cannot bypass the limit.
+Object names use a hash of Cloudflare's client address header; each stores only
+a failure count and expiry time. The `OWNER_SIGN_IN_LIMITER`
+binding and SQLite class migration are included in `wrangler.jsonc`; deploy with
+that configuration to install the limiter. Sign-in fails closed if it is absent.
+
+To connect claude.ai: Settings → Connectors → Add custom connector, with the URL
+`https://<worker-url>/mcp`, then sign in on the page that opens.
 
 ## Local setup
 
 1. Copy `worker/.dev.vars.example` to `worker/.dev.vars`.
-2. Fill in the six local values. Do not commit this file.
+2. Fill in the seven local values. Do not commit this file.
 3. Run `npm run action:dev`.
 4. Test `http://localhost:8787/health`; the MCP endpoint is
    `http://localhost:8787/mcp`.
@@ -79,6 +124,7 @@ npx wrangler secret put FIREBASE_LLM_EMAIL --config worker/wrangler.jsonc
 npx wrangler secret put FIREBASE_LLM_PASSWORD --config worker/wrangler.jsonc
 npx wrangler secret put FIREBASE_PROJECT_ID --config worker/wrangler.jsonc
 npx wrangler secret put LIFEQUEST_OWNER_UID --config worker/wrangler.jsonc
+npx wrangler secret put LIFEQUEST_OWNER_PASSPHRASE --config worker/wrangler.jsonc
 ```
 
 Do not put secret values directly on a command line or in committed files.
@@ -103,7 +149,8 @@ npm run action:deploy
 
 ## Security model
 
-- The bearer token protects the public `/mcp` endpoint.
+- `/mcp` accepts only OAuth access tokens issued for it, or the static action token.
+- OAuth tokens, codes, and secrets are stored in KV only as hashes.
 - The Worker authenticates internally as the allowlisted Firebase LLM UID.
 - The owner UID is fixed by a Worker secret; callers cannot choose another UID.
 - Firestore writes use the current manifest update time as a precondition.

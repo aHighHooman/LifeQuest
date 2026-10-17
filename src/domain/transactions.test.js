@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialAppState } from './initialState.js';
 import { usdToCredits, creditsToUsd } from '../constants/currency.js';
+import { settleDaily } from './settlement.js';
+import { getProtocolCycleState } from './protocols.js';
+import { normalizeHabitRecord } from './gameState.js';
+import { protocolView } from './views.js';
+import {
+    createPortableSnapshot, formatPortableSnapshot, normalizePortableSnapshot, parsePortableSnapshot
+} from '../utils/portableState.js';
 import {
     changeCoins, completeQuest, undoQuest, completeProtocol, setCoinBalance,
-    purchaseGrocery, refundGrocery, purchaseCalories, refundCalories
+    purchaseGrocery, refundGrocery, purchaseCalories, refundCalories,
+    updateQuestDetails, updateProtocolDetails
 } from './transactions.js';
 
 const event = { id: 'coin-1', date: '2026-10-02T12:00:00.000Z', todayKey: '2026-10-02' };
@@ -171,6 +179,11 @@ describe('LifeQuest transactions', () => {
         expect(refunded.calories).toMatchObject({ current: 0, history: [] });
         expect(refunded.coinHistory).toHaveLength(2);
         expect(refundCalories(refunded, 'cal-1', editable, event)).toBe(refunded);
+        expect(purchaseCalories(refunded, entry, event, food)).toBe(refunded);
+        const reloaded = normalizePortableSnapshot(JSON.parse(JSON.stringify(createPortableSnapshot(refunded))));
+        expect(reloaded.calories.removedEntryIds).toEqual(['cal-1']);
+        const imported = parsePortableSnapshot(formatPortableSnapshot(createPortableSnapshot(refunded)));
+        expect(imported.calories.removedEntryIds).toEqual(['cal-1']);
     });
 
     it('keeps free entries and exercise free, and refuses refunds outside the editing window', () => {
@@ -194,5 +207,142 @@ describe('LifeQuest transactions', () => {
         expect(lowered.coinHistory[1]).toMatchObject({ amount: 8.3457, type: 'spent' });
         expect(lowered.budget.earnedRewards).toBe(2);
         expect(setCoinBalance(lowered, 4, event)).toBe(lowered);
+    });
+});
+
+describe('LifeQuest record edits', () => {
+    it('re-prices a default-reward quest when its difficulty changes', () => {
+        const edited = updateQuestDetails(makeState(), 'quest-1', { difficulty: 'hard', title: ' Renamed ' });
+        expect(edited.quests[0]).toMatchObject({
+            title: 'Renamed', difficulty: 'hard', reward: { xp: 60, gold: 4 }
+        });
+    });
+
+    it('makes a partial reward custom and keeps the other half', () => {
+        const edited = updateQuestDetails(makeState(), 'quest-1', { reward: { gold: 3 } });
+        expect(edited.quests[0]).toMatchObject({ reward: { xp: 10, gold: 3 }, isCustomReward: true });
+        const harder = updateQuestDetails(edited, 'quest-1', { difficulty: 'legendary' });
+        expect(harder.quests[0].reward).toEqual({ xp: 10, gold: 3 });
+    });
+
+    it('keeps default rewards when an edit contains no actual reward values', () => {
+        for (const reward of [{}, { xp: null, gold: null }, null]) {
+            const edited = updateQuestDetails(makeState(), 'quest-1', { title: 'Renamed', reward });
+            const harder = updateQuestDetails(edited, 'quest-1', { difficulty: 'hard' });
+            expect(harder.quests[0]).toMatchObject({ title: 'Renamed', reward: { xp: 60, gold: 4 } });
+            expect(harder.quests[0].isCustomReward).not.toBe(true);
+            const completed = completeQuest(harder, 'quest-1', event);
+            expect(updateQuestDetails(completed, 'quest-1', { missionBrief: 'Notes', reward }).quests[0].missionBrief).toBe('Notes');
+        }
+    });
+
+    it('keeps today due and pays its bonus when a new schedule starts tomorrow', () => {
+        const state = makeState();
+        state.habits = [{
+            id: 'habit-1', title: 'Walk', frequency: 'weekly', frequencyParam: 1, isActive: true,
+            history: { '2026-09-25': 1 }, completionReward: 1, passiveReward: 0, passivePaidThrough: '2026-10-01'
+        }];
+        const edited = updateProtocolDetails(state, 'habit-1', { frequency: 'monthly' }, event);
+        expect(protocolView(edited.habits[0], event.todayKey)).toMatchObject({ selectedForToday: true, dueDate: event.todayKey });
+        const completed = completeProtocol(edited, 'habit-1', event);
+        expect(completed.stats.gold).toBe(11);
+        const tomorrow = normalizeHabitRecord(completed.habits[0], 0, '2026-10-03');
+        expect(tomorrow.frequency).toBe('monthly');
+        expect(getProtocolCycleState(tomorrow, '2026-10-03').dueDateKey).toBe('2026-11-01');
+    });
+
+    it('lets repeated schedule edits replace or cancel tomorrow without changing today', () => {
+        const state = makeState();
+        state.habits = [{ id: 'habit-1', title: 'Walk', frequency: 'weekly', frequencyParam: 1, history: { '2026-09-25': 1 } }];
+        const monthly = updateProtocolDetails(state, 'habit-1', { frequency: 'monthly' }, event);
+        const interval = updateProtocolDetails(monthly, 'habit-1', { frequency: 'interval', frequencyParam: 3 }, event);
+        const longer = updateProtocolDetails(interval, 'habit-1', { frequencyParam: 5 }, event);
+        expect(getProtocolCycleState(longer.habits[0], event.todayKey).dueDateKey).toBe(event.todayKey);
+        expect(normalizeHabitRecord(longer.habits[0], 0, '2026-10-03')).toMatchObject({ frequency: 'interval', frequencyParam: 5 });
+        const cancelled = updateProtocolDetails(longer, 'habit-1', { frequency: 'weekly' }, event);
+        expect(normalizeHabitRecord(cancelled.habits[0], 0, '2026-10-03').frequency).toBe('weekly');
+    });
+
+    it('returns the same state when nothing changes or a completed quest would be re-priced', () => {
+        const state = makeState();
+        expect(updateQuestDetails(state, 'quest-1', { difficulty: 'easy' })).toBe(state);
+        const completed = completeQuest(state, 'quest-1', event);
+        expect(updateQuestDetails(completed, 'quest-1', { reward: { gold: 9 } })).toBe(completed);
+        expect(updateQuestDetails(completed, 'quest-1', { missionBrief: 'notes' }).quests[0].missionBrief).toBe('notes');
+    });
+
+    it('pays owed passive income at the old rate before changing it', () => {
+        const state = makeState();
+        state.budget.goldToUsdRatio = 1;
+        state.habits = [{
+            id: 'habit-1', title: 'Walk', frequency: 'weekly', frequencyParam: 1, isActive: true,
+            history: { '2026-09-29': 1 }, completionReward: 0.2, passiveReward: 0.1, passivePaidThrough: '2026-09-30'
+        }];
+        const edited = updateProtocolDetails(state, 'habit-1', { passiveReward: 0.5, title: 'Long walk' }, event);
+        expect(edited.stats.gold).toBe(10.2);
+        expect(edited.habits[0]).toMatchObject({
+            title: 'Long walk', passiveReward: 0.5, passivePaidThrough: '2026-10-02'
+        });
+        const tomorrow = settleDaily(edited, {
+            ...event, todayKey: '2026-10-03', dateForDay: (day) => `${day}T12:00:00.000Z`
+        });
+        expect(tomorrow.stats.gold).toBe(10.7);
+        expect(tomorrow.coinHistory.map((entry) => entry.amount)).toEqual([0.1, 0.1, 0.5]);
+    });
+
+    it.each([
+        ['enabling a zero reward', 'weekly', 0, '2026-10-01', { passiveReward: 1 }],
+        ['extending an expired cycle', 'daily', 1, '2026-10-02', { frequency: 'weekly' }],
+        ['extending a zero-reward cycle', 'daily', 0, '2026-10-01', { frequency: 'weekly', passiveReward: 1 }],
+        ['editing a legacy cursor', 'weekly', 0, undefined, { passiveReward: 1 }]
+    ])('starts new passive terms tomorrow when %s', (_label, frequency, passiveReward, passivePaidThrough, changes) => {
+        const state = makeState();
+        state.stats.lastLoginDate = '2026-10-05';
+        state.habits = [{
+            id: 'habit-1', title: 'Walk', frequency, frequencyParam: 1, isActive: true,
+            history: { '2026-10-01': 1 }, completionReward: 0.2, passiveReward, passivePaidThrough
+        }];
+        const before = structuredClone(state);
+        const editEvent = { ...event, todayKey: '2026-10-05', date: '2026-10-05T12:00:00.000Z' };
+        const edited = updateProtocolDetails(state, 'habit-1', changes, editEvent);
+        expect(state).toEqual(before);
+        expect(edited.habits[0].passivePaidThrough).toBe(editEvent.todayKey);
+        expect(edited.stats.gold).toBe(10);
+        expect(edited.coinHistory).toEqual([]);
+
+        const settled = settleDaily(edited, {
+            ...editEvent, todayKey: '2026-10-06', dateForDay: (day) => `${day}T12:00:00.000Z`
+        });
+        expect(settled.stats.gold).toBe(11);
+        expect(settled.budget.earnedRewards).toBe(2.5);
+        expect(settled.coinHistory).toEqual([expect.objectContaining({
+            date: '2026-10-06T12:00:00.000Z', amount: 1
+        })]);
+    });
+
+    it('does not rewind a cursor that has already paid beyond the edit day', () => {
+        const state = makeState();
+        state.habits = [{
+            id: 'habit-1', title: 'Walk', frequency: 'weekly', isActive: true,
+            history: { '2026-10-01': 1 }, passiveReward: 1, passivePaidThrough: '2026-10-04'
+        }];
+        const edited = updateProtocolDetails(state, 'habit-1', { passiveReward: 2 }, event);
+        expect(edited.habits[0].passivePaidThrough).toBe('2026-10-04');
+        expect(edited.stats).toBe(state.stats);
+        expect(edited.coinHistory).toBe(state.coinHistory);
+    });
+
+    it('does not settle passive income for a rename and resets frequencyParam off interval', () => {
+        const state = makeState();
+        state.habits = [{
+            id: 'habit-1', title: 'Walk', frequency: 'interval', frequencyParam: 3, isActive: true,
+            history: { '2026-09-29': 1 }, completionReward: 0.2, passiveReward: 0.1, passivePaidThrough: '2026-09-30'
+        }];
+        const renamed = updateProtocolDetails(state, 'habit-1', { title: 'Stroll' }, event);
+        expect(renamed.stats.gold).toBe(10);
+        const scheduled = updateProtocolDetails(state, 'habit-1', { frequency: 'daily' }, event);
+        expect(normalizeHabitRecord(scheduled.habits[0], 0, '2026-10-03'))
+            .toMatchObject({ frequency: 'daily', frequencyParam: 1 });
+        expect(updateProtocolDetails(state, 'habit-1', { title: 'Walk' }, event)).toBe(state);
     });
 });

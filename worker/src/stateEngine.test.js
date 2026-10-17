@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
-    completeProtocol,
+    assertSnapshotTotals,
     completeQuest,
     createProtocol,
     createQuest,
-    deactivateProtocol,
-    discardQuest,
+    logCalories,
     prepareSnapshot,
-    restoreQuest,
-    undoQuest
+    recordCoins,
+    setCalorieTarget,
+    undoQuest,
+    updateProtocol,
+    updateQuest
 } from './stateEngine.js';
 
 const makeSnapshot = () => prepareSnapshot({
@@ -16,10 +18,9 @@ const makeSnapshot = () => prepareSnapshot({
     generatedAt: '2026-07-29T12:00:00.000Z',
     appName: 'LifeQuest',
     currencyUnitVersion: 2,
-    stats: { level: 1, xp: 0, maxXp: 100, hp: 50, maxHp: 100, gold: 0 },
+    stats: { level: 1, xp: 0, maxXp: 100, gold: 0 },
     settings: {
-        protocolReward: 0.2,
-        questRewards: { easy: 0.5, medium: 1.5, hard: 4, legendary: 10 }
+        questRewards: { medium: 1.5 }
     },
     quests: [{
         id: 'quest-1',
@@ -29,54 +30,10 @@ const makeSnapshot = () => prepareSnapshot({
         completed: false,
         discarded: false
     }],
-    habits: [{
-        id: 'habit-1',
-        title: 'Walk',
-        frequency: 'daily',
-        frequencyParam: 1,
-        streak: 0,
-        history: {},
-        isActive: true,
-        completionReward: 0.2,
-        passiveReward: 0
-    }],
-    coinHistory: [],
     budget: { earnedRewards: 0, goldToUsdRatio: 0.8 }
 });
 
 describe('LifeQuest Action state engine', () => {
-    it('completes and undoes a quest with its rewards', () => {
-        const snapshot = makeSnapshot();
-        const now = new Date('2026-07-29T18:00:00.000Z');
-
-        expect(completeQuest(snapshot, 'quest-1', now).changed).toBe(true);
-        expect(snapshot.quests[0].completed).toBe(true);
-        expect(snapshot.stats).toMatchObject({ xp: 25, gold: 1.5 });
-        expect(snapshot.budget.earnedRewards).toBe(1.875);
-
-        expect(undoQuest(snapshot, 'quest-1', now).changed).toBe(true);
-        expect(snapshot.quests[0].completed).toBe(false);
-        expect(snapshot.stats).toMatchObject({ xp: 0, gold: 0 });
-        expect(snapshot.budget.earnedRewards).toBe(0);
-    });
-
-    it('discards and restores quests reversibly', () => {
-        const snapshot = makeSnapshot();
-        snapshot.quests[0].isFocusedToday = true;
-
-        discardQuest(snapshot, 'quest-1', new Date('2026-07-29T18:00:00.000Z'));
-        expect(snapshot.quests[0]).toMatchObject({
-            discarded: true,
-            isFocusedToday: false
-        });
-
-        restoreQuest(snapshot, 'quest-1');
-        expect(snapshot.quests[0]).toMatchObject({
-            discarded: false,
-            discardedAt: null
-        });
-    });
-
     it('undoes an assistant completion using the recorded conversion delta after a rate change', () => {
         const snapshot = makeSnapshot();
         completeQuest(snapshot, 'quest-1');
@@ -93,54 +50,51 @@ describe('LifeQuest Action state engine', () => {
         const snapshot = makeSnapshot();
         snapshot.budget.earnedRewards = 1.234567;
         completeQuest(snapshot, 'quest-1');
+        snapshot.habits = [null, 'malformed legacy record'];
         const reloaded = prepareSnapshot(JSON.parse(JSON.stringify(snapshot)));
         reloaded.budget.goldToUsdRatio = 2;
         undoQuest(reloaded, 'quest-1');
         expect(prepareSnapshot(reloaded).budget.earnedRewards).toBeCloseTo(1.234567, 12);
     });
 
-    it('deactivates a protocol explicitly', () => {
+    // MCP schemas already cap these; the engine must hold even without them.
+    it('rejects coin and reward amounts too large to store', () => {
         const snapshot = makeSnapshot();
-        const result = deactivateProtocol(snapshot, 'habit-1', '2026-07-29');
-        expect(result.changed).toBe(true);
-        expect(snapshot.habits[0].isActive).toBe(false);
+        const before = JSON.stringify(snapshot);
+        [
+            () => recordCoins(snapshot, { type: 'earn', amount: 1e308, description: 'Typo' }),
+            () => logCalories(snapshot, { calories: 500, label: 'Typo meal', coinCost: 1e308 }),
+            () => createQuest(snapshot, { title: 'Typo quest', reward: { gold: 1e304 } }),
+            () => updateQuest(snapshot, 'quest-1', { reward: { xp: 1e304 } }),
+            () => createProtocol(snapshot, { title: 'Typo protocol', completionReward: 1e304 })
+        ].forEach((attempt) => expect(attempt).toThrow(/cannot exceed/));
+        createProtocol(snapshot, { title: 'Walk' });
+        expect(() => updateProtocol(snapshot, snapshot.habits[0].id, { passiveReward: Infinity }, '2026-07-29')).toThrow(/cannot exceed/);
+        expect(JSON.stringify({ ...snapshot, habits: [] })).toBe(JSON.stringify({ ...JSON.parse(before), habits: [] }));
     });
 
-    it('deduplicates creation requests', () => {
+    it('rejects intervals and calorie values too large to store', () => {
         const snapshot = makeSnapshot();
-        const firstQuest = createQuest(snapshot, {
-            title: 'Passport',
-            difficulty: 'medium',
-            requestId: 'create-quest-123'
-        });
-        const secondQuest = createQuest(snapshot, {
-            title: 'Passport',
-            difficulty: 'medium',
-            requestId: 'create-quest-123'
-        });
-        expect(secondQuest.id).toBe(firstQuest.id);
-        expect(snapshot.quests.filter((quest) => quest.title === 'Passport')).toHaveLength(1);
-
-        const firstProtocol = createProtocol(snapshot, {
-            title: 'Stretch',
-            requestId: 'create-protocol-123'
-        });
-        const secondProtocol = createProtocol(snapshot, {
-            title: 'Stretch',
-            requestId: 'create-protocol-123'
-        });
-        expect(secondProtocol.id).toBe(firstProtocol.id);
-        expect(snapshot.habits.filter((protocol) => protocol.title === 'Stretch')).toHaveLength(1);
+        expect(() => createProtocol(snapshot, { title: 'Rare', frequency: 'interval', frequencyParam: 1e308 })).toThrow(/interval cannot exceed/);
+        createProtocol(snapshot, { title: 'Rare', frequency: 'interval', frequencyParam: 3 });
+        expect(() => updateProtocol(snapshot, snapshot.habits[0].id, { frequencyParam: 1e308 }, '2026-07-29')).toThrow(/interval cannot exceed/);
+        expect(() => logCalories(snapshot, { calories: 1e308, label: 'Typo' })).toThrow(/Calories cannot exceed/);
+        expect(() => logCalories(snapshot, { calories: -Infinity, label: 'Typo' })).toThrow(/Calories cannot exceed/);
+        expect(() => setCalorieTarget(snapshot, 1e308)).toThrow(/between 1 and/);
+        expect(snapshot.calories.history).toHaveLength(0);
     });
 
-    it('deduplicates retried protocol completions', () => {
+    it('refuses to save totals that overflowed through default rewards', () => {
         const snapshot = makeSnapshot();
-        const now = new Date('2026-07-29T18:00:00.000Z');
-        completeProtocol(snapshot, 'habit-1', '2026-07-29', now, 'complete-123');
-        completeProtocol(snapshot, 'habit-1', '2026-07-29', now, 'complete-123');
-        expect(snapshot.habits[0].history['2026-07-29']).toBe(1);
-        expect(snapshot.stats.xp).toBe(5);
-        expect(snapshot.stats.gold).toBe(0.2);
-        expect(snapshot.budget.earnedRewards).toBe(0.25);
+        snapshot.settings.questRewards.easy = 1e304;
+        [createQuest(snapshot, { title: 'One' }), createQuest(snapshot, { title: 'Two' })]
+            .forEach((quest) => completeQuest(snapshot, quest.id));
+        expect(snapshot.stats.gold).toBe(Infinity);
+        expect(() => assertSnapshotTotals(snapshot)).toThrow(/overflow/);
+        expect(() => assertSnapshotTotals(makeSnapshot())).not.toThrow();
+        const legacy = makeSnapshot();
+        legacy.stats.gold = 'not a number';
+        legacy.budget.earnedRewards = null;
+        expect(() => assertSnapshotTotals(legacy)).not.toThrow();
     });
 });

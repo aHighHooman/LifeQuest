@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { questView as sharedQuestView, protocolView as sharedProtocolView } from '../../src/domain/views.js';
 import { buildLlmSnapshot } from '../../src/utils/llmInterface.js';
 import { dashboardView, listQuestView, listProtocolView, questView, protocolView } from './views.js';
 
@@ -33,9 +32,19 @@ const makeState = () => ({
 });
 
 describe('shared browser and worker summary views', () => {
-    it('keeps worker projection exports compatible', () => {
-        expect(questView).toBe(sharedQuestView);
-        expect(protocolView).toBe(sharedProtocolView);
+    it('filters every MCP Today response using the request time, even with no browser open', () => {
+        const state = makeState();
+        state.habits = [
+            { id: 'timed', title: 'Midday routine', frequency: 'daily', history: {}, todayWindow: { start: '12:00', end: '13:00', timeZone: 'UTC' } },
+            { id: 'all-day', title: 'All day', frequency: 'daily', history: {} }
+        ];
+        for (const [time, ids] of [['11:59', ['all-day']], ['12:00', ['timed', 'all-day']], ['13:00', ['all-day']]]) {
+            const instant = new Date(`2026-10-02T${time}:00Z`);
+            expect(dashboardView(state, todayKey, instant).protocols.map((protocol) => protocol.id)).toEqual(ids);
+            const list = listProtocolView(state, todayKey, new URLSearchParams(), instant);
+            expect(list.protocols.find((protocol) => protocol.id === 'timed').selectedForToday).toBe(ids.includes('timed'));
+            expect(buildLlmSnapshot(state, instant).dashboard.today.protocols.map((protocol) => protocol.id)).toEqual(ids);
+        }
     });
 
     it('shows configured pending rewards, custom rewards, and completed receipts consistently', () => {

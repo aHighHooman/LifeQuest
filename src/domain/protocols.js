@@ -1,10 +1,25 @@
 import { addDays, diffDays } from './calendar.js';
 
-export const getProtocolIntervalDays = (protocol) => {
-    if (protocol.frequency === 'weekly') return 7;
-    if (protocol.frequency === 'monthly') return 30;
-    if (protocol.frequency === 'interval') {
-        const interval = Number(protocol.frequencyParam);
+export const getProtocolSchedule = (protocol, todayKey) => {
+    const pending = protocol.pendingSchedule;
+    const schedule = pending?.effectiveDateKey && todayKey >= pending.effectiveDateKey ? pending : protocol;
+    return { frequency: schedule.frequency || 'daily', frequencyParam: Number(schedule.frequencyParam || 1) };
+};
+
+// Saved changes survive reloads and become active on the same calendar day in
+// the browser and worker. Until then, today's cycle and bonus stay intact.
+export const applyPendingProtocolSchedule = (protocol, todayKey) => {
+    if (!protocol?.pendingSchedule?.effectiveDateKey || !todayKey || todayKey < protocol.pendingSchedule.effectiveDateKey) return protocol;
+    const { pendingSchedule: _pending, ...rest } = protocol;
+    return { ...rest, ...getProtocolSchedule(protocol, todayKey) };
+};
+
+export const getProtocolIntervalDays = (protocol, todayKey) => {
+    const schedule = getProtocolSchedule(protocol, todayKey);
+    if (schedule.frequency === 'weekly') return 7;
+    if (schedule.frequency === 'monthly') return 30;
+    if (schedule.frequency === 'interval') {
+        const interval = Number(schedule.frequencyParam);
         return Number.isFinite(interval) ? Math.max(1, interval) : 1;
     }
     return 1;
@@ -25,13 +40,13 @@ export const getProtocolCycleAnchorDateKey = (protocol) => {
     return completion > reset ? completion : reset;
 };
 
-export const getProtocolDueDateKey = (protocol) => {
+export const getProtocolDueDateKey = (protocol, todayKey) => {
     const anchor = getProtocolCycleAnchorDateKey(protocol);
-    return anchor ? addDays(anchor, getProtocolIntervalDays(protocol)) : null;
+    return anchor ? addDays(anchor, getProtocolIntervalDays(protocol, todayKey)) : null;
 };
 
 export const getProtocolCycleState = (protocol, todayKey) => {
-    const dueDateKey = getProtocolDueDateKey(protocol);
+    const dueDateKey = getProtocolDueDateKey(protocol, todayKey);
     const daysUntilDue = dueDateKey ? diffDays(dueDateKey, todayKey) : 0;
     return {
         todayKey,
@@ -53,7 +68,7 @@ export const getProtocolStreak = (protocol, todayKey) => {
         .sort();
     if (!completionDays.length) return 0;
     if (protocol.isActive !== false && getProtocolCycleState(protocol, todayKey).isOverdue) return 0;
-    const intervalDays = Math.floor(getProtocolIntervalDays(protocol));
+    const intervalDays = Math.floor(getProtocolIntervalDays(protocol, todayKey));
     let streak = 1;
     for (let index = completionDays.length - 1; index > 0; index -= 1) {
         if (diffDays(completionDays[index], completionDays[index - 1]) > intervalDays) break;
@@ -62,18 +77,18 @@ export const getProtocolStreak = (protocol, todayKey) => {
     return streak;
 };
 
-export const getProtocolPassiveWindow = (protocol) => {
+export const getProtocolPassiveWindow = (protocol, todayKey) => {
     const anchorDateKey = getProtocolCycleAnchorDateKey(protocol);
     return {
         anchorDateKey,
         startDateKey: anchorDateKey ? addDays(anchorDateKey, 1) : null,
-        endDateKey: getProtocolDueDateKey(protocol)
+        endDateKey: getProtocolDueDateKey(protocol, todayKey)
     };
 };
 
 export const getProtocolPassivePayoutDateKeys = (protocol, startAfterDateKey, throughDateKey) => {
     if (protocol?.isActive === false || Number(protocol?.passiveReward || 0) <= 0) return [];
-    const { anchorDateKey, startDateKey, endDateKey } = getProtocolPassiveWindow(protocol);
+    const { anchorDateKey, startDateKey, endDateKey } = getProtocolPassiveWindow(protocol, throughDateKey);
     if (!startDateKey || !endDateKey || !throughDateKey) return [];
 
     const effectiveStartKey = addDays(startAfterDateKey || anchorDateKey, 1);
@@ -88,7 +103,7 @@ export const getProtocolPassivePayoutDateKeys = (protocol, startAfterDateKey, th
 };
 
 export const getPausedPassivePaidThrough = (protocol, todayKey) => {
-    const dueDateKey = getProtocolDueDateKey(protocol);
+    const dueDateKey = getProtocolDueDateKey(protocol, todayKey);
     if (!dueDateKey) return protocol.passivePaidThrough ?? null;
     const boundary = todayKey < dueDateKey ? todayKey : dueDateKey;
     return !protocol.passivePaidThrough || boundary > protocol.passivePaidThrough
